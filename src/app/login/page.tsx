@@ -17,10 +17,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const storeName = (settings?.store_name || 'OBATHAUS').trim();
-  const words = storeName.split(/\s+/);
-  const firstWord = words[0] || 'CAFE';
-  const remainingWords = words.slice(1).join(' ');
+  const rawStoreName = (settings?.store_name || 'OBAT HAUS').trim();
+  const cleanBrand = rawStoreName.replace(/-\s*operational\s*system\s*management/i, '').trim() || 'OBAT HAUS';
+  let firstWord = 'OBAT';
+  let secondWord = 'HAUS';
+  if (cleanBrand.toUpperCase() === 'OBATHAUS') {
+    firstWord = 'OBAT';
+    secondWord = 'HAUS';
+  } else {
+    const parts = cleanBrand.split(/\s+/);
+    firstWord = parts[0] || 'OBAT';
+    secondWord = parts.slice(1).join(' ') || 'HAUS';
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +64,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center p-3 rounded-3xl bg-white shadow-md border border-[#ECEEF1]">
             {settings?.logo_url ? (
               <div className="w-14 h-14 rounded-2xl overflow-hidden border border-[#ECEEF1] bg-white flex items-center justify-center p-1 shadow-2xs">
-                <img src={settings.logo_url} alt={storeName} className="w-full h-full object-contain rounded-xl" />
+                <img src={settings.logo_url} alt={cleanBrand} className="w-full h-full object-contain rounded-xl" />
               </div>
             ) : (
               <div className="w-14 h-14 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center border border-[#FED7AA] p-2.5 shadow-2xs">
@@ -67,13 +75,19 @@ export default function LoginPage() {
           <div>
             <div className="flex items-center justify-center tracking-tight font-black text-2xl text-[#18181B] uppercase">
               <span>{firstWord}</span>
-              {remainingWords ? (
-                <span className="text-[#FF6B00] ml-1.5">{remainingWords}</span>
-              ) : null}
+              <span className="text-[#FF6B00] ml-1.5">{secondWord}</span>
               <span className="w-2 h-2 rounded-full bg-[#FF6B00] ml-1 self-start mt-1.5" />
             </div>
-            <p className="text-xs text-[#71717A] font-medium mt-1">
-              {settings?.tagline || 'Operational System Management'}
+
+            {/* Compact & Elegant Subtitle Badge */}
+            <div className="flex items-center justify-center mt-1.5">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#FF6B00] bg-[#FFF7ED] border border-[#FED7AA] px-2.5 py-0.5 rounded-full">
+                Operational System Management
+              </span>
+            </div>
+
+            <p className="text-xs text-[#71717A] font-medium mt-2">
+              {settings?.tagline || 'Authentic Coffee & Refreshing Drinks - Sulawesi Barat'}
             </p>
           </div>
         </div>

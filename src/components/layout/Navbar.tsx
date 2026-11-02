@@ -46,14 +46,14 @@ export function Navbar() {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-heading text-base leading-tight">
-                {settings?.store_name || 'Cafe Antigravity'}
+                {settings?.store_name || 'OBATHAUS'}
               </span>
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FFF7ED] text-[#FF6B00]">
                 POS V1.0
               </span>
             </div>
             <p className="text-xs text-mutedtext hidden sm:block">
-              {settings?.tagline || 'Artisanal Coffee & Kitchen'}
+              {settings?.tagline || 'Operational System Management'}
             </p>
           </div>
         </div>

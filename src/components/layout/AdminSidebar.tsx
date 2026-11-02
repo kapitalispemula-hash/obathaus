@@ -219,7 +219,8 @@ export function AdminSidebar() {
     },
   ];
 
-  const storeName = (settings?.store_name || 'Obat Haus').trim();
+  const rawStoreName = (settings?.store_name || 'Obat Haus').trim();
+  const cleanBrand = rawStoreName.replace(/-\s*operational\s*system\s*management/i, '').trim() || 'Obat Haus';
 
   return (
     <aside
@@ -241,11 +242,11 @@ export function AdminSidebar() {
             className={`flex items-center gap-3 group cursor-pointer min-w-0 ${
               isCollapsed ? 'justify-center' : ''
             }`}
-            title={storeName}
+            title={cleanBrand}
           >
             {settings?.logo_url ? (
               <div className="w-10 h-10 rounded-2xl overflow-hidden border border-[#ECEEF1] bg-white flex items-center justify-center p-1 shadow-md shadow-orange-500/10 shrink-0">
-                <img src={settings.logo_url} alt={storeName} className="w-full h-full object-contain rounded-xl" />
+                <img src={settings.logo_url} alt={cleanBrand} className="w-full h-full object-contain rounded-xl" />
               </div>
             ) : (
               <div className="w-10 h-10 rounded-2xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center justify-center p-1.5 shadow-md shadow-orange-500/10 shrink-0">
@@ -255,8 +256,8 @@ export function AdminSidebar() {
 
             {!isCollapsed && (
               <div className="min-w-0">
-                <h2 className="text-sm font-black text-[#18181B] truncate tracking-tight">{storeName}</h2>
-                <p className="text-[10px] text-[#FF6B00] font-bold">Admin & Owner Panel</p>
+                <h2 className="text-sm font-black text-[#18181B] truncate tracking-tight">{cleanBrand}</h2>
+                <p className="text-[10px] text-[#FF6B00] font-bold">Operational System Management</p>
               </div>
             )}
           </Link>

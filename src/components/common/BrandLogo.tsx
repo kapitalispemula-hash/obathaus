@@ -17,13 +17,21 @@ export function BrandLogo({
   showImage?: boolean;
 }) {
   const cart = useCart();
-  const storeName = (name || cart?.settings?.store_name || 'OBATHAUS').trim();
+  const rawStoreName = (name || cart?.settings?.store_name || 'OBAT HAUS').trim();
   const logoUrl = cart?.settings?.logo_url;
 
-  // Split store name into first word (black) and remaining words (orange)
-  const words = storeName.split(/\s+/);
-  const firstWord = words[0] || 'OBATHAUS';
-  const remainingWords = words.slice(1).join(' ');
+  // Clean brand name so "- Operational System Management" doesn't clutter navbar
+  const cleanBrand = rawStoreName.replace(/-\s*operational\s*system\s*management/i, '').trim() || 'OBAT HAUS';
+  let firstWord = 'OBAT';
+  let secondWord = 'HAUS';
+  if (cleanBrand.toUpperCase() === 'OBATHAUS') {
+    firstWord = 'OBAT';
+    secondWord = 'HAUS';
+  } else {
+    const parts = cleanBrand.split(/\s+/);
+    firstWord = parts[0] || 'OBAT';
+    secondWord = parts.slice(1).join(' ') || 'HAUS';
+  }
 
   return (
     <Link
@@ -33,7 +41,7 @@ export function BrandLogo({
       {showImage ? (
         logoUrl ? (
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden border border-[#ECEEF1] bg-white flex items-center justify-center shrink-0 p-0.5 shadow-2xs">
-            <img src={logoUrl} alt={storeName} className="w-full h-full object-contain rounded-lg" />
+            <img src={logoUrl} alt={cleanBrand} className="w-full h-full object-contain rounded-lg" />
           </div>
         ) : (
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
@@ -43,9 +51,7 @@ export function BrandLogo({
       ) : null}
       <div className="flex items-center tracking-tight font-black text-lg sm:text-xl text-[#18181B] uppercase">
         <span>{firstWord}</span>
-        {remainingWords ? (
-          <span className="text-[#FF6B00] ml-1.5">{remainingWords}</span>
-        ) : null}
+        <span className="text-[#FF6B00] ml-1.5">{secondWord}</span>
         <span className="w-2 h-2 rounded-full bg-[#FF6B00] ml-1 self-start mt-1.5" />
       </div>
     </Link>

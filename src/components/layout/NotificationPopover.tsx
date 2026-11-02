@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useOutlet } from '@/lib/outlet-context';
 import { dbService } from '@/lib/services/database';
 import { AppNotification, NotificationCategory, NotificationType } from '@/types/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 
 export function NotificationPopover() {
   const router = useRouter();
@@ -50,12 +51,50 @@ export function NotificationPopover() {
     if (typeof window !== 'undefined') {
       window.addEventListener('obathaus_notifications_updated', handleUpdate);
     }
-    // Poll every 15s for demo responsiveness
+    // Poll every 15s as fallback
     const interval = setInterval(loadNotifications, 15000);
+
+    // Live WebSockets Realtime Channel
+    let realtimeChannel: any = null;
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        realtimeChannel = supabase
+          .channel('obathaus_realtime_popover')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'app_notifications' },
+            () => loadNotifications()
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'supplier_pos' },
+            () => loadNotifications()
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'outlet_orders' },
+            () => loadNotifications()
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'dispatches' },
+            () => loadNotifications()
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime channel subscription error:', err);
+      }
+    }
+
     return () => {
       clearInterval(interval);
       if (typeof window !== 'undefined') {
         window.removeEventListener('obathaus_notifications_updated', handleUpdate);
+      }
+      if (realtimeChannel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(realtimeChannel);
       }
     };
   }, [role, activeOutlet?.id]);

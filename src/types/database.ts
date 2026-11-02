@@ -693,6 +693,7 @@ export interface AppNotification {
   id: string;
   recipient_role: 'admin' | 'cashier' | 'warehouse_operator' | 'all';
   recipient_outlet_id?: string | null;
+  recipient_warehouse_id?: string | null;
   title: string;
   message: string;
   type: NotificationType;

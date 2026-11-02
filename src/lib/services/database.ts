@@ -2,6 +2,7 @@
 // CAFE POS — POINT OF SALE & FINANCIAL ANALYTICS
 
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import { enqueueOfflineTransaction, syncOfflineQueue } from '@/lib/services/offline-sync';
 import {
   Category,
   Product,
@@ -841,6 +842,69 @@ export const dbService = {
     };
 
     localTransactions.unshift(newTransaction);
+    setStorageItem(STORAGE_KEYS.TRANSACTIONS, localTransactions);
+
+    // REAL-TIME SUPABASE CLOUD COMMIT WITH OFFLINE QUEUE FALLBACK
+    if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const supabase = createClient();
+        const { error: trxErr } = await supabase.from('transactions').insert({
+          id: newTransaction.id,
+          invoice_number: newTransaction.invoice_number,
+          cashier_id: newTransaction.cashier_id,
+          outlet_id: newTransaction.outlet_id,
+          shift_id: newTransaction.shift_id,
+          subtotal: newTransaction.subtotal,
+          discount_total: newTransaction.discount_total,
+          tax_total: newTransaction.tax_total,
+          grand_total: newTransaction.grand_total,
+          total_cogs: newTransaction.total_cogs,
+          total_profit: newTransaction.total_profit,
+          payment_method: newTransaction.payment_method,
+          amount_received: newTransaction.amount_received,
+          change_amount: newTransaction.change_amount,
+          status: newTransaction.status,
+          idempotency_key: newTransaction.idempotency_key,
+          notes: newTransaction.notes,
+          created_at: newTransaction.created_at,
+        });
+
+        if (!trxErr) {
+          const dbItems = items.map((it) => ({
+            id: it.id,
+            transaction_id: newTransaction.id,
+            product_id: it.product_id,
+            product_name: it.product_name,
+            product_sku: it.product_sku,
+            unit_price: it.unit_price,
+            unit_hpp: it.unit_hpp,
+            quantity: it.quantity,
+            subtotal: it.subtotal,
+            discount_allocated: it.discount_allocated,
+            created_at: it.created_at,
+          }));
+          await supabase.from('transaction_items').insert(dbItems);
+
+          if (activeShift) {
+            await supabase.from('cashier_shifts').update({
+              total_cash_sales: activeShift.total_cash_sales,
+              total_non_cash_sales: activeShift.total_non_cash_sales,
+              closing_cash_expected: activeShift.closing_cash_expected,
+              updated_at: now.toISOString(),
+            }).eq('id', activeShift.id);
+          }
+        } else {
+          console.warn('Supabase transaction insert failed, queued for offline sync:', trxErr);
+          enqueueOfflineTransaction(newTransaction);
+        }
+      } catch (err) {
+        console.warn('Network issue during checkout, queued for offline sync:', err);
+        enqueueOfflineTransaction(newTransaction);
+      }
+    } else {
+      enqueueOfflineTransaction(newTransaction);
+    }
+
     return newTransaction;
   },
 
@@ -853,6 +917,34 @@ export const dbService = {
     endDate?: string;
     limit?: number;
   }): Promise<Transaction[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase
+          .from('transactions')
+          .select('*, cashier:profiles!transactions_cashier_id_fkey(*), outlet:outlets(*), items:transaction_items(*)')
+          .order('created_at', { ascending: false });
+
+        if (filter?.outletId && filter.outletId !== 'all') {
+          query = query.eq('outlet_id', filter.outletId);
+        }
+        if (filter?.cashierId) query = query.eq('cashier_id', filter.cashierId);
+        if (filter?.status) query = query.eq('status', filter.status);
+        if (filter?.startDate) query = query.gte('created_at', filter.startDate);
+        if (filter?.endDate) query = query.lte('created_at', filter.endDate);
+        if (filter?.limit) query = query.limit(filter.limit);
+
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          localTransactions = data as Transaction[];
+          setStorageItem(STORAGE_KEYS.TRANSACTIONS, localTransactions);
+          return data as Transaction[];
+        }
+      } catch (e) {
+        console.warn('Falling back to local getTransactions:', e);
+      }
+    }
+
     let list = [...localTransactions];
     const outlets = await this.getOutlets();
 
@@ -1483,6 +1575,27 @@ export const dbService = {
   // USER PROFILES & CASHIER MANAGEMENT
   // =========================================================================
   async getProfiles(): Promise<Profile[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
+        if (!error && data && data.length > 0) {
+          const outlets = await this.getOutlets();
+          const warehouses = await this.getWarehouses();
+          const mapped = data.map((p) => ({
+            ...p,
+            outlet: outlets.find((o) => o.id === p.primary_outlet_id),
+            warehouse: warehouses.find((w) => w.id === p.primary_warehouse_id),
+          }));
+          localProfiles = mapped;
+          setStorageItem(STORAGE_KEYS.PROFILES, mapped);
+          return mapped;
+        }
+      } catch (e) {
+        console.warn('Falling back to local getProfiles:', e);
+      }
+    }
+
     syncFromStorage();
     const outlets = await this.getOutlets();
     const warehouses = await this.getWarehouses();
@@ -1527,6 +1640,22 @@ export const dbService = {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('profiles').insert([newProfile]).select().single();
+        if (!error && data) {
+          localProfiles.push(data);
+          setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
+          return data;
+        }
+        if (error) console.warn('Supabase createCashier error:', error);
+      } catch (e) {
+        console.warn('Falling back to local createCashier:', e);
+      }
+    }
+
     localProfiles.push(newProfile);
     setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
     return newProfile;
@@ -1534,6 +1663,27 @@ export const dbService = {
 
   async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile> {
     syncFromStorage();
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) {
+          const idx = localProfiles.findIndex((p) => p.id === id);
+          if (idx !== -1) localProfiles[idx] = { ...localProfiles[idx], ...data };
+          setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
+          return data;
+        }
+        if (error) console.warn('Supabase updateProfile error:', error);
+      } catch (e) {
+        console.warn('Falling back to local updateProfile:', e);
+      }
+    }
+
     const idx = localProfiles.findIndex((p) => p.id === id);
     if (idx === -1) throw new Error('Pengguna tidak ditemukan.');
     localProfiles[idx] = {
@@ -1985,6 +2135,24 @@ export const dbService = {
   // PHASE 3: WAREHOUSE PERSISTENCE & STOCKS
   // =========================================================================
   async getWarehouseStocks(warehouseId?: string): Promise<WarehouseStock[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const targetWhId = warehouseId || 'e0000000-0000-0000-0000-000000000001';
+        const { data, error } = await supabase
+          .from('warehouse_stocks')
+          .select('*, raw_material:raw_materials(*), warehouse:warehouses(*)')
+          .eq('warehouse_id', targetWhId);
+        if (!error && data && data.length > 0) {
+          localWarehouseStocks = data as WarehouseStock[];
+          setStorageItem(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
+          return data as WarehouseStock[];
+        }
+      } catch (e) {
+        console.warn('Falling back to local getWarehouseStocks:', e);
+      }
+    }
+
     const stocks = getStorageItem<WarehouseStock[]>(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
     const materials = await this.getRawMaterials();
     const warehouses = await this.getWarehouses();
@@ -2010,6 +2178,37 @@ export const dbService = {
   },
 
   async updateWarehouseStock(warehouseId: string, rawMaterialId: string, deltaQty: number): Promise<number> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: existing } = await supabase
+          .from('warehouse_stocks')
+          .select('*')
+          .eq('warehouse_id', warehouseId)
+          .eq('raw_material_id', rawMaterialId)
+          .single();
+
+        const currentQty = existing ? Number(existing.quantity) : 0;
+        const newQty = Math.max(0, currentQty + deltaQty);
+
+        if (existing) {
+          await supabase
+            .from('warehouse_stocks')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .eq('id', existing.id);
+        } else {
+          await supabase.from('warehouse_stocks').insert({
+            warehouse_id: warehouseId,
+            raw_material_id: rawMaterialId,
+            quantity: newQty,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.warn('Falling back to local updateWarehouseStock:', e);
+      }
+    }
+
     const current = getStorageItem<WarehouseStock[]>(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
     let target = current.find((s) => s.warehouse_id === warehouseId && s.raw_material_id === rawMaterialId);
 
@@ -2036,6 +2235,25 @@ export const dbService = {
   // PHASE 3: SUPPLIER PROCUREMENT (PO)
   // =========================================================================
   async getSupplierPOs(warehouseId?: string): Promise<SupplierPO[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase
+          .from('supplier_pos')
+          .select('*, supplier:suppliers(*), creator:profiles!supplier_pos_created_by_fkey(*), items:supplier_po_items(*, raw_material:raw_materials(*), unit:units(*))')
+          .order('created_at', { ascending: false });
+        if (warehouseId) query = query.eq('warehouse_id', warehouseId);
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          localSupplierPOs = data as SupplierPO[];
+          setStorageItem(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
+          return data as SupplierPO[];
+        }
+      } catch (e) {
+        console.warn('Falling back to local getSupplierPOs:', e);
+      }
+    }
+
     const list = getStorageItem<SupplierPO[]>(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
     const suppliers = await this.getSuppliers();
     const materials = await this.getRawMaterials();
@@ -2070,6 +2288,39 @@ export const dbService = {
       items: payload.items || [],
     };
 
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: insertedPO, error: poErr } = await supabase.from('supplier_pos').insert({
+          id: newPO.id,
+          po_number: newPO.po_number,
+          supplier_id: newPO.supplier_id,
+          warehouse_id: newPO.warehouse_id,
+          status: newPO.status,
+          order_date: newPO.order_date,
+          expected_delivery_date: newPO.expected_delivery_date,
+          notes: newPO.notes,
+          created_by: newPO.created_by,
+          created_at: newPO.created_at,
+        }).select().single();
+
+        if (!poErr && insertedPO && newPO.items && newPO.items.length > 0) {
+          const itemsToInsert = newPO.items.map((it) => ({
+            id: it.id || crypto.randomUUID(),
+            supplier_po_id: insertedPO.id,
+            raw_material_id: it.raw_material_id,
+            quantity_ordered: it.quantity_ordered,
+            unit_id: it.unit_id,
+            unit_cost: it.unit_cost,
+            subtotal: it.subtotal || it.quantity_ordered * it.unit_cost,
+          }));
+          await supabase.from('supplier_po_items').insert(itemsToInsert);
+        }
+      } catch (e) {
+        console.warn('Falling back to local createSupplierPO:', e);
+      }
+    }
+
     const current = getStorageItem<SupplierPO[]>(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
     localSupplierPOs = [newPO, ...current];
     setStorageItem(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
@@ -2096,6 +2347,20 @@ export const dbService = {
   },
 
   async approveSupplierPO(poId: string, adminId: string): Promise<SupplierPO> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('supplier_pos').update({
+          status: 'approved',
+          approved_by: adminId,
+          approved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq('id', poId);
+      } catch (e) {
+        console.warn('Falling back to local approveSupplierPO:', e);
+      }
+    }
+
     const current = getStorageItem<SupplierPO[]>(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
     const target = current.find((p) => p.id === poId);
     if (!target) throw new Error('Purchase Order tidak ditemukan');
@@ -2126,6 +2391,20 @@ export const dbService = {
   },
 
   async rejectSupplierPO(poId: string, adminId: string, reason: string): Promise<SupplierPO> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('supplier_pos').update({
+          status: 'rejected',
+          approved_by: adminId,
+          rejection_reason: reason,
+          updated_at: new Date().toISOString(),
+        }).eq('id', poId);
+      } catch (e) {
+        console.warn('Falling back to local rejectSupplierPO:', e);
+      }
+    }
+
     const current = getStorageItem<SupplierPO[]>(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
     const target = current.find((p) => p.id === poId);
     if (!target) throw new Error('Purchase Order tidak ditemukan');
@@ -2219,6 +2498,25 @@ export const dbService = {
   // PHASE 3: OUTLET ORDERS & DISTRIBUTION (DISPATCH)
   // =========================================================================
   async getOutletOrders(warehouseId?: string): Promise<OutletOrder[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase
+          .from('outlet_orders')
+          .select('*, outlet:outlets(*), items:outlet_order_items(*, raw_material:raw_materials(*))')
+          .order('created_at', { ascending: false });
+        if (warehouseId) query = query.eq('warehouse_id', warehouseId);
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          localOutletOrders = data as OutletOrder[];
+          setStorageItem(STORAGE_KEYS.OUTLET_ORDERS, localOutletOrders);
+          return data as OutletOrder[];
+        }
+      } catch (e) {
+        console.warn('Falling back to local getOutletOrders:', e);
+      }
+    }
+
     const list = getStorageItem<OutletOrder[]>(STORAGE_KEYS.OUTLET_ORDERS, localOutletOrders);
     const outlets = await this.getOutlets();
     const materials = await this.getRawMaterials();
@@ -2234,6 +2532,18 @@ export const dbService = {
   },
 
   async updateOutletOrderStatus(orderId: string, status: OutletOrderStatus): Promise<OutletOrder> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase
+          .from('outlet_orders')
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq('id', orderId);
+      } catch (e) {
+        console.warn('Falling back to local updateOutletOrderStatus:', e);
+      }
+    }
+
     const current = getStorageItem<OutletOrder[]>(STORAGE_KEYS.OUTLET_ORDERS, localOutletOrders);
     const target = current.find((o) => o.id === orderId);
     if (!target) throw new Error('Permintaan outlet tidak ditemukan');
@@ -2260,6 +2570,35 @@ export const dbService = {
       items: payload.items || [],
     };
 
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: insertedOrder, error: ordErr } = await supabase.from('outlet_orders').insert({
+          id: newOrder.id,
+          order_number: newOrder.order_number,
+          outlet_id: newOrder.outlet_id,
+          warehouse_id: newOrder.warehouse_id,
+          status: newOrder.status,
+          order_date: newOrder.order_date,
+          notes: newOrder.notes,
+          created_by: newOrder.created_by,
+          created_at: newOrder.created_at,
+        }).select().single();
+
+        if (!ordErr && insertedOrder && newOrder.items && newOrder.items.length > 0) {
+          const itemsToInsert = newOrder.items.map((it) => ({
+            id: it.id || crypto.randomUUID(),
+            outlet_order_id: insertedOrder.id,
+            raw_material_id: it.raw_material_id,
+            quantity_requested: it.quantity_requested,
+          }));
+          await supabase.from('outlet_order_items').insert(itemsToInsert);
+        }
+      } catch (e) {
+        console.warn('Falling back to local createOutletOrder:', e);
+      }
+    }
+
     const current = getStorageItem<OutletOrder[]>(STORAGE_KEYS.OUTLET_ORDERS, localOutletOrders);
     localOutletOrders = [newOrder, ...current];
     setStorageItem(STORAGE_KEYS.OUTLET_ORDERS, localOutletOrders);
@@ -2284,6 +2623,25 @@ export const dbService = {
   },
 
   async getDispatches(warehouseId?: string): Promise<Dispatch[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase
+          .from('dispatches')
+          .select('*, to_outlet:outlets(*), items:dispatch_items(*, raw_material:raw_materials(*))')
+          .order('created_at', { ascending: false });
+        if (warehouseId) query = query.eq('from_warehouse_id', warehouseId);
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          localDispatches = data as Dispatch[];
+          setStorageItem(STORAGE_KEYS.DISPATCHES, localDispatches);
+          return data as Dispatch[];
+        }
+      } catch (e) {
+        console.warn('Falling back to local getDispatches:', e);
+      }
+    }
+
     const list = getStorageItem<Dispatch[]>(STORAGE_KEYS.DISPATCHES, localDispatches);
     const outlets = await this.getOutlets();
     const materials = await this.getRawMaterials();
@@ -2314,6 +2672,38 @@ export const dbService = {
       created_at: new Date().toISOString(),
       items: payload.items || [],
     };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: insertedDsp, error: dspErr } = await supabase.from('dispatches').insert({
+          id: newDispatch.id,
+          dispatch_number: newDispatch.dispatch_number,
+          outlet_order_id: newDispatch.outlet_order_id || null,
+          from_warehouse_id: newDispatch.from_warehouse_id,
+          to_outlet_id: newDispatch.to_outlet_id,
+          status: newDispatch.status,
+          dispatch_date: newDispatch.dispatch_date,
+          driver_name: newDispatch.driver_name,
+          vehicle_number: newDispatch.vehicle_number,
+          notes: newDispatch.notes,
+          created_by: newDispatch.created_by,
+          created_at: newDispatch.created_at,
+        }).select().single();
+
+        if (!dspErr && insertedDsp && newDispatch.items && newDispatch.items.length > 0) {
+          const itemsToInsert = newDispatch.items.map((it) => ({
+            id: it.id || crypto.randomUUID(),
+            dispatch_id: insertedDsp.id,
+            raw_material_id: it.raw_material_id,
+            quantity_dispatched: it.quantity_dispatched,
+          }));
+          await supabase.from('dispatch_items').insert(itemsToInsert);
+        }
+      } catch (e) {
+        console.warn('Falling back to local createDispatch:', e);
+      }
+    }
 
     // 1. Deduct stock from warehouse
     if (newDispatch.items && newDispatch.items.length > 0) {
@@ -2773,6 +3163,26 @@ export const dbService = {
   // PHASE 5: CASHIER SHIFTS, CASH MOVEMENTS & AUDIT CONTROL
   // =========================================================================
   async getActiveShift(cashierId?: string, outletId?: string): Promise<CashierShift | null> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase
+          .from('cashier_shifts')
+          .select('*, outlet:outlets(*), cashier:profiles!cashier_shifts_cashier_id_fkey(*)')
+          .eq('status', 'active');
+        if (cashierId) query = query.eq('cashier_id', cashierId);
+        if (outletId) query = query.eq('outlet_id', outletId);
+        const { data, error } = await query.order('opened_at', { ascending: false }).limit(1);
+        if (!error && data && data.length > 0) {
+          const shift = data[0] as CashierShift;
+          const movements = await this.getShiftMovements(shift.id);
+          return { ...shift, movements };
+        }
+      } catch (e) {
+        console.warn('Falling back to local getActiveShift:', e);
+      }
+    }
+
     const list = getStorageItem<CashierShift[]>(STORAGE_KEYS.SHIFTS, localShifts);
     let target = list.find((s) => {
       if (s.status !== 'active') return false;
@@ -2836,6 +3246,31 @@ export const dbService = {
       updated_at: now,
     };
 
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('cashier_shifts').insert({
+          id: newShift.id,
+          shift_number: newShift.shift_number,
+          outlet_id: newShift.outlet_id,
+          cashier_id: newShift.cashier_id,
+          status: newShift.status,
+          opening_cash: newShift.opening_cash,
+          opened_at: newShift.opened_at,
+          total_cash_sales: 0,
+          total_non_cash_sales: 0,
+          total_cash_in: 0,
+          total_cash_out: 0,
+          closing_cash_expected: newShift.opening_cash,
+          notes: newShift.notes,
+          created_at: newShift.created_at,
+          updated_at: newShift.updated_at,
+        });
+      } catch (e) {
+        console.warn('Falling back to local openShift:', e);
+      }
+    }
+
     localShifts = [newShift, ...current];
     setStorageItem(STORAGE_KEYS.SHIFTS, localShifts);
 
@@ -2871,6 +3306,23 @@ export const dbService = {
       target.notes = target.notes ? `${target.notes} | ${notes}` : notes;
     }
     target.updated_at = now;
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('cashier_shifts').update({
+          status: 'closed',
+          closed_at: now,
+          closing_cash_actual: closingCashActual,
+          closing_cash_expected: expected,
+          cash_difference: diff,
+          notes: target.notes,
+          updated_at: now,
+        }).eq('id', shiftId);
+      } catch (e) {
+        console.warn('Falling back to local closeShift:', e);
+      }
+    }
 
     localShifts = [...current];
     setStorageItem(STORAGE_KEYS.SHIFTS, localShifts);
@@ -3065,6 +3517,24 @@ export const dbService = {
   // NOTIFICATIONS ENGINE
   // =========================================================================
   async getNotifications(role: string, outletId?: string): Promise<AppNotification[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase.from('app_notifications').select('*').order('created_at', { ascending: false }).limit(50);
+        if (role !== 'admin') {
+          query = query.or(`recipient_role.eq.${role},recipient_role.eq.all`);
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          localNotifications = data as AppNotification[];
+          setStorageItem(STORAGE_KEYS.NOTIFICATIONS, localNotifications);
+          return data as AppNotification[];
+        }
+      } catch (e) {
+        console.warn('Falling back to local getNotifications:', e);
+      }
+    }
+
     let list = getStorageItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, localNotifications);
 
     // Auto-reconcile un-notified pending supplier POs for Admin (e.g. from previous simulations)
@@ -3134,6 +3604,14 @@ export const dbService = {
   },
 
   async markNotificationAsRead(id: string): Promise<void> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('app_notifications').update({ is_read: true }).eq('id', id);
+      } catch (e) {
+        console.warn('Falling back to local markNotificationAsRead:', e);
+      }
+    }
     const list = getStorageItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, localNotifications);
     const target = list.find((n) => n.id === id);
     if (target) {
@@ -3147,6 +3625,19 @@ export const dbService = {
   },
 
   async markAllNotificationsAsRead(role: string, outletId?: string): Promise<void> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase.from('app_notifications').update({ is_read: true });
+        if (role !== 'admin') {
+          query = query.eq('recipient_role', role);
+        }
+        await query;
+      } catch (e) {
+        console.warn('Falling back to local markAllNotificationsAsRead:', e);
+      }
+    }
+
     const list = getStorageItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, localNotifications);
     list.forEach((n) => {
       if (role === 'admin' && (n.recipient_role === 'admin' || n.recipient_role === 'all')) {
@@ -3167,13 +3658,35 @@ export const dbService = {
   },
 
   async createNotification(payload: Omit<AppNotification, 'id' | 'created_at' | 'is_read'>): Promise<AppNotification> {
-    const current = getStorageItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, localNotifications);
     const newNotif: AppNotification = {
       ...payload,
-      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: crypto.randomUUID(),
       is_read: false,
       created_at: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('app_notifications').insert({
+          id: newNotif.id,
+          recipient_role: newNotif.recipient_role,
+          outlet_id: newNotif.recipient_outlet_id || null,
+          warehouse_id: newNotif.recipient_warehouse_id || null,
+          title: newNotif.title,
+          message: newNotif.message,
+          category: newNotif.category || 'general',
+          type: newNotif.type || 'info',
+          is_read: false,
+          action_url: newNotif.action_url || null,
+          created_at: newNotif.created_at,
+        });
+      } catch (e) {
+        console.warn('Falling back to local createNotification:', e);
+      }
+    }
+
+    const current = getStorageItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, localNotifications);
     localNotifications = [newNotif, ...current];
     setStorageItem(STORAGE_KEYS.NOTIFICATIONS, localNotifications);
     if (typeof window !== 'undefined') {

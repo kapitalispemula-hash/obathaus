@@ -48,6 +48,10 @@ export function PwaSupport() {
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      if (typeof window !== 'undefined') {
+        (window as any).__pwaDeferredPrompt = e;
+        window.dispatchEvent(new CustomEvent('pwa-prompt-available'));
+      }
       // If mobile and not standalone, show CTA
       if (mobileCheck && !checkStandalone) {
         checkAndShowBanner();
@@ -56,11 +60,19 @@ export function PwaSupport() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
 
+    const handleOpenModal = () => {
+      setShowMobileBanner(true);
+    };
+    window.addEventListener('open-pwa-install-modal', handleOpenModal);
+
     // App installed event
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setShowMobileBanner(false);
       setDeferredPrompt(null);
+      if (typeof window !== 'undefined') {
+        (window as any).__pwaDeferredPrompt = null;
+      }
     };
     window.addEventListener('appinstalled', handleAppInstalled);
 
@@ -76,6 +88,7 @@ export function PwaSupport() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('open-pwa-install-modal', handleOpenModal);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
@@ -104,19 +117,24 @@ export function PwaSupport() {
   };
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) {
+    const prompt = deferredPrompt || (typeof window !== 'undefined' ? (window as any).__pwaDeferredPrompt : null);
+    if (!prompt) {
       if (isIos) {
         // Just keep banner open showing steps
         return;
       }
       return;
     }
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
     if (outcome === 'accepted') {
       setShowMobileBanner(false);
+      setIsInstalled(true);
     }
     setDeferredPrompt(null);
+    if (typeof window !== 'undefined') {
+      (window as any).__pwaDeferredPrompt = null;
+    }
   };
 
   return (

@@ -91,6 +91,40 @@ export default function AdminSettingsPage() {
   const [isResetting, setIsResetting] = useState(false);
   const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
 
+  // PWA Install State
+  const [installStatusMsg, setInstallStatusMsg] = useState<string | null>(null);
+
+  const handleInstallAndroid = async () => {
+    setInstallStatusMsg(null);
+    const prompt = typeof window !== 'undefined' ? (window as any).__pwaDeferredPrompt : null;
+    if (prompt) {
+      try {
+        prompt.prompt();
+        const { outcome } = await prompt.userChoice;
+        if (outcome === 'accepted') {
+          setInstallStatusMsg('Aplikasi berhasil dipasang di perangkat Anda!');
+          (window as any).__pwaDeferredPrompt = null;
+        }
+      } catch (err) {
+        console.warn('Install error:', err);
+      }
+    } else {
+      const isStand = typeof window !== 'undefined' && (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true
+      );
+      if (isStand) {
+        setInstallStatusMsg('Aplikasi Obat Haus sudah terpasang di perangkat ini.');
+        return;
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('open-pwa-install-modal'));
+      }
+      setInstallStatusMsg('Banner pop-up instalasi telah dibuka. Jika tidak muncul otomatis, ketuk menu titik tiga (⋮) di Chrome > "Install Aplikasi".');
+    }
+  };
+
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -638,6 +672,14 @@ export default function AdminSettingsPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleInstallAndroid}
+                  className="px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Install Aplikasi (Android)</span>
+                </button>
                 <a
                   href="/pos"
                   target="_blank"
@@ -652,17 +694,43 @@ export default function AdminSettingsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Android Card */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-4.5 space-y-3">
-                <div className="flex items-center gap-2.5 text-[#FF6B00]">
-                  <Smartphone className="w-5 h-5" />
-                  <h4 className="font-bold text-sm text-white">Panduan Pengguna Android (Chrome)</h4>
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4 flex flex-col justify-between">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[#FF6B00]">
+                      <Smartphone className="w-5 h-5" />
+                      <h4 className="font-bold text-sm text-white">Panduan &amp; Install Android (Chrome)</h4>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-md bg-orange-500/20 text-[#FF8A3D] text-[10px] font-black uppercase tracking-wider border border-orange-500/30">
+                      Disarankan
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Pasang langsung aplikasi POS &amp; Operasional Obat Haus ke layar utama Android Anda dengan 1-klik tanpa perlu lewat Play Store.
+                  </p>
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Buka link <strong>https://obathaus.vercel.app</strong> di Google Chrome HP/Tablet Anda. Ketuk banner pop-up yang muncul di bawah layar atau ketuk menu titik tiga (⋮) lalu pilih <strong>&quot;Install Aplikasi&quot;</strong> atau <strong>&quot;Tambahkan ke Layar Utama&quot;</strong>.
-                </p>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Ikon Logo Obat Haus otomatis terpasang di HP</span>
+
+                {/* Direct Action Button for Android */}
+                <div className="space-y-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleInstallAndroid}
+                    className="w-full py-3 px-4 bg-gradient-to-r from-[#FF6B00] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 shrink-0" />
+                    <span>Install Aplikasi Android Sekarang (1-Klik)</span>
+                  </button>
+
+                  {installStatusMsg && (
+                    <div className="p-2.5 bg-orange-950/60 border border-orange-500/40 rounded-xl text-orange-200 text-[11px] leading-tight text-center">
+                      {installStatusMsg}
+                    </div>
+                  )}
+
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium w-full">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Ikon Logo Resmi Obat Haus otomatis terpasang di HP</span>
+                  </div>
                 </div>
               </div>
 

@@ -110,7 +110,7 @@ let localNotifications: AppNotification[] = [...INITIAL_NOTIFICATIONS];
 const initialData = generateRealistic30DaysData();
 let localTransactions: Transaction[] = initialData.transactions;
 let localOperatingExpenses: OperatingExpense[] = initialData.expenses;
-let localInvoiceCounter = 1200;
+let localInvoiceCounter = 0;
 
 const STORAGE_KEYS = {
   SETTINGS: 'cafepos_store_settings',
@@ -170,12 +170,33 @@ function setStorageItem<T>(key: string, value: T): void {
 }
 
 let isStorageSynced = false;
+const PRODUCTION_CLEAN_FLAG = 'obathaus_clean_prod_v1';
 
 function syncFromStorage(force = false) {
   if (typeof window === 'undefined') return;
   if (isStorageSynced && !force) return;
   isStorageSynced = true;
   try {
+    // One-time automatic cleanup of legacy demo/dummy data in browser storage
+    if (!window.localStorage.getItem(PRODUCTION_CLEAN_FLAG)) {
+      window.localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
+      window.localStorage.removeItem(STORAGE_KEYS.EXPENSES);
+      window.localStorage.removeItem(STORAGE_KEYS.PROFILES);
+      window.localStorage.removeItem(STORAGE_KEYS.DELETED_PROFILE_IDS);
+      window.localStorage.removeItem(STORAGE_KEYS.SHIFTS);
+      window.localStorage.removeItem(STORAGE_KEYS.SHIFT_MOVEMENTS);
+      window.localStorage.removeItem(STORAGE_KEYS.SUPPLIER_POS);
+      window.localStorage.removeItem(STORAGE_KEYS.SUPPLIER_RECEIPTS);
+      window.localStorage.removeItem(STORAGE_KEYS.OUTLET_ORDERS);
+      window.localStorage.removeItem(STORAGE_KEYS.DISPATCHES);
+      window.localStorage.removeItem(STORAGE_KEYS.WH_RETURNS);
+      window.localStorage.removeItem(STORAGE_KEYS.STOCK_OPNAMES);
+      window.localStorage.removeItem(STORAGE_KEYS.STOCK_LEDGER);
+      window.localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
+      window.localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+      window.localStorage.setItem(PRODUCTION_CLEAN_FLAG, 'true');
+    }
+
     const storedSettings = getStorageItem<StoreSettings | null>(STORAGE_KEYS.SETTINGS, null);
     if (storedSettings) localStoreSettings = { ...INITIAL_STORE_SETTINGS, ...storedSettings };
 

@@ -28,6 +28,31 @@ CREATE TABLE IF NOT EXISTS public.app_notifications (
 -- 3. ENSURE OPERATING EXPENSES HAS OUTLET_ID
 ALTER TABLE IF EXISTS public.operating_expenses ADD COLUMN IF NOT EXISTS outlet_id UUID;
 
+-- 3.1. PURGE ALL DUMMY / DEMO OPERATIONAL DATA (CLEAN SLATE FOR REAL PRODUCTION)
+DELETE FROM public.transaction_refund_items;
+DELETE FROM public.transaction_refunds;
+DELETE FROM public.transaction_items;
+DELETE FROM public.transactions;
+DELETE FROM public.operating_expenses;
+DELETE FROM public.shift_cash_movements;
+DELETE FROM public.cashier_shifts;
+DELETE FROM public.supplier_receipt_items;
+DELETE FROM public.supplier_receipts;
+DELETE FROM public.supplier_po_items;
+DELETE FROM public.supplier_pos;
+DELETE FROM public.dispatch_items;
+DELETE FROM public.dispatches;
+DELETE FROM public.outlet_order_items;
+DELETE FROM public.outlet_orders;
+DELETE FROM public.warehouse_return_items;
+DELETE FROM public.warehouse_returns;
+DELETE FROM public.stock_opname_items;
+DELETE FROM public.stock_opnames;
+DELETE FROM public.stock_ledger;
+DELETE FROM public.app_notifications;
+DELETE FROM public.audit_logs;
+DELETE FROM public.profiles WHERE username != 'admin';
+
 -- 4. SEED OR UPDATE STORE SETTINGS
 INSERT INTO public.store_settings (
   id, store_name, tagline, address, phone, email, timezone,
@@ -166,7 +191,7 @@ ON CONFLICT (id) DO UPDATE SET
   receipt_footer = EXCLUDED.receipt_footer,
   updated_at = now();
 
--- 7. SEED CORE STAFF PROFILES (FOR ADMIN, WAREHOUSE & CASHIERS)
+-- 7. SEED CORE ADMIN PROFILE ONLY (ADMIN CAN CREATE REAL USERS IN ADMIN PANEL)
 INSERT INTO public.profiles (id, email, username, password, full_name, role, is_active, primary_outlet_id, primary_warehouse_id)
 VALUES
   (
@@ -178,50 +203,6 @@ VALUES
     'admin',
     true,
     NULL,
-    NULL
-  ),
-  (
-    'b0000000-0000-0000-0000-000000000001'::uuid,
-    'gudang@obathaus.id',
-    'gudang',
-    '123456',
-    'Faisal (Operator Gudang Pusat)',
-    'warehouse_operator',
-    true,
-    NULL,
-    'e0000000-0000-0000-0000-000000000001'::uuid
-  ),
-  (
-    'c0000000-0000-0000-0000-000000000001'::uuid,
-    'kasir@obathaus.id',
-    'kasir',
-    '123456',
-    'Budi Santoso (Kasir Cityfood)',
-    'cashier',
-    true,
-    'd0000000-0000-0000-0000-000000000001'::uuid,
-    NULL
-  ),
-  (
-    'c0000000-0000-0000-0000-000000000002'::uuid,
-    'siti@obathaus.id',
-    'siti',
-    '123456',
-    'Siti Rahmawati (Kasir Sentral)',
-    'cashier',
-    true,
-    'd0000000-0000-0000-0000-000000000002'::uuid,
-    NULL
-  ),
-  (
-    'c0000000-0000-0000-0000-000000000003'::uuid,
-    'dewi@obathaus.id',
-    'dewi',
-    '123456',
-    'Dewi Lestari (Kasir Pantai Bahari)',
-    'cashier',
-    true,
-    'd0000000-0000-0000-0000-000000000003'::uuid,
     NULL
   )
 ON CONFLICT (id) DO UPDATE SET

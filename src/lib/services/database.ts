@@ -170,7 +170,7 @@ function setStorageItem<T>(key: string, value: T): void {
 }
 
 let isStorageSynced = false;
-const PRODUCTION_CLEAN_FLAG = 'obathaus_clean_prod_v1';
+const PRODUCTION_CLEAN_FLAG = 'obathaus_prod_purge_hasan_v3';
 
 function syncFromStorage(force = false) {
   if (typeof window === 'undefined') return;
@@ -183,6 +183,10 @@ function syncFromStorage(force = false) {
       window.localStorage.removeItem(STORAGE_KEYS.EXPENSES);
       window.localStorage.removeItem(STORAGE_KEYS.PROFILES);
       window.localStorage.removeItem(STORAGE_KEYS.DELETED_PROFILE_IDS);
+      window.localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
+      window.localStorage.removeItem(STORAGE_KEYS.DELETED_CATEGORY_IDS);
+      window.localStorage.removeItem(STORAGE_KEYS.PRODUCTS);
+      window.localStorage.removeItem(STORAGE_KEYS.DELETED_PRODUCT_IDS);
       window.localStorage.removeItem(STORAGE_KEYS.SHIFTS);
       window.localStorage.removeItem(STORAGE_KEYS.SHIFT_MOVEMENTS);
       window.localStorage.removeItem(STORAGE_KEYS.SUPPLIER_POS);

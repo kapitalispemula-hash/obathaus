@@ -20,13 +20,12 @@ import {
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/format';
 import { CategoryIcon } from '@/components/common/CategoryIcon';
-import { INITIAL_CATEGORIES, INITIAL_PRODUCTS } from '@/lib/mock-data';
 
 export default function PosPage() {
   const { addItem, items, itemCount, grandTotal, settings, orderNotes, setOrderNotes } = useCart();
   const { activeShift, openShiftModal, refreshActiveShift } = useShift();
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,8 +49,8 @@ export default function PosPage() {
           dbService.getCategories(true),
           dbService.getProducts({ onlyActive: true }),
         ]);
-        if (cats && cats.length > 0) setCategories(cats);
-        if (prods && prods.length > 0) setProducts(prods);
+        setCategories(cats || []);
+        setProducts(prods || []);
       } catch (err) {
         console.error('Failed to load POS catalog:', err);
       }

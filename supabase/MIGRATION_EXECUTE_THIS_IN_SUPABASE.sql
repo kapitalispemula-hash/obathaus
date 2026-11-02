@@ -1,5 +1,6 @@
 -- ============================================================================
--- OBAT HAUS — PRODUCTION CLEAN WIPE & REALTIME DATABASE SETUP
+-- OBAT HAUS — 100% CLEAN PRODUCTION SLATE & SUPABASE REALTIME CONFIGURATION
+-- Admin Account: username = hasan, password = hasan123
 -- ============================================================================
 
 -- 1. DECOUPLE PROFILES FROM AUTH.USERS & ADD REQUIRED COLUMNS
@@ -30,7 +31,7 @@ ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS invoice_prefix TEX
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS receipt_header TEXT;
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
 
--- 4. PURGE ALL DUMMY / DEMO OPERATIONAL DATA (CLEAN SLATE FOR REAL PRODUCTION)
+-- 4. BERSIHKAN TOTAL SEMUA DATA DUMMY (PRODUK, KATEGORI, TRANSAKSI, SHIFT, LOGISTIK)
 DELETE FROM public.transaction_refund_items;
 DELETE FROM public.transaction_refunds;
 DELETE FROM public.transaction_items;
@@ -54,16 +55,28 @@ DELETE FROM public.stock_ledger;
 DELETE FROM public.app_notifications;
 DELETE FROM public.audit_logs;
 
--- 5. SISAKAN HANYA AKUN ADMIN (HAPUS SEMUA KASIR / OPERATOR DUMMY)
-DELETE FROM public.profiles WHERE username != 'admin' OR username IS NULL;
+-- Hapus seluruh produk, menu, resep, dan bahan baku dummy
+DELETE FROM public.recipe_items;
+DELETE FROM public.recipes;
+DELETE FROM public.outlet_menus;
+DELETE FROM public.outlet_stocks;
+DELETE FROM public.warehouse_stocks;
+DELETE FROM public.products;
+DELETE FROM public.categories;
+DELETE FROM public.raw_materials;
+DELETE FROM public.raw_material_categories;
+DELETE FROM public.suppliers;
+
+-- 5. SISAKAN HANYA 1 AKUN ADMIN UTAMA (HASAN / HASAN123)
+DELETE FROM public.profiles;
 
 INSERT INTO public.profiles (id, email, username, password, full_name, role, is_active)
 VALUES (
   'a0000000-0000-0000-0000-000000000001'::uuid,
-  'admin@obathaus.id',
-  'admin',
-  '123456',
-  'Owner / Admin Obat Haus',
+  'hasan@obathaus.id',
+  'hasan',
+  'hasan123',
+  'Hasan (Owner / Admin)',
   'admin',
   true
 )
@@ -76,7 +89,7 @@ ON CONFLICT (id) DO UPDATE SET
   is_active = true,
   updated_at = now();
 
--- 6. SETTINGS TOKO RESMI OBAT HAUS
+-- 6. PENGATURAN TOKO RESMI OBAT HAUS
 INSERT INTO public.store_settings (
   id, store_name, tagline, address, phone, email, timezone,
   tax_percentage, is_tax_inclusive, discount_enabled, max_discount_percentage,
@@ -88,7 +101,7 @@ VALUES (
   'Authentic Coffee & Refreshing Drinks - Sulawesi Barat',
   'Polewali Mandar & Majene, Sulawesi Barat',
   '0811-4409-900',
-  'admin@obathaus.id',
+  'hasan@obathaus.id',
   'Asia/Makassar',
   0,
   true,
@@ -107,7 +120,7 @@ ON CONFLICT (id) DO UPDATE SET
   receipt_paper_size = EXCLUDED.receipt_paper_size,
   updated_at = now();
 
--- 7. BUKA AKSES PENUH ROW LEVEL SECURITY (RLS) AGAR ADMIN DAPAT MENAMBAH & MENGHAPUS DATA LANGSUNG
+-- 7. BUKA HAK AKSES OPERASIONAL (ADMIN DAPAT MENAMBAH & MENGHAPUS SEMUA DATA LANGSUNG DI SUPABASE)
 DO $$
 DECLARE
   t text;
@@ -131,7 +144,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- 8. AKTIFKAN SUPABASE REALTIME REPLICATION UNTUK WEBSOCKET MULTI-PERANGKAT
+-- 8. AKTIFKAN SUPABASE REALTIME WEBSOCKET
 DO $$
 BEGIN
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE profiles; EXCEPTION WHEN duplicate_object THEN NULL; END;

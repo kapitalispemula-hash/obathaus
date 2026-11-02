@@ -7,7 +7,7 @@
 -- 1. CENTRAL WAREHOUSE
 INSERT INTO warehouses (id, code, name, address, phone, is_active)
 VALUES (
-  'wh-00000000-0000-0000-0000-000000000001',
+  'e0000000-0000-0000-0000-000000000001',
   'WH-01',
   'Gudang Logistik Pusat Obat Haus (Central Warehouse Polman)',
   'Polewali Mandar, Sulawesi Barat',
@@ -25,7 +25,7 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO outlets (id, code, name, address, phone, is_active)
 VALUES
   (
-    'out-00000000-0000-0000-0000-000000000001',
+    'd0000000-0000-0000-0000-000000000001',
     'OUT-01',
     'OBATHAUS Cityfood (pusat)',
     'Jl. Todilaling, Kel. Pekkabata, Polewali, Polewali Mandar',
@@ -33,7 +33,7 @@ VALUES
     true
   ),
   (
-    'out-00000000-0000-0000-0000-000000000002',
+    'd0000000-0000-0000-0000-000000000002',
     'OUT-02',
     'OBATHAUS Sentral',
     'Jl. Mr. Muh. Yamin, Kel. Pekkabata, Polewali, Polewali Mandar',
@@ -41,7 +41,7 @@ VALUES
     true
   ),
   (
-    'out-00000000-0000-0000-0000-000000000003',
+    'd0000000-0000-0000-0000-000000000003',
     'OUT-03',
     'OBATHAUS Pantai Bahari',
     'Jl. Bahari, Kel. Polewali, Polewali, Polewali Mandar',
@@ -49,7 +49,7 @@ VALUES
     true
   ),
   (
-    'out-00000000-0000-0000-0000-000000000004',
+    'd0000000-0000-0000-0000-000000000004',
     'OUT-04',
     'OBATHAUS Wonomulyo',
     'Jl. Jenderal Soedirman (Jensu), Wonomulyo, Polewali Mandar',
@@ -57,7 +57,7 @@ VALUES
     true
   ),
   (
-    'out-00000000-0000-0000-0000-000000000005',
+    'd0000000-0000-0000-0000-000000000005',
     'OUT-05',
     'OBATHAUS Campalagian',
     'Jl. Poros Polman-Majene (samping PKM Campa), Campalagian, Polewali Mandar',
@@ -65,7 +65,7 @@ VALUES
     true
   ),
   (
-    'out-00000000-0000-0000-0000-000000000006',
+    'd0000000-0000-0000-0000-000000000006',
     'OUT-06',
     'OBATHAUS Tinambung',
     'Jl. Poros Polman-Majene (samping Indomaret Tinambung), Tinambung, Polewali Mandar',
@@ -73,7 +73,7 @@ VALUES
     true
   ),
   (
-    'out-00000000-0000-0000-0000-000000000007',
+    'd0000000-0000-0000-0000-000000000007',
     'OUT-07',
     'OBATHAUS Majene',
     'Jl. KH. Daeng (depan Masjid Tanjung Batu Majene) Banggae, Majene',
@@ -89,21 +89,21 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- 3. ASSIGN STAFF TO REAL OUTLETS & CENTRAL WAREHOUSE
 UPDATE public.profiles
-SET primary_warehouse_id = 'wh-00000000-0000-0000-0000-000000000001'
-WHERE id = 'w0000000-0000-0000-0000-000000000001' OR role = 'warehouse_operator';
+SET primary_warehouse_id = 'e0000000-0000-0000-0000-000000000001'
+WHERE id = 'b0000000-0000-0000-0000-000000000001' OR role = 'warehouse_operator';
 
 UPDATE public.profiles
-SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000001',
+SET primary_outlet_id = 'd0000000-0000-0000-0000-000000000001',
     full_name = 'Budi Santoso (Kasir Cityfood)'
 WHERE id = 'c0000000-0000-0000-0000-000000000001';
 
 UPDATE public.profiles
-SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000002',
+SET primary_outlet_id = 'd0000000-0000-0000-0000-000000000002',
     full_name = 'Siti (Kasir Sentral)'
 WHERE id = 'c0000000-0000-0000-0000-000000000002';
 
 UPDATE public.profiles
-SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000003',
+SET primary_outlet_id = 'd0000000-0000-0000-0000-000000000003',
     full_name = 'Dewi (Kasir Pantai Bahari)'
 WHERE id = 'c0000000-0000-0000-0000-000000000003';
 

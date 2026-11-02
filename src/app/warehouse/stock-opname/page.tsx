@@ -150,9 +150,9 @@ export default function WarehouseStockOpnamePage() {
       });
 
       const newOpname = await dbService.createStockOpname({
-        warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+        warehouse_id: 'e0000000-0000-0000-0000-000000000001',
         notes: opnameNotes,
-        conducted_by: user?.id || 'w0000000-0000-0000-0000-000000000001',
+        conducted_by: user?.id || 'b0000000-0000-0000-0000-000000000001',
         items: itemsPayload,
       });
 

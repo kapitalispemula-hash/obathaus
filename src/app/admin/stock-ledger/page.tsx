@@ -233,7 +233,7 @@ export default function AdminStockLedgerPage() {
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-1 focus:ring-[#FF6B00]"
               >
                 <option value="all">Semua Lokasi (Gudang & 7 Cabang)</option>
-                <option value="wh-00000000-0000-0000-0000-000000000001">Gudang Pusat Makassar</option>
+                <option value="e0000000-0000-0000-0000-000000000001">Gudang Pusat Makassar</option>
                 {outlets.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.name}

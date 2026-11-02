@@ -668,7 +668,7 @@ export const dbService = {
     }
 
     // Determine target outlet
-    const targetOutletId = payload.outlet_id || cashier.primary_outlet_id || 'out-00000000-0000-0000-0000-000000000001';
+    const targetOutletId = payload.outlet_id || cashier.primary_outlet_id || 'd0000000-0000-0000-0000-000000000001';
     const currentOutlets = await this.getOutlets();
     const targetOutlet = currentOutlets.find((o) => o.id === targetOutletId) || currentOutlets[0];
 
@@ -1989,7 +1989,7 @@ export const dbService = {
     const materials = await this.getRawMaterials();
     const warehouses = await this.getWarehouses();
 
-    const targetWhId = warehouseId || warehouses[0]?.id || 'wh-00000000-0000-0000-0000-000000000001';
+    const targetWhId = warehouseId || warehouses[0]?.id || 'e0000000-0000-0000-0000-000000000001';
     const filtered = stocks.filter((s) => s.warehouse_id === targetWhId);
 
     // Ensure all registered materials have a stock entry
@@ -2059,12 +2059,12 @@ export const dbService = {
       id: payload.id || `po-${Date.now()}`,
       po_number: payload.po_number || `PO-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
       supplier_id: payload.supplier_id || '',
-      warehouse_id: payload.warehouse_id || 'wh-00000000-0000-0000-0000-000000000001',
+      warehouse_id: payload.warehouse_id || 'e0000000-0000-0000-0000-000000000001',
       status: 'pending_approval',
       order_date: new Date().toISOString(),
       expected_delivery_date: payload.expected_delivery_date || null,
       notes: payload.notes || null,
-      created_by: payload.created_by || 'w0000000-0000-0000-0000-000000000001',
+      created_by: payload.created_by || 'b0000000-0000-0000-0000-000000000001',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       items: payload.items || [],
@@ -2179,11 +2179,11 @@ export const dbService = {
       id: payload.id || `rec-${Date.now()}`,
       receipt_number: payload.receipt_number || `RCV-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
       supplier_po_id: payload.supplier_po_id || '',
-      warehouse_id: payload.warehouse_id || 'wh-00000000-0000-0000-0000-000000000001',
+      warehouse_id: payload.warehouse_id || 'e0000000-0000-0000-0000-000000000001',
       delivery_order_number: payload.delivery_order_number || null,
       received_date: new Date().toISOString(),
       notes: payload.notes || null,
-      received_by: payload.received_by || 'w0000000-0000-0000-0000-000000000001',
+      received_by: payload.received_by || 'b0000000-0000-0000-0000-000000000001',
       created_at: new Date().toISOString(),
       items: payload.items || [],
     };
@@ -2250,7 +2250,7 @@ export const dbService = {
       id: payload.id || `ord-${Date.now()}`,
       order_number: payload.order_number || `ORD-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
       outlet_id: payload.outlet_id || '',
-      warehouse_id: payload.warehouse_id || 'wh-00000000-0000-0000-0000-000000000001',
+      warehouse_id: payload.warehouse_id || 'e0000000-0000-0000-0000-000000000001',
       status: payload.status || 'submitted',
       order_date: new Date().toISOString(),
       notes: payload.notes || null,
@@ -2303,14 +2303,14 @@ export const dbService = {
       id: payload.id || `dsp-${Date.now()}`,
       dispatch_number: payload.dispatch_number || `SJ-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
       outlet_order_id: payload.outlet_order_id || '',
-      from_warehouse_id: payload.from_warehouse_id || 'wh-00000000-0000-0000-0000-000000000001',
+      from_warehouse_id: payload.from_warehouse_id || 'e0000000-0000-0000-0000-000000000001',
       to_outlet_id: payload.to_outlet_id || '',
       status: 'in_transit',
       dispatch_date: new Date().toISOString(),
       driver_name: payload.driver_name || null,
       vehicle_number: payload.vehicle_number || null,
       notes: payload.notes || null,
-      created_by: payload.created_by || 'w0000000-0000-0000-0000-000000000001',
+      created_by: payload.created_by || 'b0000000-0000-0000-0000-000000000001',
       created_at: new Date().toISOString(),
       items: payload.items || [],
     };
@@ -2373,7 +2373,7 @@ export const dbService = {
       id: payload.id || `ret-${Date.now()}`,
       return_number: payload.return_number || `RET-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
       from_outlet_id: payload.from_outlet_id || '',
-      to_warehouse_id: payload.to_warehouse_id || 'wh-00000000-0000-0000-0000-000000000001',
+      to_warehouse_id: payload.to_warehouse_id || 'e0000000-0000-0000-0000-000000000001',
       status: payload.status || 'pending_inspection',
       return_date: payload.return_date || new Date().toISOString(),
       reason: payload.reason || 'Bahan rusak/kadaluarsa saat pengiriman',
@@ -2441,11 +2441,11 @@ export const dbService = {
     const newOpname: StockOpname = {
       id: payload.id || `opn-${Date.now()}`,
       opname_number: payload.opname_number || `SOP-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
-      warehouse_id: payload.warehouse_id || 'wh-00000000-0000-0000-0000-000000000001',
+      warehouse_id: payload.warehouse_id || 'e0000000-0000-0000-0000-000000000001',
       status: 'pending_approval',
       opname_date: new Date().toISOString(),
       notes: payload.notes || null,
-      conducted_by: payload.conducted_by || 'w0000000-0000-0000-0000-000000000001',
+      conducted_by: payload.conducted_by || 'b0000000-0000-0000-0000-000000000001',
       created_at: new Date().toISOString(),
       items: payload.items || [],
     };

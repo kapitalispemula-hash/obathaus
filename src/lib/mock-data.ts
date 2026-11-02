@@ -72,14 +72,14 @@ export const INITIAL_PROFILES: Profile[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'w0000000-0000-0000-0000-000000000001',
+    id: 'b0000000-0000-0000-0000-000000000001',
     email: 'gudang@obathaus.id',
     username: 'gudang',
     full_name: 'Faisal (Operator Gudang Pusat)',
     role: 'warehouse_operator',
     is_active: true,
     password: '123456',
-    primary_warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    primary_warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     created_at: '2026-10-01T08:00:00Z',
     updated_at: '2026-10-01T08:00:00Z',
   },
@@ -91,7 +91,7 @@ export const INITIAL_PROFILES: Profile[] = [
     role: 'cashier',
     is_active: true,
     password: '123456',
-    primary_outlet_id: 'out-00000000-0000-0000-0000-000000000001',
+    primary_outlet_id: 'd0000000-0000-0000-0000-000000000001',
     created_at: '2026-10-01T08:00:00Z',
     updated_at: '2026-10-01T08:00:00Z',
   },
@@ -103,7 +103,7 @@ export const INITIAL_PROFILES: Profile[] = [
     role: 'cashier',
     is_active: true,
     password: '123456',
-    primary_outlet_id: 'out-00000000-0000-0000-0000-000000000002',
+    primary_outlet_id: 'd0000000-0000-0000-0000-000000000002',
     created_at: '2026-10-01T08:00:00Z',
     updated_at: '2026-10-01T08:00:00Z',
   },
@@ -115,7 +115,7 @@ export const INITIAL_PROFILES: Profile[] = [
     role: 'cashier',
     is_active: true,
     password: '123456',
-    primary_outlet_id: 'out-00000000-0000-0000-0000-000000000003',
+    primary_outlet_id: 'd0000000-0000-0000-0000-000000000003',
     created_at: '2026-10-01T08:00:00Z',
     updated_at: '2026-10-01T08:00:00Z',
   },
@@ -1069,13 +1069,13 @@ export function generateRealistic30DaysData(): {
   ];
 
   const OUTLET_IDS = [
-    'out-00000000-0000-0000-0000-000000000001',
-    'out-00000000-0000-0000-0000-000000000002',
-    'out-00000000-0000-0000-0000-000000000003',
-    'out-00000000-0000-0000-0000-000000000004',
-    'out-00000000-0000-0000-0000-000000000005',
-    'out-00000000-0000-0000-0000-000000000006',
-    'out-00000000-0000-0000-0000-000000000007',
+    'd0000000-0000-0000-0000-000000000001',
+    'd0000000-0000-0000-0000-000000000002',
+    'd0000000-0000-0000-0000-000000000003',
+    'd0000000-0000-0000-0000-000000000004',
+    'd0000000-0000-0000-0000-000000000005',
+    'd0000000-0000-0000-0000-000000000006',
+    'd0000000-0000-0000-0000-000000000007',
   ];
 
   expenseDefs.forEach((e, idx) => {
@@ -1203,7 +1203,7 @@ export function generateRealistic30DaysData(): {
 
 export const INITIAL_OUTLETS: Outlet[] = [
   {
-    id: 'out-00000000-0000-0000-0000-000000000001',
+    id: 'd0000000-0000-0000-0000-000000000001',
     code: 'OUT-01',
     name: 'OBATHAUS Cityfood (pusat)',
     address: 'Jl. Todilaling, Kel. Pekkabata, Polewali, Polewali Mandar',
@@ -1216,7 +1216,7 @@ export const INITIAL_OUTLETS: Outlet[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'out-00000000-0000-0000-0000-000000000002',
+    id: 'd0000000-0000-0000-0000-000000000002',
     code: 'OUT-02',
     name: 'OBATHAUS Sentral',
     address: 'Jl. Mr. Muh. Yamin, Kel. Pekkabata, Polewali, Polewali Mandar',
@@ -1229,7 +1229,7 @@ export const INITIAL_OUTLETS: Outlet[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'out-00000000-0000-0000-0000-000000000003',
+    id: 'd0000000-0000-0000-0000-000000000003',
     code: 'OUT-03',
     name: 'OBATHAUS Pantai Bahari',
     address: 'Jl. Bahari, Kel. Polewali, Polewali, Polewali Mandar',
@@ -1242,7 +1242,7 @@ export const INITIAL_OUTLETS: Outlet[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'out-00000000-0000-0000-0000-000000000004',
+    id: 'd0000000-0000-0000-0000-000000000004',
     code: 'OUT-04',
     name: 'OBATHAUS Wonomulyo',
     address: 'Jl. Jenderal Soedirman (Jensu), Wonomulyo, Polewali Mandar',
@@ -1255,7 +1255,7 @@ export const INITIAL_OUTLETS: Outlet[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'out-00000000-0000-0000-0000-000000000005',
+    id: 'd0000000-0000-0000-0000-000000000005',
     code: 'OUT-05',
     name: 'OBATHAUS Campalagian',
     address: 'Jl. Poros Polman-Majene (samping PKM Campa), Campalagian, Polewali Mandar',
@@ -1268,7 +1268,7 @@ export const INITIAL_OUTLETS: Outlet[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'out-00000000-0000-0000-0000-000000000006',
+    id: 'd0000000-0000-0000-0000-000000000006',
     code: 'OUT-06',
     name: 'OBATHAUS Tinambung',
     address: 'Jl. Poros Polman-Majene (samping Indomaret Tinambung), Tinambung, Polewali Mandar',
@@ -1281,7 +1281,7 @@ export const INITIAL_OUTLETS: Outlet[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'out-00000000-0000-0000-0000-000000000007',
+    id: 'd0000000-0000-0000-0000-000000000007',
     code: 'OUT-07',
     name: 'OBATHAUS Majene',
     address: 'Jl. KH. Daeng (depan Masjid Tanjung Batu Majene) Banggae, Majene',
@@ -1297,7 +1297,7 @@ export const INITIAL_OUTLETS: Outlet[] = [
 
 export const INITIAL_WAREHOUSES: Warehouse[] = [
   {
-    id: 'wh-00000000-0000-0000-0000-000000000001',
+    id: 'e0000000-0000-0000-0000-000000000001',
     code: 'WH-01',
     name: 'Gudang Logistik Pusat Obat Haus (Central Warehouse Polman)',
     address: 'Polewali Mandar, Sulawesi Barat',
@@ -1517,14 +1517,14 @@ for (const outlet of INITIAL_OUTLETS) {
 // ==========================================
 
 export const INITIAL_WAREHOUSE_STOCKS: WarehouseStock[] = [
-  { id: 'ws-01', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-01', quantity: 15000, updated_at: '2026-11-01T08:00:00Z' },
-  { id: 'ws-02', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-02', quantity: 25000, updated_at: '2026-11-01T08:00:00Z' },
-  { id: 'ws-03', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-03', quantity: 40000, updated_at: '2026-11-01T08:00:00Z' },
-  { id: 'ws-04', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-04', quantity: 80000, updated_at: '2026-11-01T08:00:00Z' },
-  { id: 'ws-05', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-05', quantity: 30000, updated_at: '2026-11-01T08:00:00Z' },
-  { id: 'ws-06', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-06', quantity: 5000, updated_at: '2026-11-01T08:00:00Z' },
-  { id: 'ws-07', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-07', quantity: 10000, updated_at: '2026-11-01T08:00:00Z' },
-  { id: 'ws-08', warehouse_id: 'wh-00000000-0000-0000-0000-000000000001', raw_material_id: 'raw-08', quantity: 20000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-01', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-01', quantity: 15000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-02', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-02', quantity: 25000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-03', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-03', quantity: 40000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-04', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-04', quantity: 80000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-05', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-05', quantity: 30000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-06', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-06', quantity: 5000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-07', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-07', quantity: 10000, updated_at: '2026-11-01T08:00:00Z' },
+  { id: 'ws-08', warehouse_id: 'e0000000-0000-0000-0000-000000000001', raw_material_id: 'raw-08', quantity: 20000, updated_at: '2026-11-01T08:00:00Z' },
 ];
 
 export const INITIAL_SUPPLIER_POS: SupplierPO[] = [
@@ -1532,12 +1532,12 @@ export const INITIAL_SUPPLIER_POS: SupplierPO[] = [
     id: 'po-01',
     po_number: 'PO-202611-001',
     supplier_id: 'sup-01',
-    warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     status: 'approved',
     order_date: '2026-11-01T09:00:00Z',
     expected_delivery_date: '2026-11-03T14:00:00Z',
     notes: 'Pengadaan bubuk matcha dan sirup reguler awal bulan',
-    created_by: 'w0000000-0000-0000-0000-000000000001',
+    created_by: 'b0000000-0000-0000-0000-000000000001',
     approved_by: 'a0000000-0000-0000-0000-000000000001',
     approved_at: '2026-11-01T10:30:00Z',
     created_at: '2026-11-01T09:00:00Z',
@@ -1569,12 +1569,12 @@ export const INITIAL_SUPPLIER_POS: SupplierPO[] = [
     id: 'po-02',
     po_number: 'PO-202611-002',
     supplier_id: 'sup-02',
-    warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     status: 'pending_approval',
     order_date: '2026-11-02T08:30:00Z',
     expected_delivery_date: '2026-11-04T10:00:00Z',
     notes: 'Restock mingguan Fresh Milk Pasteurisasi Celebes Dairy',
-    created_by: 'w0000000-0000-0000-0000-000000000001',
+    created_by: 'b0000000-0000-0000-0000-000000000001',
     created_at: '2026-11-02T08:30:00Z',
     updated_at: '2026-11-02T08:30:00Z',
     items: [
@@ -1597,11 +1597,11 @@ export const INITIAL_SUPPLIER_RECEIPTS: SupplierReceipt[] = [
     id: 'rec-01',
     receipt_number: 'RCV-202610-092',
     supplier_po_id: 'po-01',
-    warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     delivery_order_number: 'SJ-SUP-88219',
     received_date: '2026-10-28T11:00:00Z',
     notes: 'Penerimaan fisik lengkap, segel aman dan kondisi dingin terjaga',
-    received_by: 'w0000000-0000-0000-0000-000000000001',
+    received_by: 'b0000000-0000-0000-0000-000000000001',
     created_at: '2026-10-28T11:00:00Z',
     items: [
       {
@@ -1622,8 +1622,8 @@ export const INITIAL_OUTLET_ORDERS: OutletOrder[] = [
   {
     id: 'ord-01',
     order_number: 'ORD-OUT01-081',
-    outlet_id: 'out-00000000-0000-0000-0000-000000000001',
-    warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    outlet_id: 'd0000000-0000-0000-0000-000000000001',
+    warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     status: 'submitted',
     order_date: '2026-11-02T09:15:00Z',
     notes: 'Permintaan bahan baku harian Outlet Hasanuddin',
@@ -1639,8 +1639,8 @@ export const INITIAL_OUTLET_ORDERS: OutletOrder[] = [
   {
     id: 'ord-02',
     order_number: 'ORD-OUT02-042',
-    outlet_id: 'out-00000000-0000-0000-0000-000000000002',
-    warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    outlet_id: 'd0000000-0000-0000-0000-000000000002',
+    warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     status: 'processing',
     order_date: '2026-11-02T08:00:00Z',
     notes: 'Permintaan cabang Pengayoman (sedang disiapkan tim gudang)',
@@ -1659,14 +1659,14 @@ export const INITIAL_DISPATCHES: Dispatch[] = [
     id: 'dsp-01',
     dispatch_number: 'SJ-202611-019',
     outlet_order_id: 'ord-02',
-    from_warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
-    to_outlet_id: 'out-00000000-0000-0000-0000-000000000003',
+    from_warehouse_id: 'e0000000-0000-0000-0000-000000000001',
+    to_outlet_id: 'd0000000-0000-0000-0000-000000000003',
     status: 'in_transit',
     dispatch_date: '2026-11-02T10:00:00Z',
     driver_name: 'Pak Daeng Rapi (Kurir Logistik Obat Haus)',
     vehicle_number: 'DD 4521 XA (Mobil Box)',
     notes: 'Pengiriman batch pagi menuju Cabang Hertasning',
-    created_by: 'w0000000-0000-0000-0000-000000000001',
+    created_by: 'b0000000-0000-0000-0000-000000000001',
     created_at: '2026-11-02T10:00:00Z',
     items: [
       { id: 'dspi-01', dispatch_id: 'dsp-01', raw_material_id: 'raw-02', quantity_dispatched: 5000, unit_id: 'unit-gram' },
@@ -1679,8 +1679,8 @@ export const INITIAL_WAREHOUSE_RETURNS: WarehouseReturn[] = [
   {
     id: 'ret-01',
     return_number: 'RET-202611-005',
-    from_outlet_id: 'out-00000000-0000-0000-0000-000000000004',
-    to_warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    from_outlet_id: 'd0000000-0000-0000-0000-000000000004',
+    to_warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     status: 'pending_inspection',
     return_date: '2026-11-02T11:00:00Z',
     reason: 'Kardus kemasan cup 16oz robek saat bongkar muat di cabang Perintis',
@@ -1696,11 +1696,11 @@ export const INITIAL_STOCK_OPNAMES: StockOpname[] = [
   {
     id: 'opn-01',
     opname_number: 'SOP-202610-001',
-    warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+    warehouse_id: 'e0000000-0000-0000-0000-000000000001',
     status: 'approved',
     opname_date: '2026-10-31T17:00:00Z',
     notes: 'Opname fisik rutin tutup bulan Gudang Pusat',
-    conducted_by: 'w0000000-0000-0000-0000-000000000001',
+    conducted_by: 'b0000000-0000-0000-0000-000000000001',
     approved_by: 'a0000000-0000-0000-0000-000000000001',
     approved_at: '2026-10-31T18:00:00Z',
     created_at: '2026-10-31T17:00:00Z',
@@ -1909,7 +1909,7 @@ export const INITIAL_STOCK_LEDGER: StockLedgerEntry[] = [
     id: 'led-01',
     transaction_time: '2026-10-31T09:00:00Z',
     location_type: 'warehouse',
-    location_id: 'wh-00000000-0000-0000-0000-000000000001',
+    location_id: 'e0000000-0000-0000-0000-000000000001',
     location_name: 'Gudang Pusat Makassar',
     raw_material_id: 'raw-03',
     movement_type: 'supplier_receipt',
@@ -1922,13 +1922,13 @@ export const INITIAL_STOCK_LEDGER: StockLedgerEntry[] = [
     reference_document_type: 'supplier_po',
     reference_document_number: 'RCV-202610-001',
     notes: 'Penerimaan biji kopi Arabika dari Toraja Highlands',
-    created_by: 'w0000000-0000-0000-0000-000000000001',
+    created_by: 'b0000000-0000-0000-0000-000000000001',
   },
   {
     id: 'led-02',
     transaction_time: '2026-11-01T07:30:00Z',
     location_type: 'warehouse',
-    location_id: 'wh-00000000-0000-0000-0000-000000000001',
+    location_id: 'e0000000-0000-0000-0000-000000000001',
     location_name: 'Gudang Pusat Makassar',
     raw_material_id: 'raw-03',
     movement_type: 'dispatch_to_transit',
@@ -1941,7 +1941,7 @@ export const INITIAL_STOCK_LEDGER: StockLedgerEntry[] = [
     reference_document_type: 'dispatch',
     reference_document_number: 'SJ-202611-001',
     notes: 'Pengiriman restock via armada DD 4521 XA ke Cabang Hasanuddin',
-    created_by: 'w0000000-0000-0000-0000-000000000001',
+    created_by: 'b0000000-0000-0000-0000-000000000001',
   },
   {
     id: 'led-03',

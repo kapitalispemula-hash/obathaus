@@ -105,7 +105,7 @@ export default function PosStockPage() {
       setIsSubmittingOrder(true);
       await dbService.createOutletOrder({
         outlet_id: outletId,
-        warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+        warehouse_id: 'e0000000-0000-0000-0000-000000000001',
         notes: orderNotes,
         created_by: user?.id || 'c0000000-0000-0000-0000-000000000001',
         items: orderItems.map((itm, idx) => ({

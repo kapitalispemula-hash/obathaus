@@ -90,7 +90,7 @@ export default function WarehouseReturnsPage() {
       setIsSubmittingInspection(true);
       await dbService.inspectWarehouseReturn(
         inspectingReturn.id,
-        'w0000000-0000-0000-0000-000000000001', // Warehouse Operator ID
+        'b0000000-0000-0000-0000-000000000001', // Warehouse Operator ID
         inspectAction,
         inspectStatus,
         inspectNotes
@@ -158,7 +158,7 @@ export default function WarehouseReturnsPage() {
 
       await dbService.createWarehouseReturn({
         from_outlet_id: fromOutletId,
-        to_warehouse_id: 'wh-00000000-0000-0000-0000-000000000001',
+        to_warehouse_id: 'e0000000-0000-0000-0000-000000000001',
         reason: returnReason,
         notes: returnNotes,
         items: itemsPayload,

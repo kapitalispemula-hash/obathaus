@@ -80,7 +80,7 @@ BEGIN
         (v_kasir1_id, 'kasir1@obathaus.id', 'kasir1', '123456', 'Budi Santoso (Kasir Cityfood)', 'cashier', true),
         (v_kasir2_id, 'kasir2@obathaus.id', 'kasir2', '123456', 'Siti (Kasir Sentral)', 'cashier', true),
         ('c0000000-0000-0000-0000-000000000003'::uuid, 'kasir3@obathaus.id', 'kasir3', '123456', 'Dewi (Kasir Pantai Bahari)', 'cashier', true),
-        ('w0000000-0000-0000-0000-000000000001'::uuid, 'gudang@obathaus.id', 'gudang', '123456', 'Faisal (Operator Gudang Pusat)', 'warehouse_operator', true)
+        ('b0000000-0000-0000-0000-000000000001'::uuid, 'gudang@obathaus.id', 'gudang', '123456', 'Faisal (Operator Gudang Pusat)', 'warehouse_operator', true)
     ON CONFLICT (id) DO UPDATE 
     SET full_name = EXCLUDED.full_name,
         role = EXCLUDED.role,

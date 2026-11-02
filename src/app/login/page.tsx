@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const storeName = (settings?.store_name || 'Cafe POS').trim();
+  const storeName = (settings?.store_name || 'OBATHAUS').trim();
   const words = storeName.split(/\s+/);
   const firstWord = words[0] || 'CAFE';
   const remainingWords = words.slice(1).join(' ');
@@ -73,7 +73,7 @@ export default function LoginPage() {
               <span className="w-2 h-2 rounded-full bg-[#FF6B00] ml-1 self-start mt-1.5" />
             </div>
             <p className="text-xs text-[#71717A] font-medium mt-1">
-              {settings?.tagline || 'Food & Beverage Point of Sale • Management Portal'}
+              {settings?.tagline || 'Operational System Management'}
             </p>
           </div>
         </div>

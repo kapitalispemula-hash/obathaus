@@ -187,7 +187,7 @@ export function ReceiptModal({ isOpen, onClose, transaction, settings }: Receipt
             <div className="pt-3 text-center space-y-1 text-[10px] text-slate-600">
               <p className="whitespace-pre-line">{footer}</p>
               <p className="pt-1 text-[9px] text-slate-400">
-                Dicetak oleh Sistem Kasir Cafe POS V1.0
+                Dicetak oleh OBATHAUS - Operational System Management
               </p>
             </div>
           </div>

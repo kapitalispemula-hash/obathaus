@@ -7,9 +7,48 @@ import { CartProvider } from '@/lib/cart-context';
 import { PwaSupport } from '@/components/common/PwaSupport';
 
 export const metadata: Metadata = {
-  title: 'Cafe POS — Point of Sale & Financial Analytics',
-  description: 'Aplikasi Kasir Modern & Analisis Finansial Cafe: HPP Snapshot, Gross Profit & Net Operating Profit.',
+  metadataBase: new URL('https://obathaus.vercel.app'),
+  title: {
+    default: 'OBATHAUS - Operational System Management',
+    template: '%s | OBATHAUS',
+  },
+  description:
+    'Sistem Manajemen Operasional Terpadu, Gudang Logistik & Kasir POS Multi-Cabang Obat Haus (Sulawesi Barat).',
+  applicationName: 'OBATHAUS',
+  appleWebApp: {
+    capable: true,
+    title: 'OBATHAUS',
+    statusBarStyle: 'default',
+  },
+  formatDetection: {
+    telephone: false,
+  },
   manifest: '/manifest.json',
+  openGraph: {
+    type: 'website',
+    locale: 'id_ID',
+    url: 'https://obathaus.vercel.app',
+    siteName: 'OBATHAUS',
+    title: 'OBATHAUS - Operational System Management',
+    description:
+      'Sistem Manajemen Operasional Terpadu, Gudang Logistik & Kasir POS Multi-Cabang Obat Haus (Sulawesi Barat).',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'OBATHAUS - Operational System Management',
+    description:
+      'Sistem Manajemen Operasional Terpadu, Gudang Logistik & Kasir POS Multi-Cabang Obat Haus (Sulawesi Barat).',
+  },
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

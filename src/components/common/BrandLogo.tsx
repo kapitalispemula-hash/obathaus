@@ -17,12 +17,12 @@ export function BrandLogo({
   showImage?: boolean;
 }) {
   const cart = useCart();
-  const storeName = (name || cart?.settings?.store_name || 'Cafe POS').trim();
+  const storeName = (name || cart?.settings?.store_name || 'OBATHAUS').trim();
   const logoUrl = cart?.settings?.logo_url;
 
   // Split store name into first word (black) and remaining words (orange)
   const words = storeName.split(/\s+/);
-  const firstWord = words[0] || 'CAFE';
+  const firstWord = words[0] || 'OBATHAUS';
   const remainingWords = words.slice(1).join(' ');
 
   return (

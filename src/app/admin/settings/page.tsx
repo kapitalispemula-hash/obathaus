@@ -24,6 +24,11 @@ import {
   Coffee,
   Loader2,
   Sparkles,
+  Printer,
+  Smartphone,
+  Download,
+  Share2,
+  ExternalLink,
 } from 'lucide-react';
 
 function updateBrowserFavicon(iconUrl: string) {
@@ -184,7 +189,7 @@ export default function AdminSettingsPage() {
         finalLogo = logoPreview || logoUrl || null;
       }
 
-      const finalStoreName = storeName.trim() || 'Cafe POS';
+      const finalStoreName = storeName.trim() || 'OBATHAUS - Operational System Management';
       await dbService.updateStoreSettings({
         store_name: finalStoreName,
         tagline: tagline.trim(),
@@ -394,7 +399,7 @@ export default function AdminSettingsPage() {
                       <p className="text-[11px] text-mutedtext leading-relaxed">
                         {logoPreview
                           ? 'Logo ini sedang aktif dan ditampilkan di seluruh antarmuka cafe.'
-                          : 'Belum ada file logo kustom. Sistem menggunakan tipografi Cafe POS.'}
+                          : 'Belum ada file logo kustom. Sistem menggunakan logo resmi OBAT HAUS.'}
                       </p>
                       {logoPreview && (
                         <button
@@ -425,7 +430,7 @@ export default function AdminSettingsPage() {
                       )}
                     </div>
                     <span className="font-semibold truncate text-[11px] text-white/90">
-                      {storeName || 'Cafe POS'} — Point of Sale & Financial Analytics
+                      {storeName || 'OBATHAUS'} — Operational System Management
                     </span>
                   </div>
                 </div>
@@ -571,37 +576,25 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          {/* 2. Invoice & Receipt Settings */}
+          {/* 2. Standar Printer Struk Kasir */}
           <div className="bg-white p-6 rounded-2xl border border-borderline shadow-xs space-y-4">
             <h3 className="font-bold text-heading text-base flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center">
-                <Receipt className="w-4 h-4" />
+                <Printer className="w-4 h-4" />
               </div>
-              <span>Format Invoice & Struk Kasir</span>
+              <span>Standar Printer Struk Kasir (Thermal Paper)</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-heading mb-1">Prefix Nomor Invoice</label>
-                <input
-                  type="text"
-                  value={invoicePrefix}
-                  onChange={(e) => setInvoicePrefix(e.target.value)}
-                  placeholder="Contoh: INV"
-                  required
-                  className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00] text-heading"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-heading mb-1">Ukuran Kertas Thermal Printer</label>
+                <label className="block text-xs font-bold text-heading mb-1.5">Ukuran Kertas Thermal Printer Toko</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(['58mm', '80mm'] as const).map((sz) => (
                     <button
                       key={sz}
                       type="button"
                       onClick={() => setPaperSize(sz)}
-                      className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      className={`py-2.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
                         paperSize === sz
                           ? 'bg-[#FF6B00] text-white border-[#FF6B00] shadow-xs'
                           : 'bg-canvas text-heading border-borderline hover:bg-slate-200/50'
@@ -613,26 +606,79 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-heading mb-1">Header Pesan Struk</label>
-                <input
-                  type="text"
-                  value={receiptHeader}
-                  onChange={(e) => setReceiptHeader(e.target.value)}
-                  placeholder="Selamat Datang di Cafe POS"
-                  className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                />
+              <div className="flex items-center">
+                <div className="bg-[#FFF7ED] border border-[#FED7AA] rounded-2xl p-3.5 text-xs text-[#9A3412] leading-relaxed w-full">
+                  <span className="font-bold block mb-0.5">ℹ️ Pengaturan Struk & Prefix Invoice Khusus Cabang</span>
+                  Format prefix nomor nota, header, dan footer struk kasir kini diatur secara independen per cabang di menu <strong>Cabang &amp; Gudang</strong>.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2.1. Dedicated App Download & PWA Mobile Section */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 rounded-3xl shadow-xl border border-slate-700/60 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-700/60">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white p-2 flex items-center justify-center shrink-0 shadow-md">
+                  <TargetLogo className="w-full h-full" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-lg sm:text-xl tracking-tight text-white">
+                      Aplikasi Mobile OBAT HAUS
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-[#FF6B00] text-white tracking-wider">
+                      Android &amp; iOS
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Progressive Web App (PWA) resmi untuk kasir tablet, smartphone staf, dan owner.
+                  </p>
+                </div>
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-heading mb-1">Footer / Pesan Penutup Struk</label>
-                <textarea
-                  value={receiptFooter}
-                  onChange={(e) => setReceiptFooter(e.target.value)}
-                  rows={2}
-                  placeholder="Terima kasih atas kunjungan Anda!"
-                  className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                />
+              <div className="flex items-center gap-2">
+                <a
+                  href="/pos"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Buka Web App</span>
+                </a>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Android Card */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4.5 space-y-3">
+                <div className="flex items-center gap-2.5 text-[#FF6B00]">
+                  <Smartphone className="w-5 h-5" />
+                  <h4 className="font-bold text-sm text-white">Panduan Pengguna Android (Chrome)</h4>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Buka link <strong>https://obathaus.vercel.app</strong> di Google Chrome HP/Tablet Anda. Ketuk banner pop-up yang muncul di bawah layar atau ketuk menu titik tiga (⋮) lalu pilih <strong>&quot;Install Aplikasi&quot;</strong> atau <strong>&quot;Tambahkan ke Layar Utama&quot;</strong>.
+                </p>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Ikon Logo Obat Haus otomatis terpasang di HP</span>
+                </div>
+              </div>
+
+              {/* iOS Card */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4.5 space-y-3">
+                <div className="flex items-center gap-2.5 text-sky-400">
+                  <Smartphone className="w-5 h-5" />
+                  <h4 className="font-bold text-sm text-white">Panduan Pengguna iPhone / iPad (Safari)</h4>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Buka link <strong>https://obathaus.vercel.app</strong> di browser Safari. Ketuk tombol Bagikan <strong>(ikon kotak panah ke atas [↑])</strong> di bilah bawah, lalu gulir ke bawah dan pilih <strong>&quot;Tambah ke Layar Utama&quot;</strong> (<em>Add to Home Screen</em>).
+                </p>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Berjalan full screen selayaknya aplikasi iOS native</span>
+                </div>
               </div>
             </div>
           </div>

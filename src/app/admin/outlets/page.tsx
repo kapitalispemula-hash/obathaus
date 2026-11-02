@@ -445,22 +445,23 @@ export default function AdminOutletsPage() {
 
         {/* Modal Outlet Add / Edit */}
         {isOutletModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-borderline overflow-hidden flex flex-col max-h-[88vh] my-auto animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-heading text-sm sm:text-base">
                   {editingOutlet ? 'Edit Data Cabang Outlet' : 'Tambah Cabang Outlet Baru'}
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsOutletModalOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center text-mutedtext hover:text-heading rounded-full hover:bg-[#FAFAFA]"
+                  className="w-8 h-8 flex items-center justify-center text-mutedtext hover:text-heading rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveOutlet} className="p-6 space-y-4">
+              <form onSubmit={handleSaveOutlet} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
                 {outletFormError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
@@ -584,12 +585,13 @@ export default function AdminOutletsPage() {
                     Cabang Outlet Beroperasi Aktif
                   </label>
                 </div>
+                </div>
 
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
+                <div className="px-6 py-3.5 bg-slate-50 border-t border-borderline flex items-center justify-end gap-2.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsOutletModalOpen(false)}
-                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
                     Batal
                   </button>
@@ -608,22 +610,23 @@ export default function AdminOutletsPage() {
 
         {/* Modal Warehouse Edit */}
         {isWarehouseModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-borderline overflow-hidden flex flex-col max-h-[88vh] my-auto animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-heading text-sm sm:text-base">
                   Edit Data Gudang Pusat
                 </h3>
                 <button
                   type="button"
                   onClick={() => setIsWarehouseModalOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center text-mutedtext hover:text-heading rounded-full hover:bg-[#FAFAFA]"
+                  className="w-8 h-8 flex items-center justify-center text-mutedtext hover:text-heading rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveWarehouse} className="p-6 space-y-4">
+              <form onSubmit={handleSaveWarehouse} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
                 {warehouseFormError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
@@ -679,11 +682,13 @@ export default function AdminOutletsPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
+                </div>
+
+                <div className="px-6 py-3.5 bg-slate-50 border-t border-borderline flex items-center justify-end gap-2.5 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsWarehouseModalOpen(false)}
-                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
                     Batal
                   </button>

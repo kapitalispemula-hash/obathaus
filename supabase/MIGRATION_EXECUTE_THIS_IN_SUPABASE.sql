@@ -25,11 +25,13 @@ CREATE TABLE IF NOT EXISTS public.app_notifications (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 3. ENSURE OPERATING EXPENSES & OUTLETS HAVE REQUIRED COLUMNS
+-- 3. ENSURE OPERATING EXPENSES, OUTLETS & STORE SETTINGS HAVE REQUIRED COLUMNS
 ALTER TABLE IF EXISTS public.operating_expenses ADD COLUMN IF NOT EXISTS outlet_id UUID;
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS invoice_prefix TEXT;
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS receipt_header TEXT;
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
+ALTER TABLE IF EXISTS public.store_settings ADD COLUMN IF NOT EXISTS receipt_paper_size TEXT DEFAULT '58mm';
+ALTER TABLE IF EXISTS public.store_settings ADD COLUMN IF NOT EXISTS invoice_prefix TEXT DEFAULT 'INV';
 
 -- 4. BERSIHKAN TOTAL SEMUA DATA DUMMY (PRODUK, KATEGORI, TRANSAKSI, SHIFT, LOGISTIK)
 DELETE FROM public.transaction_refund_items;
@@ -97,7 +99,7 @@ INSERT INTO public.store_settings (
 )
 VALUES (
   '00000000-0000-0000-0000-000000000001'::uuid,
-  'OBAT HAUS POS',
+  'OBATHAUS - Operational System Management',
   'Authentic Coffee & Refreshing Drinks - Sulawesi Barat',
   'Polewali Mandar & Majene, Sulawesi Barat',
   '0811-4409-900',

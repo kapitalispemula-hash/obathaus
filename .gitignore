@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing & Scratch Scripts
+scratch/
+coverage/
+
+# Next.js Build Outputs
+/.next/
+/out/
+/build/
+dist/
+
+# TypeScript Build Cache
+tsconfig.tsbuildinfo
+
+# Debug & Error Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Environment Variables & Secrets (CRITICAL: Do NOT commit secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env*.local
+
+# OS Metadata & System Files
+.DS_Store
+Thumbs.db
+*.pem
+
+# Editor Directories
+.vscode/
+.idea/
+
+# Vercel Project Cache
+.vercel

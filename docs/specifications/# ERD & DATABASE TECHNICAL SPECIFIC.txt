@@ -1,0 +1,1378 @@
+# ERD & DATABASE TECHNICAL SPECIFICATION
+## Cafe POS System — V1.0
+
+**Dokumen:** 03-ERD-DATABASE.md  
+**Versi:** 1.0  
+**Status:** Draft Technical Specification  
+**Database:** Supabase PostgreSQL  
+**Authentication:** Supabase Auth  
+**Storage:** Supabase Storage  
+**Target:** Web Application + Progressive Web App (PWA)  
+**Environment:** Demo / Development
+
+---
+
+# 1. TUJUAN DATABASE
+
+Database dirancang untuk mendukung aplikasi Cafe POS dengan dua role utama:
+
+1. **Admin:** Mengelola seluruh data operasional, produk, kategori, kasir, transaksi, pengeluaran, laporan penjualan, HPP, dan keuntungan.
+2. **Kasir:** Mengakses katalog produk, menjalankan transaksi POS, mencetak struk, dan melihat riwayat transaksi miliknya.
+
+Prinsip desain:
+
+- Relasi data konsisten dan terstruktur.
+- Transaksi checkout harus bersifat atomic.
+- Data transaksi historis tidak berubah ketika harga jual atau HPP produk diperbarui.
+- Data keuangan hanya dapat diakses Admin.
+- Data transaksi memiliki jejak audit.
+- Database menggunakan `store_id` agar dapat dikembangkan menjadi sistem multi-outlet di masa depan.
+- Penghapusan data penting menggunakan soft delete atau mekanisme arsip.
+- Data laporan keuangan dihitung dari transaksi dan pengeluaran aktual, bukan angka dummy yang disimpan terpisah.
+
+# 2. DATABASE TECHNOLOGY
+
+| Komponen | Teknologi |
+|---|---|
+| Database | Supabase PostgreSQL |
+| Authentication | Supabase Auth |
+| File Storage | Supabase Storage |
+| Database Security | PostgreSQL RLS |
+| Business Logic | PostgreSQL Functions / RPC |
+| Deployment | Vercel |
+| Application | Next.js + TypeScript |
+| PWA | Web App Manifest + Service Worker |
+
+Gunakan migration SQL sebagai sumber utama perubahan database.
+
+Lokasi migration:
+
+`supabase/migrations/`
+
+Seed data:
+
+`supabase/seed.sql`
+
+Jangan membuat struktur database hanya melalui perubahan manual di Supabase Dashboard. Semua perubahan skema harus dapat direproduksi melalui migration.
+
+# 3. DATABASE ENUMS
+
+Gunakan PostgreSQL ENUM untuk nilai yang memiliki pilihan tetap.
+
+## 3.1 User Role
+
+`app_role`
+
+- admin
+- cashier
+
+## 3.2 Transaction Status
+
+`transaction_status`
+
+- completed
+- voided
+- partially_refunded
+- refunded
+
+## 3.3 Payment Method
+
+`payment_method`
+
+- cash
+- qris
+- debit
+- transfer
+
+## 3.4 Payment Status
+
+`payment_status`
+
+- paid
+- pending
+- failed
+- refunded
+
+Untuk V1, transaksi yang berhasil diselesaikan harus memiliki pembayaran berstatus `paid`. Pembayaran eksternal hanya disimulasikan; aplikasi tidak mengintegrasikan payment gateway.
+
+## 3.5 Refund Status
+
+`refund_status`
+
+- completed
+- cancelled
+
+## 3.6 Expense Status
+
+`expense_status`
+
+- recorded
+- voided
+
+## 3.7 Tax Calculation Mode
+
+`tax_mode`
+
+- none
+- exclusive
+- inclusive
+
+# 4. DATABASE TABLES
+
+Struktur database dibagi menjadi beberapa kelompok:
+
+1. Store & User Management
+2. Store Configuration
+3. Product & Category Management
+4. Sales & Transactions
+5. Payment
+6. Refund
+7. Operating Expenses
+8. Audit & Invoice Management
+
+---
+
+# 5. STORE & USER MANAGEMENT
+
+## 5.1 Table: stores
+
+Menyimpan identitas bisnis atau outlet.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID store |
+| name | VARCHAR(150) | Nama cafe |
+| slug | VARCHAR(100) UNIQUE | Identitas URL |
+| email | VARCHAR(150) | Email bisnis |
+| phone | VARCHAR(30) | Nomor telepon |
+| address | TEXT | Alamat |
+| logo_url | TEXT | URL logo |
+| currency_code | VARCHAR(3) | Default IDR |
+| timezone | VARCHAR(50) | Default Asia/Makassar |
+| is_active | BOOLEAN | Status store |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Catatan:
+- V1 menggunakan satu store untuk demo.
+- Struktur sudah menyiapkan kemungkinan multi-store.
+- Transaksi historis tetap menyimpan kode mata uangnya sendiri.
+
+## 5.2 Table: profiles
+
+Menghubungkan akun Supabase Auth dengan identitas pengguna aplikasi.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK, FK | Mengacu ke auth.users.id |
+| store_id | UUID FK | Store pengguna |
+| full_name | VARCHAR(150) | Nama pengguna |
+| email | VARCHAR(150) | Email pengguna |
+| phone | VARCHAR(30) | Nomor telepon |
+| role | app_role | admin / cashier |
+| avatar_url | TEXT | Foto profil |
+| is_active | BOOLEAN | Status akun |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Aturan:
+
+- Satu akun Auth memiliki satu profile.
+- Setiap pengguna terhubung dengan satu store pada V1.
+- Role tidak boleh ditentukan sendiri oleh pengguna ketika registrasi.
+- Pembuatan Admin dan Kasir dilakukan melalui proses provisioning yang terotorisasi.
+- Kasir yang dinonaktifkan tidak boleh melakukan checkout baru.
+- Data transaksi lama tetap mempertahankan referensi pengguna yang melakukan transaksi.
+
+Foreign Key:
+
+`profiles.id → auth.users.id`
+
+`profiles.store_id → stores.id`
+
+## 5.3 Pengamanan Role
+
+Jangan mengandalkan role yang dikirim dari frontend.
+
+Penerapan role harus menggunakan:
+- Database profile.
+- Pemeriksaan role di server.
+- PostgreSQL RLS.
+- Server-side authorization.
+
+Pengguna tidak boleh mengubah `role`, `store_id`, atau `is_active` miliknya sendiri melalui request biasa.
+
+---
+
+# 6. STORE CONFIGURATION
+
+## 6.1 Table: store_settings
+
+Menyimpan pengaturan operasional aplikasi untuk setiap store.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID pengaturan |
+| store_id | UUID FK UNIQUE | Store terkait |
+| language | VARCHAR(10) | Default id |
+| currency_code | VARCHAR(3) | Default IDR |
+| timezone | VARCHAR(50) | Asia/Makassar |
+| tax_enabled | BOOLEAN | Pajak aktif |
+| tax_rate | NUMERIC(7,4) | Persentase pajak |
+| tax_mode | tax_mode | none / exclusive / inclusive |
+| default_discount_enabled | BOOLEAN | Fitur diskon |
+| receipt_width | VARCHAR(10) | 58mm / 80mm |
+| receipt_config | JSONB | Pengaturan tampilan struk |
+| invoice_prefix | VARCHAR(20) | Prefix invoice |
+| invoice_format | VARCHAR(100) | Format nomor invoice |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Contoh `receipt_config`:
+
+```json
+{
+  "show_logo": true,
+  "show_store_address": true,
+  "show_store_phone": true,
+  "show_cashier_name": true,
+  "show_footer_message": true,
+  "footer_message": "Terima kasih telah berkunjung!",
+  "show_tax": true
+}
+```
+
+Ketentuan:
+- Pengaturan hanya dapat diubah Admin.
+- Pengaturan pajak dan mata uang yang digunakan ketika checkout harus disalin ke transaksi sebagai snapshot.
+- Perubahan pengaturan tidak boleh mengubah transaksi lama.
+
+---
+
+# 7. PRODUCT & CATEGORY MANAGEMENT
+
+## 7.1 Table: categories
+
+Menyimpan kategori produk.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID kategori |
+| store_id | UUID FK | Store |
+| name | VARCHAR(100) | Nama kategori |
+| description | TEXT | Deskripsi |
+| image_url | TEXT | Gambar kategori |
+| sort_order | INTEGER | Urutan tampilan |
+| is_active | BOOLEAN | Status aktif |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Contoh kategori:
+- Coffee
+- Non Coffee
+- Tea
+- Food
+- Snack
+- Dessert
+- Signature
+- Others
+
+Constraint:
+
+`UNIQUE(store_id, name)`
+
+## 7.2 Table: products
+
+Menyimpan katalog produk.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID produk |
+| store_id | UUID FK | Store |
+| category_id | UUID FK | Kategori |
+| sku | VARCHAR(50) | Kode produk |
+| name | VARCHAR(150) | Nama produk |
+| description | TEXT | Deskripsi |
+| image_url | TEXT | Foto produk |
+| selling_price | NUMERIC(14,2) | Harga jual |
+| cost_price | NUMERIC(14,2) | HPP |
+| is_available | BOOLEAN | Tersedia untuk dijual |
+| is_archived | BOOLEAN | Status arsip |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Constraint:
+
+- Harga jual tidak boleh negatif.
+- HPP tidak boleh negatif.
+- SKU unik dalam satu store apabila diisi.
+- Produk yang telah digunakan dalam transaksi tidak dihapus permanen.
+- Produk yang tidak tersedia tidak muncul dalam katalog POS.
+
+Penting:
+
+`cost_price` hanya boleh dibaca dan diubah oleh Admin.
+
+Kasir tidak boleh menerima data HPP melalui API katalog, response server, atau query database.
+
+Untuk katalog POS, gunakan database view atau server endpoint khusus yang hanya mengembalikan:
+
+- id
+- category_id
+- name
+- sku
+- selling_price
+- image_url
+- is_available
+
+Jangan memberikan akses SELECT langsung ke seluruh kolom `products` kepada role Kasir.
+
+## 7.3 Supabase Storage
+
+Bucket:
+
+`product-images`
+
+Kebijakan:
+- Admin dapat upload, update, dan menghapus gambar.
+- Kasir hanya dapat melihat gambar produk yang dipublikasikan.
+- Gunakan file validation untuk tipe dan ukuran gambar.
+- Simpan URL atau path file pada `products.image_url`.
+
+Bucket tambahan:
+
+`store-assets`
+
+Untuk:
+- Logo cafe.
+- Gambar identitas outlet.
+- Asset struk.
+
+---
+
+# 8. SALES & TRANSACTION MANAGEMENT
+
+## 8.1 Table: transactions
+
+Tabel utama untuk setiap transaksi penjualan.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID transaksi |
+| store_id | UUID FK | Store |
+| cashier_id | UUID FK | Kasir |
+| invoice_number | VARCHAR(100) | Nomor invoice |
+| status | transaction_status | Status transaksi |
+| currency_code | VARCHAR(3) | Snapshot mata uang |
+| subtotal | NUMERIC(14,2) | Total sebelum diskon |
+| discount_type | VARCHAR(20) | none / fixed / percentage |
+| discount_value | NUMERIC(14,2) | Nilai diskon input |
+| discount_total | NUMERIC(14,2) | Total diskon |
+| taxable_amount | NUMERIC(14,2) | Dasar pengenaan pajak |
+| tax_rate_snapshot | NUMERIC(7,4) | Snapshot tarif pajak |
+| tax_mode_snapshot | tax_mode | Snapshot mode pajak |
+| tax_total | NUMERIC(14,2) | Total pajak |
+| grand_total | NUMERIC(14,2) | Total pembayaran |
+| net_revenue | NUMERIC(14,2) | Pendapatan penjualan setelah diskon, sebelum pajak |
+| notes | TEXT | Catatan transaksi |
+| idempotency_key | UUID | Kunci anti-duplikasi checkout |
+| completed_at | TIMESTAMPTZ | Waktu checkout berhasil |
+| voided_at | TIMESTAMPTZ | Waktu void |
+| voided_by | UUID FK | Admin yang melakukan void |
+| void_reason | TEXT | Alasan void |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Constraint:
+
+- `UNIQUE(store_id, invoice_number)`
+- `UNIQUE(store_id, idempotency_key)`
+- `grand_total >= 0`
+- `discount_total >= 0`
+- `tax_total >= 0`
+
+Nomor invoice harus dibuat secara server-side.
+
+Jangan membuat nomor invoice hanya dengan timestamp dari frontend.
+
+## 8.2 Table: transaction_items
+
+Menyimpan detail setiap produk dalam transaksi.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID item |
+| transaction_id | UUID FK | Transaksi |
+| product_id | UUID FK nullable | Produk sumber |
+| product_name_snapshot | VARCHAR(150) | Nama produk saat transaksi |
+| sku_snapshot | VARCHAR(50) | SKU saat transaksi |
+| quantity | INTEGER | Jumlah produk |
+| unit_price_snapshot | NUMERIC(14,2) | Harga jual saat transaksi |
+| unit_cost_snapshot | NUMERIC(14,2) | HPP saat transaksi |
+| gross_subtotal | NUMERIC(14,2) | Harga × jumlah |
+| discount_allocated | NUMERIC(14,2) | Diskon yang dialokasikan |
+| net_sales | NUMERIC(14,2) | Penjualan item setelah diskon |
+| tax_allocated | NUMERIC(14,2) | Pajak item |
+| total | NUMERIC(14,2) | Total item termasuk pajak |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+
+Constraint:
+
+- Quantity harus lebih besar dari 0.
+- Snapshot harga dan HPP tidak boleh negatif.
+- Diskon alokasi tidak boleh melebihi subtotal item.
+- Produk yang sudah digunakan tidak boleh mengubah data historisnya.
+
+`product_id` dapat dibuat nullable untuk menjaga transaksi historis apabila produk suatu saat diarsipkan atau dihapus melalui prosedur administratif.
+
+Snapshot produk tetap wajib disimpan.
+
+## 8.3 Snapshot Harga dan HPP
+
+Contoh:
+
+Pada 1 November:
+- Harga jual: Rp25.000
+- HPP: Rp10.000
+
+Pada 10 November Admin memperbarui:
+- Harga jual: Rp28.000
+- HPP: Rp12.000
+
+Transaksi tanggal 1 November harus tetap menggunakan:
+- Harga jual Rp25.000
+- HPP Rp10.000
+
+Transaksi tanggal 10 November menggunakan:
+- Harga jual Rp28.000
+- HPP Rp12.000
+
+Jangan pernah menghitung ulang keuntungan transaksi lama menggunakan HPP produk terbaru.
+
+---
+
+# 9. PAYMENT MANAGEMENT
+
+## 9.1 Table: payments
+
+Menyimpan pembayaran untuk setiap transaksi.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID pembayaran |
+| transaction_id | UUID FK | Transaksi |
+| method | payment_method | Metode pembayaran |
+| status | payment_status | Status pembayaran |
+| amount | NUMERIC(14,2) | Jumlah pembayaran |
+| cash_received | NUMERIC(14,2) | Uang diterima |
+| change_amount | NUMERIC(14,2) | Uang kembalian |
+| reference_number | VARCHAR(100) | Referensi pembayaran |
+| paid_at | TIMESTAMPTZ | Waktu pembayaran |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+
+Ketentuan:
+
+- V1 menggunakan simulasi pembayaran.
+- Tidak ada integrasi QRIS atau bank sungguhan.
+- Metode pembayaran tetap dicatat untuk kebutuhan rekap.
+- Untuk pembayaran tunai, `cash_received` dan `change_amount` wajib dihitung dengan benar.
+- Total pembayaran harus sesuai dengan total transaksi.
+
+V1 dapat menggunakan satu metode pembayaran per transaksi. Struktur dapat dikembangkan menjadi split payment pada versi berikutnya.
+
+---
+
+# 10. REFUND & VOID MANAGEMENT
+
+Refund dan void harus dibedakan.
+
+- Void: membatalkan transaksi secara keseluruhan.
+- Refund: mengembalikan pembayaran atas transaksi yang telah selesai, baik sebagian maupun seluruhnya.
+
+## 10.1 Table: transaction_refunds
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID refund |
+| store_id | UUID FK | Store |
+| transaction_id | UUID FK | Transaksi asli |
+| refund_number | VARCHAR(100) | Nomor refund |
+| status | refund_status | Status |
+| refund_subtotal | NUMERIC(14,2) | Nilai barang dikembalikan |
+| discount_reversal | NUMERIC(14,2) | Pembalikan diskon |
+| tax_reversal | NUMERIC(14,2) | Pembalikan pajak |
+| refund_total | NUMERIC(14,2) | Total uang dikembalikan |
+| reason | TEXT | Alasan refund |
+| processed_by | UUID FK | Admin |
+| completed_at | TIMESTAMPTZ | Waktu selesai |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+
+## 10.2 Table: transaction_refund_items
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID item refund |
+| refund_id | UUID FK | Refund |
+| transaction_item_id | UUID FK | Item transaksi asli |
+| quantity | INTEGER | Jumlah dikembalikan |
+| unit_price_snapshot | NUMERIC(14,2) | Harga historis |
+| unit_cost_snapshot | NUMERIC(14,2) | HPP historis |
+| net_sales_reversal | NUMERIC(14,2) | Pembalikan penjualan |
+| tax_reversal | NUMERIC(14,2) | Pembalikan pajak |
+| cost_reversal | NUMERIC(14,2) | Pembalikan HPP |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+
+Aturan:
+
+- Refund hanya dapat diproses Admin pada V1.
+- Jumlah refund tidak boleh melebihi kuantitas yang dibeli dikurangi jumlah yang sudah direfund.
+- Refund parsial harus didukung.
+- Refund yang dibatalkan tidak masuk perhitungan laporan.
+- Refund selesai mengurangi penjualan bersih.
+- Barang yang dikembalikan membalikkan HPP sesuai snapshot biaya historis.
+- Semua refund harus menyimpan alasan dan pelaku tindakan.
+
+Void:
+
+- Hanya Admin yang dapat melakukan void.
+- Alasan void wajib diisi.
+- Transaksi void tidak dihitung sebagai penjualan.
+- Transaksi void tidak dihitung sebagai HPP.
+- Riwayat transaksi tetap disimpan.
+
+---
+
+# 11. OPERATING EXPENSES
+
+## 11.1 Table: expense_categories
+
+Kategori pengeluaran operasional.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID kategori |
+| store_id | UUID FK | Store |
+| name | VARCHAR(100) | Nama kategori |
+| description | TEXT | Deskripsi |
+| is_active | BOOLEAN | Status |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Contoh:
+- Gaji
+- Listrik
+- Air
+- Internet
+- Sewa
+- Transportasi
+- Kebersihan
+- Maintenance
+- Marketing
+- Operasional Lainnya
+
+## 11.2 Table: operating_expenses
+
+Menyimpan pengeluaran operasional.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID pengeluaran |
+| store_id | UUID FK | Store |
+| category_id | UUID FK | Kategori |
+| title | VARCHAR(150) | Nama pengeluaran |
+| description | TEXT | Keterangan |
+| amount | NUMERIC(14,2) | Nominal |
+| expense_date | DATE | Tanggal pengeluaran |
+| payment_method | VARCHAR(30) | Cara pembayaran |
+| receipt_url | TEXT | Bukti pengeluaran |
+| status | expense_status | Status |
+| recorded_by | UUID FK | Admin |
+| created_at | TIMESTAMPTZ | Waktu dibuat |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Ketentuan:
+
+- Hanya Admin dapat melihat dan mengelola pengeluaran.
+- Pengeluaran void tidak dihitung dalam laporan.
+- Pengeluaran harus tercatat berdasarkan tanggal terjadinya.
+- HPP produk tidak boleh dimasukkan kembali sebagai pengeluaran operasional.
+- Bukti pengeluaran bersifat opsional.
+- Perubahan dan pembatalan pengeluaran harus tercatat dalam audit log.
+
+---
+
+# 12. INVOICE COUNTER
+
+## 12.1 Table: invoice_counters
+
+Digunakan untuk membuat nomor invoice secara aman dan berurutan.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID counter |
+| store_id | UUID FK | Store |
+| counter_date | DATE | Tanggal |
+| prefix | VARCHAR(20) | Prefix invoice |
+| last_number | BIGINT | Nomor terakhir |
+| updated_at | TIMESTAMPTZ | Waktu diperbarui |
+
+Constraint:
+
+`UNIQUE(store_id, counter_date, prefix)`
+
+Nomor invoice harus dihasilkan melalui fungsi database yang melakukan locking atau operasi atomic.
+
+Contoh format:
+
+`INV-20261101-0001`
+
+Nomor invoice tidak boleh dibuat dari frontend dan tidak boleh digunakan ulang.
+
+---
+
+# 13. AUDIT LOGS
+
+## 13.1 Table: audit_logs
+
+Menyimpan aktivitas penting pengguna.
+
+| Column | Type | Description |
+|---|---|---|
+| id | UUID PK | ID log |
+| store_id | UUID FK | Store |
+| user_id | UUID FK | Pengguna |
+| action | VARCHAR(100) | Jenis aktivitas |
+| entity_type | VARCHAR(100) | Tipe data |
+| entity_id | UUID | ID data |
+| old_data | JSONB | Data sebelum perubahan |
+| new_data | JSONB | Data setelah perubahan |
+| metadata | JSONB | Informasi tambahan |
+| created_at | TIMESTAMPTZ | Waktu aktivitas |
+
+Aktivitas yang harus tercatat:
+
+- Login penting atau perubahan akses jika tersedia.
+- Pembuatan dan perubahan produk.
+- Perubahan harga jual.
+- Perubahan HPP.
+- Penambahan dan perubahan kategori.
+- Pembuatan pengguna.
+- Penonaktifan pengguna.
+- Void transaksi.
+- Refund transaksi.
+- Perubahan pengaturan pajak.
+- Perubahan pengaturan struk.
+- Penambahan dan pembatalan pengeluaran.
+- Reset demo.
+
+Audit log tidak boleh dapat dimodifikasi oleh Kasir.
+
+---
+
+# 14. ENTITY RELATIONSHIP DIAGRAM
+
+Gunakan diagram berikut sebagai representasi hubungan utama database.
+
+```mermaid
+erDiagram
+    STORES ||--o{ PROFILES : has
+    STORES ||--|| STORE_SETTINGS : configures
+    STORES ||--o{ CATEGORIES : owns
+    STORES ||--o{ PRODUCTS : owns
+    STORES ||--o{ TRANSACTIONS : records
+    STORES ||--o{ EXPENSE_CATEGORIES : defines
+    STORES ||--o{ OPERATING_EXPENSES : records
+    STORES ||--o{ AUDIT_LOGS : stores
+
+    AUTH_USERS ||--|| PROFILES : linked_to
+
+    CATEGORIES ||--o{ PRODUCTS : categorizes
+
+    PROFILES ||--o{ TRANSACTIONS : processes
+
+    TRANSACTIONS ||--|{ TRANSACTION_ITEMS : contains
+    TRANSACTIONS ||--o{ PAYMENTS : receives
+    TRANSACTIONS ||--o{ TRANSACTION_REFUNDS : has
+
+    PRODUCTS ||--o{ TRANSACTION_ITEMS : referenced_by
+
+    TRANSACTION_REFUNDS ||--|{ TRANSACTION_REFUND_ITEMS : contains
+    TRANSACTION_ITEMS ||--o{ TRANSACTION_REFUND_ITEMS : refunded_from
+
+    EXPENSE_CATEGORIES ||--o{ OPERATING_EXPENSES : categorizes
+
+    PROFILES ||--o{ OPERATING_EXPENSES : records
+    PROFILES ||--o{ AUDIT_LOGS : generates
+```
+
+Catatan:
+- `AUTH_USERS` merupakan tabel internal Supabase Auth, bukan tabel yang dibuat ulang.
+- Hubungan `product_id` pada transaksi dapat nullable karena data historis harus tetap tersedia.
+- Hubungan refund harus mengacu ke transaksi dan item transaksi asli.
+
+---
+
+# 15. INDEXES & PERFORMANCE
+
+Buat index untuk mempercepat query yang sering digunakan.
+
+## 15.1 Products
+
+- `products(store_id)`
+- `products(category_id)`
+- `products(store_id, is_available, is_archived)`
+- `products(store_id, sku)` dengan unique constraint jika SKU tidak null.
+
+## 15.2 Transactions
+
+- `transactions(store_id, completed_at DESC)`
+- `transactions(store_id, cashier_id, completed_at DESC)`
+- `transactions(store_id, status)`
+- `transactions(store_id, invoice_number)` UNIQUE
+- `transactions(store_id, idempotency_key)` UNIQUE
+
+## 15.3 Transaction Items
+
+- `transaction_items(transaction_id)`
+- `transaction_items(product_id)`
+
+## 15.4 Payments
+
+- `payments(transaction_id)`
+- `payments(status, paid_at)`
+
+## 15.5 Refunds
+
+- `transaction_refunds(transaction_id)`
+- `transaction_refunds(store_id, completed_at DESC)`
+- `transaction_refund_items(transaction_item_id)`
+
+## 15.6 Expenses
+
+- `operating_expenses(store_id, expense_date DESC)`
+- `operating_expenses(category_id)`
+- `operating_expenses(status)`
+
+Gunakan index berdasarkan kebutuhan query aktual. Hindari membuat index berlebihan pada setiap kolom.
+
+---
+
+# 16. ROW LEVEL SECURITY (RLS)
+
+RLS wajib aktif pada semua tabel yang dapat diakses melalui Supabase API.
+
+## 16.1 Prinsip Akses
+
+| Data | Admin | Kasir |
+|---|---|---|
+| Store profile | Read/Update | Read terbatas |
+| Store settings | Read/Update | Tidak |
+| User profiles | Read/Manage | Read terbatas |
+| Categories | CRUD | Read aktif |
+| Products | CRUD termasuk HPP | Read katalog aman |
+| Transactions | Semua transaksi | Transaksi sendiri |
+| Transaction items | Semua | Transaksi sendiri |
+| Payments | Semua | Transaksi sendiri |
+| Refunds | CRUD sesuai aturan | Tidak |
+| Expense categories | CRUD | Tidak |
+| Operating expenses | CRUD | Tidak |
+| Audit logs | Read | Tidak |
+| Invoice counters | Internal | Tidak |
+
+## 16.2 Helper Functions
+
+Buat helper function untuk mendapatkan:
+
+- User ID saat ini.
+- Store ID pengguna.
+- Role pengguna.
+- Status aktif pengguna.
+- Pemeriksaan apakah pengguna Admin.
+- Pemeriksaan apakah pengguna Kasir.
+
+Contoh konsep:
+
+```sql
+current_store_id()
+current_user_role()
+is_active_user()
+is_store_admin()
+is_store_cashier()
+```
+
+Helper harus aman digunakan di dalam RLS.
+
+Jangan membuat fungsi `SECURITY DEFINER` tanpa alasan dan tanpa konfigurasi `search_path` yang aman.
+
+## 16.3 Aturan RLS Penting
+
+Admin:
+- Hanya dapat mengelola data dalam store miliknya.
+- Tidak dapat mengakses data store lain.
+- Dapat melihat seluruh transaksi dalam store.
+
+Kasir:
+- Hanya dapat mengakses transaksi yang dibuat oleh dirinya.
+- Tidak dapat melihat laporan keuangan.
+- Tidak dapat melihat HPP.
+- Tidak dapat melihat data pengeluaran.
+- Tidak dapat melakukan void atau refund.
+- Tidak dapat mengubah pengaturan store.
+- Tidak dapat mengubah role atau status akun.
+
+## 16.4 Proteksi HPP
+
+RLS tidak otomatis menyembunyikan kolom tertentu.
+
+Karena tabel `products` memiliki `cost_price`, maka jangan memberikan akses SELECT seluruh tabel kepada Kasir.
+
+Gunakan salah satu pendekatan berikut:
+
+1. View katalog POS yang hanya menampilkan kolom aman, dengan privilege dan konfigurasi `security_invoker` yang benar.
+2. Server-side endpoint yang mengambil data produk dan menghilangkan HPP sebelum mengirimkannya.
+3. RPC katalog khusus dengan output kolom yang telah dibatasi.
+
+Rekomendasi V1: gunakan server-side endpoint atau view aman yang telah diuji privilege-nya.
+
+Jangan mengirim HPP ke browser Kasir lalu hanya menyembunyikannya menggunakan CSS atau conditional rendering.
+
+## 16.5 Service Role
+
+Supabase Service Role Key:
+
+- Hanya digunakan di server.
+- Tidak boleh menggunakan prefix `NEXT_PUBLIC_`.
+- Tidak boleh dikirim ke browser.
+- Tidak boleh dimasukkan ke source code yang dapat diakses publik.
+- Gunakan hanya pada operasi administratif yang membutuhkan hak istimewa.
+
+---
+
+# 17. ATOMIC CHECKOUT — COMPLETE_CHECKOUT RPC
+
+Checkout adalah proses paling kritis dalam sistem.
+
+Jangan menyimpan transaksi melalui banyak request frontend yang terpisah.
+
+Gunakan PostgreSQL RPC:
+
+`complete_checkout()`
+
+Fungsi ini harus melakukan seluruh proses checkout dalam satu database transaction.
+
+## 17.1 Input
+
+Input yang boleh diterima:
+
+- Daftar product_id dan quantity.
+- Discount type.
+- Discount value.
+- Payment method.
+- Cash received jika pembayaran tunai.
+- Transaction notes.
+- Idempotency key.
+
+Jangan menerima HPP atau harga final dari frontend sebagai sumber kebenaran.
+
+## 17.2 Proses RPC
+
+Urutan proses:
+
+1. Memastikan pengguna sudah login.
+2. Memastikan akun aktif.
+3. Memastikan role adalah Admin atau Kasir.
+4. Memastikan store pengguna aktif.
+5. Memvalidasi daftar produk.
+6. Memastikan produk masih tersedia.
+7. Mengambil harga jual dari database.
+8. Mengambil HPP dari database.
+9. Menghitung subtotal.
+10. Memvalidasi dan menghitung diskon.
+11. Menghitung alokasi diskon per item.
+12. Mengambil konfigurasi pajak.
+13. Menghitung pajak sesuai tax mode.
+14. Menghitung grand total.
+15. Memvalidasi pembayaran.
+16. Membuat nomor invoice.
+17. Menyimpan transaksi.
+18. Menyimpan detail item beserta snapshot harga dan HPP.
+19. Menyimpan pembayaran.
+20. Menulis audit log bila diperlukan.
+21. Mengembalikan hasil transaksi.
+
+Semua langkah harus berhasil bersama-sama atau gagal bersama-sama.
+
+## 17.3 Idempotency
+
+Setiap checkout harus mempunyai `idempotency_key` unik.
+
+Jika request terkirim dua kali karena jaringan lambat atau pengguna menekan tombol berulang, database tidak boleh menghasilkan dua transaksi.
+
+Jika idempotency key sudah pernah digunakan, kembalikan transaksi yang sudah berhasil dibuat sesuai validasi kepemilikan dan store.
+
+## 17.4 Server-Side Validation
+
+Validasi minimal:
+
+- Quantity harus integer positif.
+- Produk harus aktif dan tersedia.
+- Produk harus berasal dari store yang sama.
+- Harga dan HPP harus diambil dari database.
+- Diskon tidak boleh melebihi subtotal.
+- Pajak dihitung menggunakan konfigurasi yang berlaku.
+- Pembayaran harus sesuai dengan grand total.
+- Uang tunai yang diterima tidak boleh kurang dari total pembayaran.
+- Kasir tidak dapat memproses checkout menggunakan store lain.
+- Kasir yang dinonaktifkan tidak dapat checkout.
+
+## 17.5 Hasil RPC
+
+Kembalikan informasi yang diperlukan aplikasi:
+
+- transaction_id
+- invoice_number
+- status
+- subtotal
+- discount_total
+- tax_total
+- grand_total
+- payment_method
+- cash_received
+- change_amount
+- completed_at
+
+Jangan mengembalikan unit_cost_snapshot atau HPP kepada Kasir.
+
+Untuk Admin, data keuangan dapat dibaca melalui jalur akses Admin yang terotorisasi.
+
+---
+
+# 18. FINANCIAL REPORTING LOGIC
+
+Laporan keuangan dihitung dari transaksi yang berhasil dan refund yang selesai.
+
+Jangan menggunakan `grand_total` sebagai pendapatan bersih tanpa memperhitungkan pajak dan diskon.
+
+## 18.1 Gross Sales
+
+Total penjualan sebelum diskon:
+
+`SUM(transaction_items.gross_subtotal)`
+
+Hanya dari transaksi `completed`, `partially_refunded`, atau `refunded` dengan penyesuaian refund yang sesuai.
+
+## 18.2 Net Revenue
+
+Pendapatan setelah diskon dan setelah memperhitungkan refund, sebelum pajak.
+
+`Net Revenue = Recognized Sales - Completed Refund Revenue`
+
+Pajak yang dipungut untuk disetorkan tidak dihitung sebagai pendapatan usaha.
+
+## 18.3 HPP Bersih
+
+`Net HPP = Sold Item HPP - Returned Item HPP`
+
+HPP penjualan:
+
+`SUM(quantity × unit_cost_snapshot)`
+
+Pengurangan HPP refund:
+
+`SUM(cost_reversal)`
+
+Void tidak masuk perhitungan.
+
+## 18.4 Gross Profit
+
+`Gross Profit = Net Revenue - Net HPP`
+
+## 18.5 Net Operating Profit
+
+`Net Operating Profit = Gross Profit - Operating Expenses`
+
+Nama yang digunakan pada UI:
+
+**Keuntungan Bersih Operasional**
+
+Jangan mengklaim sebagai laba bersih akuntansi penuh karena V1 belum mencakup seluruh komponen akuntansi seperti penyusutan, bunga, dan kewajiban pajak usaha.
+
+## 18.6 Net Profit Margin
+
+`Net Profit Margin = (Net Operating Profit / Net Revenue) × 100`
+
+Jika Net Revenue = 0, tampilkan 0% dan jangan menyebabkan pembagian dengan nol.
+
+## 18.7 Diskon dan Alokasi Item
+
+Diskon transaksi harus dialokasikan ke setiap item secara proporsional terhadap subtotal item.
+
+Contoh:
+
+| Produk | Subtotal | Alokasi Diskon |
+|---|---:|---:|
+| Coffee | Rp30.000 | Rp3.000 |
+| Food | Rp70.000 | Rp7.000 |
+| Total | Rp100.000 | Rp10.000 |
+
+Dengan demikian, perhitungan pendapatan dan keuntungan setiap produk tetap konsisten.
+
+Aturan pembulatan harus ditetapkan di database. Selisih pembulatan akibat alokasi harus dimasukkan ke item terakhir agar total alokasi sama dengan diskon transaksi.
+
+## 18.8 Tax Calculation
+
+Mode pajak:
+
+- `none`: tidak ada pajak.
+- `exclusive`: pajak ditambahkan di atas nilai penjualan setelah diskon.
+- `inclusive`: pajak sudah termasuk dalam harga yang dibayar pelanggan.
+
+Untuk mode inclusive, bagian pajak harus dipisahkan dari pendapatan usaha.
+
+Simpan tarif, mode, dan nilai pajak sebagai snapshot transaksi.
+
+## 18.9 Period Reporting
+
+Laporan harus mendukung:
+
+- Harian
+- Mingguan
+- Bulanan
+- Tahunan
+- Custom date range
+
+Semua periode menggunakan timezone store, default `Asia/Makassar`.
+
+Database menyimpan timestamp dalam UTC (`TIMESTAMPTZ`), sedangkan pengelompokan laporan mengikuti timezone store.
+
+## 18.10 Reporting Views
+
+Buat view atau fungsi laporan khusus Admin:
+
+- `admin_sales_summary`
+- `admin_daily_sales`
+- `admin_product_performance`
+- `admin_payment_summary`
+- `admin_expense_summary`
+- `admin_profit_summary`
+
+Jangan memberikan akses laporan keuangan kepada Kasir.
+
+Untuk laporan yang menggabungkan transaksi, refund, dan pengeluaran, pastikan setiap sumber data diagregasi secara terpisah sebelum digabungkan. Hindari join langsung yang menyebabkan nominal transaksi atau pengeluaran terduplikasi.
+
+---
+
+# 19. DATA RETENTION & SOFT DELETE
+
+Ketentuan:
+
+- Produk yang sudah pernah terjual tidak dihapus permanen melalui UI.
+- Kategori yang sudah digunakan tidak dihapus permanen.
+- User yang dinonaktifkan tetap memiliki histori transaksi.
+- Transaksi tidak dihapus permanen melalui UI.
+- Refund dan void harus menyimpan histori.
+- Pengeluaran yang dibatalkan tetap tersimpan.
+- Audit log bersifat append-only untuk penggunaan aplikasi normal.
+
+Gunakan `is_archived`, `is_active`, atau status sesuai kebutuhan.
+
+Jangan menggunakan cascade delete yang dapat menghapus data transaksi historis.
+
+---
+
+# 20. DATABASE SEED DATA
+
+Seed data digunakan untuk membuat demonstrasi aplikasi yang terlihat realistis.
+
+## 20.1 Store
+
+Buat satu store demo:
+
+- Nama: Kopi Senja Demo
+- Currency: IDR
+- Timezone: Asia/Makassar
+
+## 20.2 Categories
+
+Buat minimal 8 kategori:
+
+1. Coffee
+2. Non Coffee
+3. Tea
+4. Signature
+5. Food
+6. Snack
+7. Dessert
+8. Others
+
+## 20.3 Products
+
+Buat 30–40 produk dengan data:
+
+- Nama produk.
+- SKU.
+- Kategori.
+- Harga jual.
+- HPP.
+- Foto produk.
+- Status tersedia.
+
+Harga dan HPP harus realistis untuk demonstrasi cafe.
+
+## 20.4 Demo Users
+
+Siapkan:
+
+- 1 Admin.
+- 2 Kasir.
+
+Jangan menanam password plaintext ke migration atau seed SQL.
+
+Akun demo dibuat melalui Supabase Auth provisioning yang aman.
+
+## 20.5 Demo Transactions
+
+Buat data transaksi historis minimal 30 hari:
+
+- Beragam tanggal.
+- Beragam produk.
+- Beragam nominal.
+- Beragam metode pembayaran.
+- Beberapa transaksi dengan diskon.
+- Beberapa transaksi void.
+- Beberapa transaksi refund.
+- Beberapa transaksi dengan jumlah item berbeda.
+
+## 20.6 Demo Expenses
+
+Buat contoh pengeluaran:
+
+- Gaji.
+- Listrik.
+- Air.
+- Internet.
+- Sewa.
+- Kebersihan.
+- Operasional lainnya.
+
+Pastikan data transaksi dan pengeluaran menghasilkan laporan yang masuk akal.
+
+Jangan membuat angka laporan terpisah yang tidak sesuai dengan transaksi sumber.
+
+---
+
+# 21. DATABASE MIGRATION STRUCTURE
+
+Gunakan struktur berikut:
+
+```text
+supabase/
+├── migrations/
+│   ├── 0001_create_extensions_and_enums.sql
+│   ├── 0002_create_stores_and_profiles.sql
+│   ├── 0003_create_store_settings.sql
+│   ├── 0004_create_categories_and_products.sql
+│   ├── 0005_create_transactions_and_items.sql
+│   ├── 0006_create_payments.sql
+│   ├── 0007_create_refunds.sql
+│   ├── 0008_create_operating_expenses.sql
+│   ├── 0009_create_invoice_counters.sql
+│   ├── 0010_create_audit_logs.sql
+│   ├── 0011_create_indexes.sql
+│   ├── 0012_create_helper_functions.sql
+│   ├── 0013_create_rls_policies.sql
+│   ├── 0014_create_pos_catalog_view.sql
+│   ├── 0015_create_checkout_rpc.sql
+│   └── 0016_create_reporting_functions.sql
+├── seed.sql
+└── config.toml
+```
+
+Migration harus:
+
+- Dapat dijalankan secara berurutan.
+- Tidak bergantung pada perubahan manual yang tidak terdokumentasi.
+- Menggunakan foreign key dan constraint yang tepat.
+- Mengaktifkan RLS.
+- Memiliki rollback strategy untuk perubahan berisiko.
+- Tidak memasukkan credential atau password.
+- Diuji di environment development sebelum production.
+
+---
+
+# 22. DATABASE SECURITY CHECKLIST
+
+Sebelum database dinyatakan siap, pastikan:
+
+- [ ] Semua tabel bisnis memiliki `store_id` jika relevan.
+- [ ] Semua tabel yang diekspos melalui API memiliki RLS.
+- [ ] Role tidak dapat diubah oleh pengguna biasa.
+- [ ] Kasir tidak dapat membaca HPP.
+- [ ] Kasir tidak dapat membaca pengeluaran.
+- [ ] Kasir tidak dapat membaca laporan keuntungan.
+- [ ] Kasir hanya dapat membaca transaksi miliknya.
+- [ ] Kasir tidak dapat melakukan void.
+- [ ] Kasir tidak dapat melakukan refund.
+- [ ] Kasir tidak dapat mengakses store lain.
+- [ ] Checkout hanya melalui RPC/server-side logic.
+- [ ] Harga dan HPP selalu diambil dari database.
+- [ ] Idempotency mencegah transaksi ganda.
+- [ ] Service Role Key hanya berada di server.
+- [ ] Audit log tidak dapat dimodifikasi pengguna biasa.
+- [ ] Storage memiliki kebijakan akses.
+- [ ] Refund tidak dapat melebihi jumlah pembelian.
+- [ ] Perubahan harga dan HPP tidak mengubah histori transaksi.
+
+---
+
+# 23. DATABASE TEST SCENARIOS
+
+## Scenario 1 — Basic Checkout
+
+Produk:
+- Harga jual Rp25.000.
+- HPP Rp10.000.
+- Quantity 2.
+
+Expected:
+- Gross Sales: Rp50.000.
+- Net Revenue: Rp50.000.
+- HPP: Rp20.000.
+- Gross Profit: Rp30.000.
+
+## Scenario 2 — Discount
+
+Produk:
+- Harga jual Rp100.000.
+- HPP Rp40.000.
+- Diskon Rp10.000.
+
+Expected:
+- Net Revenue: Rp90.000.
+- HPP: Rp40.000.
+- Gross Profit: Rp50.000.
+
+## Scenario 3 — Operating Expense
+
+Data:
+- Gross Profit Rp500.000.
+- Expenses Rp150.000.
+
+Expected:
+- Net Operating Profit Rp350.000.
+
+## Scenario 4 — HPP Updated
+
+HPP lama Rp10.000.
+
+Setelah transaksi, Admin mengubah HPP menjadi Rp12.000.
+
+Expected:
+- Transaksi lama tetap menggunakan HPP Rp10.000.
+- Transaksi baru menggunakan HPP Rp12.000.
+
+## Scenario 5 — Void
+
+Transaksi Rp100.000 di-void Admin.
+
+Expected:
+- Tidak masuk Net Revenue.
+- Tidak masuk HPP.
+- Riwayat tetap tersedia.
+- Alasan void tercatat.
+
+## Scenario 6 — Partial Refund
+
+Transaksi:
+- Quantity 3.
+- HPP per item Rp10.000.
+- Net sales per item Rp20.000.
+
+Refund:
+- Quantity 1.
+
+Expected:
+- Penjualan dikurangi Rp20.000.
+- HPP dikurangi Rp10.000.
+- Dua unit tersisa tetap dihitung.
+
+## Scenario 7 — Duplicate Checkout
+
+Request checkout yang sama dikirim dua kali dengan idempotency key yang sama.
+
+Expected:
+- Hanya satu transaksi yang dibuat.
+- Request berikutnya mengembalikan hasil transaksi yang sama sesuai validasi keamanan.
+
+## Scenario 8 — Cashier Security
+
+Kasir mencoba mengakses:
+- HPP produk.
+- Laporan keuntungan.
+- Pengeluaran.
+- Transaksi kasir lain.
+
+Expected:
+- Semua akses ditolak atau data sensitif tidak dikembalikan.
+
+## Scenario 9 — Tax Inclusive
+
+Harga pelanggan Rp110.000 sudah termasuk pajak 10%.
+
+Expected:
+- Pendapatan sebelum pajak Rp100.000.
+- Pajak Rp10.000.
+- Grand total Rp110.000.
+
+## Scenario 10 — Zero Revenue
+
+Tidak ada penjualan pada periode laporan.
+
+Expected:
+- Net Revenue Rp0.
+- NPM ditampilkan 0%.
+- Tidak ada error pembagian dengan nol.
+
+---
+
+# 24. DEFINITION OF DONE
+
+Database V1.0 dinyatakan selesai apabila:
+
+1. Seluruh tabel utama telah dibuat.
+2. Semua foreign key dan constraint berfungsi.
+3. Migration dapat dijalankan dari awal.
+4. Supabase Auth terhubung dengan profiles.
+5. Role Admin dan Kasir berjalan.
+6. RLS sudah diterapkan dan diuji.
+7. HPP tidak dapat diakses Kasir.
+8. Checkout RPC berhasil.
+9. Idempotency berjalan.
+10. Snapshot harga dan HPP tersimpan.
+11. Refund dan void berjalan sesuai aturan.
+12. Pengeluaran dapat dicatat Admin.
+13. Laporan keuangan menghasilkan perhitungan yang benar.
+14. Data demo dapat dimasukkan.
+15. Semua skenario pengujian utama lulus.
+
+---
+
+# 25. INSTRUKSI IMPLEMENTASI UNTUK ANTIGRAVITY
+
+Gunakan dokumen ini sebagai acuan utama ketika membangun database Cafe POS.
+
+Instruksi wajib:
+
+1. Baca `docs/01-MASTERPLAN.md` dan `docs/02-PRD.md` sebelum implementasi.
+2. Jangan mengubah keputusan bisnis tanpa alasan teknis yang jelas.
+3. Jangan membuat tabel duplikat untuk data yang sama.
+4. Jangan menghitung HPP menggunakan harga produk saat ini untuk transaksi lama.
+5. Jangan pernah mengirim HPP ke frontend Kasir.
+6. Jangan mengandalkan validasi frontend untuk keamanan transaksi.
+7. Gunakan Supabase PostgreSQL RPC untuk checkout atomic.
+8. Gunakan RLS untuk membatasi akses setiap role.
+9. Gunakan migration SQL untuk seluruh perubahan database.
+10. Uji keamanan dengan akun Admin dan Kasir secara terpisah.
+11. Jangan memasukkan data produksi karena aplikasi ini masih dalam tahap demo.
+12. Jangan melanjutkan ke implementasi UI sebelum struktur database dan aturan akses utama telah tervalidasi.
+
+**Prinsip utama: Database harus menjamin integritas transaksi, keamanan data keuangan, dan akurasi laporan meskipun frontend mengalami kesalahan atau request dikirim berulang.**

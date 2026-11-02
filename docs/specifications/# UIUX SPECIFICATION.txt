@@ -1,0 +1,1283 @@
+# UI/UX SPECIFICATION
+## Cafe POS System — V1.0
+
+**Dokumen:** 04-UI-UX-SPECIFICATION.md  
+**Versi:** 1.0  
+**Status:** Design Specification  
+**Platform:** Web Application + PWA  
+**Framework:** Next.js + TypeScript + Tailwind CSS  
+**Target Device:** Smartphone, Tablet, Desktop
+
+---
+
+# 1. DESIGN OBJECTIVE
+
+UI/UX aplikasi Cafe POS harus memenuhi beberapa tujuan:
+
+1. Mudah dipelajari oleh pemilik cafe dan kasir.
+2. Mempercepat proses pemesanan dan pembayaran.
+3. Menampilkan informasi bisnis dengan jelas.
+4. Memisahkan fitur operasional Kasir dan fitur manajemen Admin.
+5. Responsif pada HP, tablet, dan desktop.
+6. Memiliki tampilan profesional yang cocok didemonstrasikan kepada calon klien.
+7. Memberikan pengalaman penggunaan yang konsisten pada seluruh halaman.
+
+## 1.1 Design Direction
+
+Nama konsep:
+
+**Modern Minimalist Cafe POS**
+
+Karakter visual:
+- Clean.
+- Modern.
+- Minimalist.
+- Warm.
+- Professional.
+- Friendly.
+- Functional.
+
+Inspirasi desain:
+- Modern SaaS Dashboard.
+- Contemporary Coffee Shop.
+- Minimalist Point of Sale.
+- Premium Cafe Management Software.
+
+Hindari:
+- Dashboard terlalu ramai.
+- Terlalu banyak warna.
+- Tombol terlalu kecil.
+- Informasi keuangan yang sulit dibaca.
+- Terlalu banyak modal pop-up.
+- Animasi yang mengganggu proses checkout.
+
+# 2. DESIGN SYSTEM
+
+## 2.1 Color Palette
+
+Gunakan warna utama berikut:
+
+| Nama | HEX | Penggunaan |
+|---|---|---|
+| Charcoal | #202522 | Sidebar, teks utama |
+| Cream | #F7F5EF | Background utama |
+| Warm Orange | #D98A45 | Primary action |
+| White | #FFFFFF | Card dan surface |
+| Soft Gray | #EAE9E4 | Border dan divider |
+| Text Gray | #777C78 | Secondary text |
+| Success Green | #23865B | Status sukses |
+| Warning Yellow | #E6B84C | Peringatan |
+| Danger Red | #D9534F | Error dan pembatalan |
+
+### Color Usage
+
+- Background dashboard: Cream.
+- Sidebar Admin: Charcoal.
+- Primary button: Warm Orange.
+- Card: White.
+- Main text: Charcoal.
+- Secondary text: Text Gray.
+- Positive financial values: Success Green.
+- Negative financial values: Danger Red.
+
+Gunakan warna secara konsisten. Jangan menjadikan semua elemen berwarna oranye.
+
+## 2.2 Typography
+
+Font utama:
+
+**Plus Jakarta Sans**
+- Heading.
+- Dashboard title.
+- Section title.
+- Card heading.
+
+**Inter**
+- Body text.
+- Form input.
+- Table.
+- Angka transaksi.
+- Label dan metadata.
+
+Ukuran rekomendasi:
+
+| Element | Size |
+|---|---|
+| Page Heading | 24–30px |
+| Section Heading | 18–20px |
+| Card Heading | 15–16px |
+| Body | 14px |
+| Caption | 12px |
+| KPI Value | 24–30px |
+| POS Product Price | 14–16px |
+
+Gunakan angka tabular (`font-variant-numeric: tabular-nums`) untuk nilai uang dan angka laporan.
+
+## 2.3 Radius & Shadow
+
+| Element | Radius |
+|---|---|
+| Main Card | 14px |
+| Button | 10px |
+| Input | 9px |
+| Product Card | 12px |
+| Modal | 16px |
+| Badge | Full Rounded |
+
+Shadow harus halus. Hindari bayangan terlalu tebal.
+
+## 2.4 Iconography
+
+Gunakan Lucide Icons.
+
+Ikon harus:
+- Konsisten.
+- Mudah dikenali.
+- Tidak terlalu dekoratif.
+- Menggunakan ukuran yang proporsional.
+
+## 2.5 Spacing
+
+Gunakan sistem spacing berbasis kelipatan 4px.
+
+- 4px: Icon spacing.
+- 8px: Element spacing.
+- 12px: Small component spacing.
+- 16px: Standard padding.
+- 24px: Card padding.
+- 32px: Section spacing.
+
+# 3. RESPONSIVE DESIGN
+
+Aplikasi harus mobile-first.
+
+## 3.1 Breakpoints
+
+| Device | Width | Layout |
+|---|---:|---|
+| Small Mobile | < 480px | Single column |
+| Mobile | 480–767px | Single column |
+| Tablet | 768–1023px | Compact sidebar / tablet POS |
+| Desktop | ≥ 1024px | Full dashboard layout |
+| Large Desktop | ≥ 1440px | Expanded dashboard |
+
+## 3.2 Mobile
+
+Karakteristik:
+- Sidebar diganti drawer atau bottom navigation sesuai halaman.
+- Tabel dapat berubah menjadi card list.
+- Form menggunakan lebar penuh.
+- Tombol utama mudah dijangkau.
+- Modal menggunakan bottom sheet apabila lebih nyaman.
+- Tidak boleh ada horizontal overflow yang tidak disengaja.
+
+## 3.3 Tablet
+
+Tablet merupakan perangkat penting untuk operasional POS.
+
+Karakteristik:
+- POS menggunakan layout dua area.
+- Katalog produk berada di area utama.
+- Keranjang transaksi berada di panel samping.
+- Tombol checkout memiliki ukuran besar.
+- Admin dashboard tetap menggunakan navigasi yang nyaman.
+
+## 3.4 Desktop
+
+- Sidebar tetap.
+- Konten utama menggunakan grid.
+- Tabel dapat menampilkan kolom lengkap.
+- Form menggunakan layout dua kolom jika sesuai.
+- Dashboard memanfaatkan ruang layar tanpa membuat konten terlalu melebar.
+
+# 4. INFORMATION ARCHITECTURE
+
+Aplikasi memiliki dua area utama berdasarkan role.
+
+## 4.1 Admin Navigation
+
+Sidebar Admin:
+
+1. Dashboard
+2. Produk
+3. Kategori
+4. Rekap
+5. Transaksi
+6. Kasir & Pengguna
+7. Pengeluaran
+8. Pengaturan
+
+Navigasi tambahan:
+- Logo dan nama cafe.
+- Status store.
+- Profil Admin.
+- Logout.
+
+## 4.2 Kasir Navigation
+
+Navigasi Kasir dibuat sederhana:
+
+1. POS
+2. Transaksi Saya
+3. Profil
+
+Kasir tidak boleh melihat:
+- HPP.
+- Keuntungan.
+- Margin.
+- Rekap keuangan.
+- Pengeluaran.
+- Manajemen pengguna.
+
+## 4.3 Route Structure
+
+```text
+/
+├── login
+├── install
+├── admin
+│   ├── dashboard
+│   ├── products
+│   ├── categories
+│   ├── reports
+│   ├── transactions
+│   ├── expenses
+│   ├── users
+│   └── settings
+│       ├── store-profile
+│       ├── invoice
+│       ├── receipt
+│       ├── tax
+│       ├── preferences
+│       └── application
+│
+└── pos
+    ├── checkout
+    ├── transactions
+    └── profile
+```
+
+Route harus dilindungi berdasarkan role. Jangan hanya menyembunyikan menu.
+
+# 5. AUTHENTICATION UI
+
+## 5.1 Login Page
+
+Layout:
+- Brand/logo cafe.
+- Judul "Selamat Datang".
+- Deskripsi singkat.
+- Email input.
+- Password input.
+- Toggle show/hide password.
+- Tombol Login.
+- Informasi error.
+- Loading state.
+
+Desain:
+- Background Cream.
+- Login card White.
+- Tombol Warm Orange.
+- Logo cafe di bagian atas.
+
+## 5.2 Login Flow
+
+1. User membuka halaman login.
+2. Mengisi email dan password.
+3. Sistem memvalidasi melalui Supabase Auth.
+4. Sistem memeriksa status akun dan role.
+5. Admin diarahkan ke `/admin/dashboard`.
+6. Kasir diarahkan ke `/pos`.
+7. Akun tidak aktif ditolak.
+
+Jangan menyediakan registrasi publik untuk Admin atau Kasir pada V1.
+
+# 6. ADMIN DASHBOARD
+
+Route:
+
+`/admin/dashboard`
+
+Tujuan:
+Memberikan gambaran kondisi operasional cafe secara cepat.
+
+## 6.1 Header
+
+Elemen:
+- Greeting: "Selamat pagi, [Nama Admin]"
+- Tanggal hari ini.
+- Nama store.
+- Avatar Admin.
+- Tombol refresh jika diperlukan.
+
+## 6.2 KPI Cards
+
+Tampilkan empat kartu utama:
+
+**1. Penjualan Hari Ini**
+- Total penjualan bersih hari ini.
+- Perbandingan dengan hari sebelumnya.
+
+**2. Total Transaksi**
+- Jumlah transaksi berhasil.
+- Perbandingan dengan hari sebelumnya.
+
+**3. Rata-rata Transaksi**
+- Average transaction value.
+
+**4. Produk Terjual**
+- Total unit produk yang terjual.
+
+KPI hanya menggunakan transaksi valid dan memperhitungkan refund sesuai aturan laporan.
+
+## 6.3 Sales Chart
+
+Judul: "Grafik Penjualan"
+
+Fitur:
+- Harian.
+- Mingguan.
+- Bulanan.
+
+Tampilkan:
+- Grafik penjualan.
+- Label periode.
+- Tooltip nilai.
+- Loading dan empty state.
+
+## 6.4 Best Selling Products
+
+Tampilkan:
+- Nama produk.
+- Gambar.
+- Jumlah terjual.
+- Nilai penjualan.
+
+## 6.5 Latest Transactions
+
+Tampilkan:
+- Nomor invoice.
+- Nama kasir.
+- Waktu transaksi.
+- Total.
+- Metode pembayaran.
+- Status.
+
+Admin dapat membuka detail transaksi.
+
+## 6.6 Payment Summary
+
+Tampilkan ringkasan berdasarkan:
+- Cash.
+- QRIS.
+- Debit.
+- Transfer.
+
+# 7. PRODUCT MANAGEMENT
+
+Route:
+
+`/admin/products`
+
+## 7.1 Product Page Header
+
+Elemen:
+- Judul "Produk".
+- Deskripsi singkat.
+- Tombol "+ Tambah Produk".
+
+## 7.2 Product Toolbar
+
+- Search produk.
+- Filter kategori.
+- Filter status.
+- Sorting.
+- Tombol reset filter.
+
+## 7.3 Product Display
+
+Desktop: Table.
+
+Mobile: Product cards.
+
+Kolom desktop:
+- Gambar.
+- Nama produk.
+- SKU.
+- Kategori.
+- Harga jual.
+- HPP.
+- Margin.
+- Status.
+- Aksi.
+
+HPP dan margin hanya ditampilkan pada halaman Admin.
+
+## 7.4 Add/Edit Product Form
+
+Field:
+- Foto produk.
+- Nama produk.
+- SKU.
+- Kategori.
+- Deskripsi.
+- Harga jual.
+- HPP.
+- Status tersedia.
+
+Tambahkan informasi otomatis:
+
+`Margin = Harga Jual - HPP`
+
+`Margin (%) = (Margin / Harga Jual) × 100`
+
+Jika harga jual nol, tampilkan margin 0%.
+
+## 7.5 Product Actions
+
+- Edit.
+- Archive.
+- Aktifkan/nonaktifkan.
+- Lihat detail.
+
+Hindari permanent delete untuk produk yang pernah digunakan dalam transaksi.
+
+## 7.6 Product Image
+
+- Preview sebelum upload.
+- Validasi format.
+- Loading state.
+- Error state.
+- Upload ke Supabase Storage.
+
+# 8. CATEGORY MANAGEMENT
+
+Route:
+
+`/admin/categories`
+
+Tampilan:
+- Judul "Kategori".
+- Tombol Tambah Kategori.
+- Daftar kategori.
+- Nama kategori.
+- Jumlah produk.
+- Status.
+- Urutan.
+- Aksi.
+
+Form:
+- Nama kategori.
+- Deskripsi.
+- Gambar opsional.
+- Urutan tampilan.
+- Status aktif.
+
+Kategori yang telah digunakan produk tidak boleh dihapus secara sembarangan.
+
+# 9. POS — CASHIER INTERFACE
+
+Route:
+
+`/pos`
+
+Ini merupakan halaman paling penting dalam aplikasi.
+
+Prioritas utama:
+**Kasir harus dapat menyelesaikan transaksi secepat dan sesederhana mungkin.**
+
+## 9.1 POS Layout — Tablet & Desktop
+
+Gunakan dua panel utama:
+
+**Panel kiri — Product Catalog**
+- Search produk.
+- Kategori.
+- Grid produk.
+- Gambar.
+- Nama.
+- Harga.
+- Status ketersediaan.
+
+**Panel kanan — Cart**
+- Daftar produk dipilih.
+- Quantity control.
+- Hapus item.
+- Catatan item opsional.
+- Subtotal.
+- Diskon.
+- Pajak jika aktif.
+- Total.
+- Tombol Checkout.
+
+Panel cart harus mudah diakses dan tidak tertutup ketika katalog di-scroll.
+
+## 9.2 POS Layout — Mobile
+
+Gunakan satu area utama.
+
+Bagian atas:
+- Store name.
+- Search.
+- Kategori horizontal scroll.
+
+Bagian tengah:
+- Grid produk dua kolom.
+- Gambar produk.
+- Nama produk.
+- Harga.
+
+Bagian bawah:
+- Sticky cart summary.
+- Jumlah item.
+- Total sementara.
+- Tombol "Lihat Keranjang".
+
+Ketika keranjang dibuka, gunakan bottom sheet atau halaman penuh yang nyaman.
+
+## 9.3 Product Card
+
+Setiap kartu produk berisi:
+- Foto produk.
+- Nama.
+- Harga.
+- Indikator ketersediaan.
+
+Ketika ditekan:
+- Produk masuk keranjang.
+- Quantity bertambah jika produk sudah ada.
+- Berikan feedback visual ringan.
+
+Jangan tampilkan HPP kepada Kasir.
+
+## 9.4 Cart
+
+Setiap item menampilkan:
+- Nama produk.
+- Harga satuan.
+- Quantity.
+- Subtotal.
+- Tombol tambah/kurang.
+- Tombol hapus.
+
+Bagian ringkasan:
+- Subtotal.
+- Diskon.
+- Pajak.
+- Grand total.
+
+Kasir tidak boleh mengubah harga produk secara bebas.
+
+## 9.5 Discount UI
+
+Diskon transaksi dapat diatur melalui kontrol yang diizinkan sistem.
+
+Pilihan:
+- Nominal tetap.
+- Persentase.
+
+Jika diskon dinonaktifkan oleh Admin, kontrol diskon tidak ditampilkan.
+
+Diskon tidak boleh melebihi subtotal.
+
+## 9.6 Checkout Button
+
+Label:
+
+"Checkout"
+
+Ketika ditekan:
+- Validasi keranjang.
+- Cegah request ganda.
+- Tampilkan loading.
+- Kirim request checkout ke server.
+- Tunggu konfirmasi database.
+- Jika berhasil, tampilkan pembayaran dan struk.
+- Jika gagal, pertahankan keranjang agar tidak hilang.
+
+Jangan mengosongkan keranjang sebelum checkout benar-benar berhasil.
+
+# 10. PAYMENT INTERFACE
+
+Gunakan modal atau halaman checkout yang sederhana.
+
+## 10.1 Payment Summary
+
+Tampilkan:
+- Daftar produk ringkas.
+- Subtotal.
+- Diskon.
+- Pajak.
+- Grand total.
+
+## 10.2 Payment Method
+
+Pilihan berbentuk kartu:
+
+- Cash.
+- QRIS.
+- Debit.
+- Transfer.
+
+Setiap metode memiliki icon yang sesuai.
+
+## 10.3 Cash Payment
+
+Jika memilih Cash:
+- Input uang diterima.
+- Tombol nominal cepat.
+- Perhitungan uang kembalian otomatis.
+
+Contoh:
+
+Total: Rp75.000
+
+Uang diterima: Rp100.000
+
+Kembalian: Rp25.000
+
+Jika uang diterima kurang dari total, tombol konfirmasi dinonaktifkan.
+
+## 10.4 Non-Cash Payment
+
+Jika memilih QRIS, Debit, atau Transfer:
+- Tampilkan total.
+- Tampilkan metode.
+- Tombol "Konfirmasi Pembayaran".
+
+Pada V1 ini hanya simulasi pencatatan pembayaran. Jangan menampilkan klaim pembayaran benar-benar telah diverifikasi oleh bank atau payment gateway.
+
+# 11. RECEIPT / STRUK
+
+Setelah transaksi berhasil, tampilkan halaman atau modal sukses.
+
+## 11.1 Success Screen
+
+Elemen:
+- Icon sukses.
+- "Transaksi Berhasil".
+- Nomor invoice.
+- Total pembayaran.
+- Metode pembayaran.
+- Tombol Cetak Struk.
+- Tombol Transaksi Baru.
+- Tombol Lihat Detail.
+
+## 11.2 Receipt Content
+
+Urutan isi struk:
+
+1. Logo cafe.
+2. Nama cafe.
+3. Alamat.
+4. Nomor telepon.
+5. Garis pemisah.
+6. Nomor invoice.
+7. Tanggal dan jam.
+8. Nama kasir.
+9. Daftar produk.
+10. Subtotal.
+11. Diskon.
+12. Pajak jika aktif.
+13. Total.
+14. Metode pembayaran.
+15. Uang diterima.
+16. Kembalian.
+17. Footer message.
+
+Jangan pernah mencetak HPP atau keuntungan pada struk pelanggan.
+
+## 11.3 Receipt Sizes
+
+Sediakan:
+- 58mm.
+- 80mm.
+
+Gunakan CSS print khusus.
+
+Struk harus tetap dapat dicetak ulang dari riwayat transaksi tanpa membuat transaksi baru.
+
+# 12. TRANSACTION HISTORY
+
+Route:
+
+`/admin/transactions`
+
+Untuk Admin:
+- Melihat semua transaksi.
+- Filter tanggal.
+- Filter kasir.
+- Filter metode pembayaran.
+- Filter status.
+- Search invoice.
+
+Untuk Kasir:
+
+`/pos/transactions`
+
+Kasir hanya melihat transaksi miliknya.
+
+## 12.1 Transaction Table
+
+Kolom:
+- Invoice.
+- Tanggal.
+- Kasir.
+- Jumlah item.
+- Total.
+- Metode pembayaran.
+- Status.
+- Aksi.
+
+Mobile:
+Gunakan card list.
+
+## 12.2 Transaction Detail
+
+Tampilkan:
+- Invoice.
+- Store.
+- Kasir.
+- Tanggal.
+- Daftar item.
+- Subtotal.
+- Diskon.
+- Pajak.
+- Total.
+- Pembayaran.
+- Status.
+
+Untuk Admin tambahkan:
+- HPP transaksi.
+- Gross Profit.
+- Informasi refund.
+- Informasi void.
+
+Untuk Kasir jangan tampilkan data HPP atau keuntungan.
+
+## 12.3 Admin Actions
+
+- Cetak ulang struk.
+- Void transaksi.
+- Refund transaksi.
+
+Void dan refund menggunakan konfirmasi dan alasan wajib.
+
+# 13. FINANCIAL REPORTING — REKAP
+
+Route:
+
+`/admin/reports`
+
+Ini merupakan halaman keuangan utama.
+
+Nama menu:
+
+**Rekap**
+
+Tujuan:
+Membantu pemilik cafe mengetahui omzet, biaya produk, pengeluaran, dan keuntungan operasional.
+
+## 13.1 Report Header
+
+- Judul "Rekap Keuangan".
+- Pilihan periode.
+- Custom date range.
+- Tombol Export.
+
+Pilihan periode:
+- Hari ini.
+- Minggu ini.
+- Bulan ini.
+- Tahun ini.
+- Custom.
+
+## 13.2 Financial KPI Cards
+
+Tampilkan enam indikator:
+
+**1. Gross Sales**
+Total penjualan sebelum diskon.
+
+**2. Net Revenue**
+Penjualan setelah diskon dan refund, sebelum pajak.
+
+**3. Total HPP**
+HPP bersih setelah memperhitungkan barang yang direfund.
+
+**4. Gross Profit**
+Net Revenue dikurangi HPP bersih.
+
+**5. Operating Expenses**
+Total pengeluaran operasional.
+
+**6. Keuntungan Bersih Operasional**
+Gross Profit dikurangi Operating Expenses.
+
+Net Profit Margin dapat ditampilkan sebagai indikator tambahan.
+
+## 13.3 Financial Formula
+
+Gunakan formula:
+
+Net Revenue = Penjualan setelah diskon - Refund penjualan
+
+Net HPP = HPP barang terjual - Pembalikan HPP barang refund
+
+Gross Profit = Net Revenue - Net HPP
+
+Net Operating Profit = Gross Profit - Operating Expenses
+
+NPM = (Net Operating Profit / Net Revenue) × 100%
+
+Jangan memasukkan pajak yang dipungut dari pelanggan sebagai pendapatan usaha.
+
+Tampilkan label yang jelas agar Admin tidak salah memahami angka laporan.
+
+## 13.4 Financial Charts
+
+Grafik yang disediakan:
+
+1. Grafik penjualan berdasarkan waktu.
+2. Grafik keuntungan.
+3. Grafik perbandingan HPP dan pendapatan.
+4. Grafik pengeluaran operasional.
+
+## 13.5 Product Performance
+
+Tampilkan:
+- Produk terlaris berdasarkan jumlah.
+- Produk dengan omzet tertinggi.
+- Produk dengan gross profit tertinggi.
+- Produk dengan margin tertinggi.
+
+Semua perhitungan harus menggunakan snapshot harga dan HPP transaksi.
+
+## 13.6 Payment Summary
+
+Ringkasan berdasarkan:
+- Cash.
+- QRIS.
+- Debit.
+- Transfer.
+
+## 13.7 Expense Summary
+
+Tampilkan:
+- Total pengeluaran.
+- Kategori pengeluaran.
+- Nominal.
+- Persentase dari total pengeluaran.
+
+## 13.8 Export
+
+Format:
+- PDF.
+- CSV.
+- XLSX.
+
+Ekspor harus menggunakan filter periode yang sedang dipilih.
+
+Hanya Admin yang memiliki akses ekspor laporan keuangan.
+
+# 14. OPERATING EXPENSES
+
+Route:
+
+`/admin/expenses`
+
+## 14.1 Expense Dashboard
+
+KPI:
+- Pengeluaran periode ini.
+- Jumlah catatan pengeluaran.
+- Kategori pengeluaran terbesar.
+
+## 14.2 Expense List
+
+Kolom:
+- Tanggal.
+- Nama pengeluaran.
+- Kategori.
+- Nominal.
+- Metode pembayaran.
+- Status.
+- Aksi.
+
+## 14.3 Add Expense Form
+
+Field:
+- Nama pengeluaran.
+- Kategori.
+- Nominal.
+- Tanggal.
+- Metode pembayaran.
+- Deskripsi.
+- Upload bukti opsional.
+
+Hanya Admin yang dapat mengelola pengeluaran.
+
+# 15. USER MANAGEMENT
+
+Route:
+
+`/admin/users`
+
+## 15.1 User List
+
+Tampilkan:
+- Nama.
+- Email.
+- Role.
+- Status.
+- Tanggal dibuat.
+- Aksi.
+
+## 15.2 Add User
+
+Field:
+- Nama lengkap.
+- Email.
+- Password awal.
+- Role.
+- Status.
+
+Role:
+- Admin.
+- Kasir.
+
+Pembuatan akun dilakukan melalui proses server-side yang aman.
+
+## 15.3 User Actions
+
+- Tambah pengguna.
+- Edit profil.
+- Ubah status.
+- Reset password melalui alur aman.
+- Lihat riwayat aktivitas bila tersedia.
+
+Jangan memberikan kemampuan kepada pengguna untuk menaikkan role sendiri.
+
+# 16. SETTINGS
+
+Route:
+
+`/admin/settings`
+
+Pengaturan dibagi menjadi beberapa tab.
+
+## 16.1 Store Profile
+
+- Nama cafe.
+- Logo.
+- Email.
+- Nomor telepon.
+- Alamat.
+
+## 16.2 Invoice Settings
+
+- Prefix invoice.
+- Format nomor invoice.
+- Preview invoice.
+
+## 16.3 Receipt Settings
+
+- Lebar struk 58mm / 80mm.
+- Tampilkan logo.
+- Tampilkan alamat.
+- Tampilkan nomor telepon.
+- Tampilkan nama kasir.
+- Footer message.
+- Preview struk.
+
+## 16.4 Tax Settings
+
+- Pajak aktif/nonaktif.
+- Tarif pajak.
+- Mode pajak inclusive/exclusive.
+
+Perubahan pajak hanya memengaruhi transaksi baru.
+
+## 16.5 Preferences
+
+- Bahasa Indonesia.
+- English.
+- Mata uang.
+- Zona waktu.
+- Format tanggal.
+
+Mata uang dan timezone harus konsisten dengan pengaturan store.
+
+Perubahan mata uang tidak boleh mengubah nominal transaksi historis.
+
+## 16.6 Application Settings
+
+- Nama aplikasi.
+- Logo aplikasi.
+- Informasi versi.
+- Halaman instalasi PWA.
+- Informasi perangkat.
+- Status instalasi.
+
+# 17. PWA INSTALLATION PAGE
+
+Route:
+
+`/install`
+
+Halaman ini menjelaskan cara memasang aplikasi pada perangkat.
+
+Konten:
+- Logo aplikasi.
+- Nama cafe.
+- Judul "Pasang Aplikasi".
+- Deskripsi singkat.
+- Tombol Install jika browser mendukung.
+- Petunjuk instalasi Android.
+- Petunjuk instalasi iPhone.
+- Petunjuk instalasi desktop.
+
+Perilaku:
+- Tampilkan tombol instalasi native jika tersedia.
+- Jika tidak tersedia, tampilkan instruksi manual.
+- Jangan menampilkan tombol install yang tidak berfungsi.
+- Berikan informasi versi aplikasi.
+
+PWA harus menggunakan:
+- Web App Manifest.
+- Service Worker.
+- App Icons.
+- Theme Color.
+- Display Standalone.
+
+Checkout membutuhkan koneksi internet pada V1.
+
+Jika offline:
+- Tampilkan indikator offline.
+- Nonaktifkan checkout.
+- Jangan mengklaim transaksi berhasil jika server belum mengonfirmasi.
+
+# 18. EMPTY, LOADING, SUCCESS & ERROR STATES
+
+Setiap halaman harus memiliki state yang konsisten.
+
+## 18.1 Loading
+
+Gunakan:
+- Skeleton.
+- Spinner.
+- Disabled button.
+- Loading label.
+
+Hindari layar kosong saat data sedang dimuat.
+
+## 18.2 Empty State
+
+Contoh:
+- Belum ada produk.
+- Belum ada transaksi.
+- Belum ada pengeluaran.
+- Belum ada data laporan.
+
+Tampilkan:
+- Icon.
+- Pesan singkat.
+- CTA yang sesuai untuk Admin.
+
+## 18.3 Error State
+
+Contoh:
+- Gagal mengambil data.
+- Gagal menyimpan produk.
+- Gagal checkout.
+- Session expired.
+- Tidak memiliki akses.
+- Koneksi terputus.
+
+Gunakan pesan yang mudah dimengerti.
+
+Jangan menampilkan stack trace atau informasi sensitif kepada pengguna.
+
+## 18.4 Success Feedback
+
+Gunakan toast atau inline success message.
+
+Contoh:
+- Produk berhasil disimpan.
+- Kategori berhasil diperbarui.
+- Transaksi berhasil.
+- Pengeluaran berhasil dicatat.
+
+# 19. INTERACTION & MICRO UX
+
+Interaksi harus sederhana dan konsisten.
+
+- Button memiliki hover, active, focus, dan disabled state.
+- Form menampilkan validasi dekat field terkait.
+- Modal dapat ditutup dengan cara yang konsisten.
+- Tombol berbahaya memerlukan konfirmasi.
+- Checkout menggunakan loading state.
+- Quantity control memiliki area klik yang nyaman.
+- Search memiliki debounce.
+- Filter dapat di-reset.
+- Toast tidak menghalangi tindakan utama.
+
+Jangan menggunakan animasi berlebihan.
+
+# 20. ACCESSIBILITY
+
+Persyaratan:
+- Kontras teks memadai.
+- Semua input memiliki label.
+- Icon button memiliki accessible label.
+- Fokus keyboard terlihat.
+- Modal mengelola fokus dengan benar.
+- Status tidak hanya dibedakan dengan warna.
+- Tombol utama memiliki ukuran sentuh yang nyaman.
+- Form dapat digunakan dengan keyboard.
+- Error message dapat dipahami tanpa bergantung pada warna.
+
+# 21. DEMO EXPERIENCE
+
+Aplikasi ini digunakan untuk demonstrasi kepada calon klien.
+
+Karena itu, siapkan pengalaman demo yang terlihat lengkap sejak pertama kali dibuka.
+
+Ketika demo dibuka:
+- Dashboard memiliki data.
+- Produk memiliki foto.
+- Kategori telah tersedia.
+- Grafik penjualan terisi.
+- Riwayat transaksi tersedia.
+- Rekap keuangan menampilkan angka realistis.
+- Pengeluaran memiliki beberapa catatan.
+- POS dapat digunakan untuk simulasi checkout.
+- Struk dapat dicetak.
+
+Sediakan data demo yang konsisten antara dashboard, transaksi, HPP, refund, pengeluaran, dan laporan.
+
+Jika tersedia fitur reset demo, hanya Admin yang boleh menjalankannya dan harus ada konfirmasi tambahan.
+
+# 22. UI COMPONENT STRUCTURE
+
+Gunakan komponen reusable.
+
+Struktur yang disarankan:
+
+```text
+src/
+└── components/
+    ├── ui/
+    │   ├── Button.tsx
+    │   ├── Input.tsx
+    │   ├── Select.tsx
+    │   ├── Modal.tsx
+    │   ├── Drawer.tsx
+    │   ├── Badge.tsx
+    │   ├── Toast.tsx
+    │   ├── Skeleton.tsx
+    │   └── EmptyState.tsx
+    │
+    ├── layout/
+    │   ├── AdminSidebar.tsx
+    │   ├── AdminHeader.tsx
+    │   ├── CashierLayout.tsx
+    │   ├── MobileNavigation.tsx
+    │   └── PageContainer.tsx
+    │
+    ├── dashboard/
+    │   ├── KpiCard.tsx
+    │   ├── SalesChart.tsx
+    │   ├── BestSellingProducts.tsx
+    │   └── LatestTransactions.tsx
+    │
+    ├── products/
+    │   ├── ProductTable.tsx
+    │   ├── ProductCard.tsx
+    │   ├── ProductForm.tsx
+    │   └── ProductImageUpload.tsx
+    │
+    ├── pos/
+    │   ├── ProductCatalog.tsx
+    │   ├── ProductGrid.tsx
+    │   ├── ProductSearch.tsx
+    │   ├── CategoryFilter.tsx
+    │   ├── CartPanel.tsx
+    │   ├── CartItem.tsx
+    │   ├── CheckoutModal.tsx
+    │   ├── PaymentSelector.tsx
+    │   └── CashCalculator.tsx
+    │
+    ├── transactions/
+    │   ├── TransactionTable.tsx
+    │   ├── TransactionDetail.tsx
+    │   ├── RefundModal.tsx
+    │   └── VoidModal.tsx
+    │
+    ├── reports/
+    │   ├── FinancialSummary.tsx
+    │   ├── ProfitChart.tsx
+    │   ├── ExpenseChart.tsx
+    │   └── ProductPerformance.tsx
+    │
+    └── receipt/
+        ├── ReceiptPreview.tsx
+        └── PrintableReceipt.tsx
+```
+
+Struktur ini merupakan rekomendasi awal dan boleh disesuaikan berdasarkan arsitektur aktual proyek.
+
+# 23. UI/UX ACCEPTANCE CRITERIA
+
+UI/UX dinyatakan memenuhi spesifikasi jika:
+
+- [ ] Desain konsisten dengan design system.
+- [ ] Dashboard Admin menampilkan seluruh KPI utama.
+- [ ] Produk dapat dikelola dengan nyaman.
+- [ ] Kategori dapat dikelola.
+- [ ] POS berfungsi di HP.
+- [ ] POS berfungsi di tablet.
+- [ ] Keranjang dapat digunakan tanpa kesulitan.
+- [ ] Checkout memiliki loading dan error state.
+- [ ] Pembayaran tunai menghitung kembalian.
+- [ ] Pembayaran non-tunai dapat disimulasikan.
+- [ ] Struk 58mm dapat dicetak.
+- [ ] Struk 80mm dapat dicetak.
+- [ ] Riwayat transaksi tersedia.
+- [ ] Refund dan void memiliki konfirmasi.
+- [ ] Rekap menampilkan HPP dan keuntungan.
+- [ ] Pengeluaran dapat dicatat.
+- [ ] Kasir tidak melihat data keuangan.
+- [ ] Halaman responsif di seluruh breakpoint.
+- [ ] PWA dapat dipasang.
+- [ ] Offline state ditampilkan dengan benar.
+- [ ] Tidak ada tombol atau menu yang hanya menjadi dekorasi tanpa fungsi.
+
+# 24. INSTRUKSI UNTUK ANTIGRAVITY
+
+Gunakan dokumen ini sebagai acuan utama pembangunan seluruh tampilan aplikasi Cafe POS.
+
+Sebelum membuat UI:
+
+1. Baca `docs/01-MASTERPLAN.md`.
+2. Baca `docs/02-PRD.md`.
+3. Baca `docs/03-ERD-DATABASE.md`.
+4. Pahami role Admin dan Kasir.
+5. Pahami aturan HPP, refund, void, dan laporan keuangan.
+
+Aturan implementasi:
+
+- Gunakan satu design system.
+- Gunakan reusable components.
+- Prioritaskan mobile-first.
+- Tablet POS harus menggunakan layout yang nyaman.
+- Jangan tampilkan HPP kepada Kasir.
+- Jangan tampilkan laporan keuangan kepada Kasir.
+- Jangan membuat tombol palsu.
+- Jangan menggunakan data dummy yang tidak konsisten dengan database.
+- Gunakan loading, empty, error, dan success state.
+- Jangan membuat halaman hanya untuk terlihat bagus tanpa fungsi yang jelas.
+- Pastikan semua navigasi dan aksi benar-benar bekerja.
+- Jangan mengubah struktur database tanpa memperbarui dokumentasinya.
+
+**PRINSIP UTAMA: Aplikasi harus terlihat profesional saat didemonstrasikan, tetapi tetap mengutamakan kecepatan, kemudahan, dan akurasi operasional saat digunakan oleh kasir.**

@@ -1,0 +1,1115 @@
+# TECHNICAL ARCHITECTURE
+## Cafe POS System — V1.0
+
+**Dokumen:** 05-TECHNICAL-ARCHITECTURE.md  
+**Versi:** 1.0  
+**Status:** Technical Specification  
+**Development Environment:** Antigravity  
+**Frontend:** Next.js + TypeScript  
+**Styling:** Tailwind CSS  
+**Backend Services:** Supabase  
+**Database:** PostgreSQL  
+**Authentication:** Supabase Auth  
+**Storage:** Supabase Storage  
+**Deployment:** Vercel  
+**Application Type:** Responsive Web + PWA
+
+---
+
+# 1. ARCHITECTURE OBJECTIVE
+
+Technical Architecture bertujuan menentukan struktur teknis aplikasi Cafe POS agar:
+
+1. Seluruh fitur memiliki alur komunikasi yang jelas.
+2. Frontend dan backend memiliki tanggung jawab masing-masing.
+3. Keamanan data berdasarkan role diterapkan secara konsisten.
+4. Proses checkout aman dari transaksi ganda.
+5. HPP dan keuntungan dihitung secara akurat.
+6. Aplikasi dapat digunakan melalui HP, tablet, dan desktop.
+7. Deployment dapat dilakukan melalui GitHub dan Vercel.
+8. Sistem mudah dikembangkan tanpa harus membangun ulang seluruh aplikasi.
+
+## 1.1 Architecture Principles
+
+Gunakan prinsip:
+
+- Separation of Concerns.
+- Server-side Security.
+- Database as Source of Truth.
+- Atomic Transaction Processing.
+- Role-Based Access Control.
+- Reusable Components.
+- Type Safety.
+- Mobile-First.
+- Environment Separation.
+- Maintainable Codebase.
+
+Jangan menempatkan seluruh business logic di frontend.
+
+# 2. HIGH-LEVEL SYSTEM ARCHITECTURE
+
+## 2.1 Main Architecture
+
+Gunakan arsitektur:
+
+**Next.js Application + Supabase Backend Services**
+
+Komponen utama:
+
+1. Client Application.
+2. Next.js Server.
+3. Supabase Authentication.
+4. Supabase PostgreSQL.
+5. Supabase Storage.
+6. PostgreSQL RPC.
+7. Vercel Hosting.
+8. GitHub Repository.
+
+## 2.2 Architecture Diagram
+
+```mermaid
+flowchart TB
+    U[Admin / Cashier]
+    D[Mobile / Tablet / Desktop]
+    V[Vercel Hosting]
+    N[Next.js Application]
+    A[Supabase Auth]
+    S[Server-side Authorization]
+    API[Server Actions / Route Handlers]
+    DB[(Supabase PostgreSQL)]
+    RPC[PostgreSQL RPC]
+    ST[Supabase Storage]
+
+    U --> D
+    D --> V
+    V --> N
+
+    N --> A
+    N --> S
+    S --> API
+
+    API --> DB
+    API --> RPC
+    API --> ST
+
+    RPC --> DB
+```
+
+## 2.3 Main Data Flow
+
+1. Pengguna membuka aplikasi.
+2. Next.js menampilkan halaman.
+3. Pengguna login melalui Supabase Auth.
+4. Server memverifikasi session.
+5. Server mengambil role dari profil pengguna.
+6. Sistem menentukan akses Admin atau Kasir.
+7. Pengguna melakukan aktivitas.
+8. Request dikirim melalui jalur server atau Supabase client yang telah dibatasi RLS.
+9. PostgreSQL memvalidasi dan memproses data.
+10. Hasil dikembalikan ke aplikasi.
+
+# 3. TECHNOLOGY STACK
+
+## 3.1 Frontend
+
+**Next.js App Router**
+
+Alasan:
+- Mendukung server dan client components.
+- Mendukung Route Handlers.
+- Memiliki sistem routing terstruktur.
+- Terintegrasi dengan Vercel.
+- Mendukung aplikasi PWA.
+
+**TypeScript**
+
+Gunakan TypeScript untuk seluruh kode aplikasi.
+
+Tujuan:
+- Mengurangi kesalahan tipe data.
+- Menjaga konsistensi struktur response.
+- Memudahkan pengembangan.
+- Mendukung autocomplete.
+
+**Tailwind CSS**
+
+Gunakan Tailwind untuk:
+- Layout.
+- Responsive design.
+- Design system.
+- Component styling.
+
+## 3.2 Backend Services
+
+Supabase digunakan sebagai layanan backend utama.
+
+| Service | Fungsi |
+|---|---|
+| Supabase Auth | Login dan session |
+| PostgreSQL | Penyimpanan data |
+| RLS | Keamanan akses data |
+| RPC | Business logic kritis |
+| Storage | Gambar dan asset |
+| Database Functions | Perhitungan dan operasi atomik |
+
+## 3.3 Hosting
+
+**Vercel**
+
+Digunakan untuk:
+- Hosting Next.js.
+- Deployment otomatis.
+- Environment variables.
+- Preview deployment.
+- Production deployment.
+
+## 3.4 Repository
+
+**GitHub**
+
+Digunakan untuk:
+- Source code.
+- Version control.
+- Riwayat perubahan.
+- Backup repository.
+- Integrasi deployment Vercel.
+
+# 4. APPLICATION STRUCTURE
+
+Gunakan struktur folder yang terorganisasi.
+
+```text
+cafe-pos/
+│
+├── public/
+│   ├── icons/
+│   ├── images/
+│   ├── manifest.json
+│   └── favicon.ico
+│
+├── docs/
+│   ├── 01-MASTERPLAN.md
+│   ├── 02-PRD.md
+│   ├── 03-ERD-DATABASE.md
+│   ├── 04-UI-UX-SPECIFICATION.md
+│   ├── 05-TECHNICAL-ARCHITECTURE.md
+│   ├── 06-DEVELOPMENT-ROADMAP.md
+│   └── 07-ACCEPTANCE-CRITERIA.md
+│
+├── src/
+│   ├── app/
+│   │   ├── (auth)/
+│   │   │   └── login/
+│   │   │
+│   │   ├── (admin)/
+│   │   │   └── admin/
+│   │   │       ├── dashboard/
+│   │   │       ├── products/
+│   │   │       ├── categories/
+│   │   │       ├── reports/
+│   │   │       ├── transactions/
+│   │   │       ├── expenses/
+│   │   │       ├── users/
+│   │   │       └── settings/
+│   │   │
+│   │   ├── (cashier)/
+│   │   │   └── pos/
+│   │   │       ├── page.tsx
+│   │   │       ├── transactions/
+│   │   │       └── profile/
+│   │   │
+│   │   ├── install/
+│   │   ├── api/
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   │
+│   ├── components/
+│   │   ├── ui/
+│   │   ├── layout/
+│   │   ├── dashboard/
+│   │   ├── products/
+│   │   ├── pos/
+│   │   ├── transactions/
+│   │   ├── reports/
+│   │   └── receipt/
+│   │
+│   ├── features/
+│   │   ├── auth/
+│   │   ├── dashboard/
+│   │   ├── products/
+│   │   ├── categories/
+│   │   ├── pos/
+│   │   ├── transactions/
+│   │   ├── reports/
+│   │   ├── expenses/
+│   │   ├── users/
+│   │   └── settings/
+│   │
+│   ├── lib/
+│   │   ├── supabase/
+│   │   │   ├── client.ts
+│   │   │   ├── server.ts
+│   │   │   └── middleware.ts
+│   │   ├── auth/
+│   │   ├── permissions/
+│   │   ├── validations/
+│   │   ├── formatters/
+│   │   └── utils/
+│   │
+│   ├── services/
+│   │   ├── products.service.ts
+│   │   ├── transactions.service.ts
+│   │   ├── reports.service.ts
+│   │   ├── expenses.service.ts
+│   │   └── users.service.ts
+│   │
+│   ├── types/
+│   │   ├── database.types.ts
+│   │   ├── auth.types.ts
+│   │   ├── product.types.ts
+│   │   ├── transaction.types.ts
+│   │   └── report.types.ts
+│   │
+│   └── middleware.ts
+│
+├── supabase/
+│   ├── migrations/
+│   ├── functions/
+│   ├── seed.sql
+│   └── config.toml
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+│
+├── .env.example
+├── .gitignore
+├── next.config.ts
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+Struktur dapat disesuaikan dengan kebutuhan implementasi, tetapi pemisahan fitur, komponen, layanan, dan akses database harus dipertahankan.
+
+# 5. FRONTEND ARCHITECTURE
+
+## 5.1 Server Components
+
+Gunakan Server Components sebagai default.
+
+Cocok untuk:
+- Dashboard data awal.
+- Daftar produk Admin.
+- Riwayat transaksi.
+- Detail transaksi.
+- Rekap keuangan.
+- Pengaturan.
+
+Keuntungan:
+- Mengurangi JavaScript di browser.
+- Data dapat diambil secara server-side.
+- Mengurangi paparan data sensitif.
+
+## 5.2 Client Components
+
+Gunakan Client Components untuk interaksi yang membutuhkan state browser.
+
+Cocok untuk:
+- Keranjang POS.
+- Product search.
+- Quantity control.
+- Payment modal.
+- Cash calculator.
+- Interactive charts.
+- Form input.
+- Toast dan modal.
+
+Jangan menambahkan `"use client"` pada seluruh halaman jika hanya beberapa komponen yang membutuhkan interaksi.
+
+## 5.3 Feature-Based Architecture
+
+Setiap fitur memiliki:
+- Components.
+- Types.
+- Schemas.
+- Services.
+- Hooks jika diperlukan.
+
+Contoh:
+
+```text
+features/
+└── pos/
+    ├── components/
+    ├── schemas/
+    ├── services/
+    ├── hooks/
+    └── types/
+```
+
+Tujuannya agar perubahan pada POS tidak merusak fitur laporan atau manajemen produk.
+
+# 6. SUPABASE CLIENT ARCHITECTURE
+
+Gunakan pemisahan client dan server.
+
+## 6.1 Browser Client
+
+Digunakan untuk kebutuhan browser yang memang memerlukan interaksi langsung.
+
+Contoh:
+- Auth session client.
+- Realtime subscription jika diperlukan.
+- Operasi publik yang aman.
+
+File:
+
+`src/lib/supabase/client.ts`
+
+## 6.2 Server Client
+
+Digunakan untuk:
+- Mengambil session pengguna.
+- Mengakses database sesuai identitas pengguna.
+- Memvalidasi authorization.
+- Menjalankan operasi server-side.
+
+File:
+
+`src/lib/supabase/server.ts`
+
+Gunakan konfigurasi SSR Supabase yang sesuai dengan versi package terpasang.
+
+Jangan membuat pola client/server sendiri yang mengabaikan mekanisme cookie dan refresh session.
+
+## 6.3 Admin/Service Role Client
+
+Buat client khusus server untuk operasi administratif yang membutuhkan Service Role.
+
+Aturan:
+- Tidak boleh diimpor ke Client Component.
+- Tidak boleh diekspos melalui browser.
+- Tidak boleh menggunakan prefix `NEXT_PUBLIC_`.
+- Hanya digunakan setelah pemeriksaan otorisasi server.
+- Jangan menggunakan Service Role untuk operasi biasa yang dapat dilakukan melalui RLS.
+
+# 7. AUTHENTICATION & AUTHORIZATION
+
+## 7.1 Authentication Flow
+
+```mermaid
+flowchart TD
+    A[Open Application] --> B[Login]
+    B --> C[Supabase Auth]
+    C --> D{Valid Session?}
+    D -->|No| E[Show Login Error]
+    D -->|Yes| F[Load User Profile]
+    F --> G{Account Active?}
+    G -->|No| H[Access Denied]
+    G -->|Yes| I{User Role}
+    I -->|Admin| J[Admin Dashboard]
+    I -->|Cashier| K[POS]
+```
+
+## 7.2 Role Authorization
+
+Role utama:
+
+- admin
+- cashier
+
+Pemeriksaan role dilakukan:
+1. Pada server.
+2. Pada API atau Server Actions.
+3. Pada database menggunakan RLS.
+
+Frontend hanya mengatur tampilan dan navigasi, bukan menjadi sumber keamanan utama.
+
+## 7.3 Route Protection
+
+Admin route:
+- `/admin/*`
+
+Cashier route:
+- `/pos/*`
+
+Jika Kasir mencoba membuka `/admin/reports`, server harus menolak akses.
+
+Jika Admin membuka `/pos`, sistem dapat mengizinkan akses sesuai kebijakan aplikasi, tetapi Admin tetap tidak boleh kehilangan akses dashboard Admin.
+
+## 7.4 Session Handling
+
+- Gunakan session Supabase.
+- Refresh session sesuai mekanisme resmi SSR.
+- Redirect saat session berakhir.
+- Jangan menyimpan password dalam localStorage.
+- Jangan menyimpan Service Role Key di browser.
+- Jangan mempercayai role yang dikirim client.
+
+# 8. API & SERVER ACTION ARCHITECTURE
+
+Gunakan Server Actions atau Route Handlers sesuai kebutuhan.
+
+Rekomendasi:
+
+**Server Actions**
+- Operasi form internal.
+- CRUD produk.
+- CRUD kategori.
+- CRUD pengeluaran.
+- Perubahan pengaturan.
+
+**Route Handlers**
+- Operasi yang membutuhkan endpoint HTTP eksplisit.
+- Integrasi eksternal.
+- Export laporan.
+- Endpoint khusus PWA bila diperlukan.
+
+**PostgreSQL RPC**
+- Checkout atomic.
+- Void transaksi.
+- Refund.
+- Perhitungan laporan kompleks yang memerlukan konsistensi database.
+
+Jangan membuat API route untuk setiap query sederhana jika server component dapat mengambil data dengan aman.
+
+## 8.1 API Modules
+
+Contoh endpoint:
+
+```text
+/api/
+├── products/
+│   ├── GET
+│   ├── POST
+│   └── PATCH
+│
+├── transactions/
+│   ├── GET
+│   └── POST
+│
+├── transactions/checkout/
+│   └── POST
+│
+├── transactions/[id]/
+│   └── GET
+│
+├── transactions/[id]/void/
+│   └── POST
+│
+├── transactions/[id]/refund/
+│   └── POST
+│
+├── reports/
+│   └── GET
+│
+└── export/
+    ├── pdf/
+    ├── csv/
+    └── xlsx/
+```
+
+Daftar tersebut adalah rancangan endpoint. Implementasi boleh menggunakan Server Actions untuk sebagian operasi.
+
+## 8.2 Request Validation
+
+Gunakan schema validation, misalnya Zod.
+
+Setiap request harus divalidasi pada server.
+
+Contoh validasi:
+- Product ID.
+- Quantity.
+- Nominal.
+- Discount type.
+- Payment method.
+- Date range.
+- User role.
+- Store ownership.
+
+Jangan hanya memvalidasi form di browser.
+
+# 9. BUSINESS LOGIC ARCHITECTURE
+
+Business logic harus memiliki sumber kebenaran yang jelas.
+
+| Business Logic | Sumber Kebenaran |
+|---|---|
+| Harga produk | PostgreSQL |
+| HPP produk | PostgreSQL |
+| Total transaksi | Checkout RPC |
+| Snapshot transaksi | PostgreSQL |
+| Nomor invoice | Invoice counter RPC |
+| Status transaksi | PostgreSQL |
+| Refund | Refund RPC |
+| Void | Void RPC |
+| Laporan keuangan | Reporting SQL |
+| Hak akses | RLS + Server Authorization |
+
+## 9.1 Checkout Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Cashier
+    participant UI as POS Frontend
+    participant S as Next.js Server
+    participant DB as PostgreSQL RPC
+
+    C->>UI: Select Products
+    UI->>UI: Build Cart
+    C->>UI: Checkout
+    UI->>S: Submit Checkout
+    S->>S: Validate Session and Role
+    S->>DB: complete_checkout()
+    DB->>DB: Validate Products and Prices
+    DB->>DB: Calculate Discount and Tax
+    DB->>DB: Create Invoice
+    DB->>DB: Save Transaction and Items
+    DB->>DB: Save Payment
+    DB-->>S: Transaction Result
+    S-->>UI: Success Response
+    UI-->>C: Show Receipt
+```
+
+Aturan penting:
+- Harga dan HPP tidak dipercaya dari frontend.
+- Database menghitung ulang total.
+- Checkout harus atomic.
+- Idempotency key harus digunakan.
+- Keranjang tidak dihapus sebelum konfirmasi berhasil.
+
+## 9.2 Void Flow
+
+1. Admin membuka detail transaksi.
+2. Admin memilih Void.
+3. Sistem meminta alasan.
+4. Server memvalidasi role.
+5. RPC memvalidasi status transaksi.
+6. Database memperbarui status menjadi voided.
+7. Audit log dibuat.
+8. Transaksi tidak lagi masuk laporan penjualan.
+
+## 9.3 Refund Flow
+
+1. Admin membuka transaksi.
+2. Admin memilih Refund.
+3. Admin memilih item dan jumlah.
+4. Sistem menghitung nilai refund berdasarkan snapshot.
+5. Server memvalidasi jumlah yang belum direfund.
+6. RPC menyimpan refund.
+7. Database memperbarui status transaksi.
+8. Laporan memperhitungkan pengurangan penjualan dan HPP.
+
+Refund harus atomic dan tidak boleh melebihi jumlah barang yang belum direfund.
+
+# 10. POS STATE MANAGEMENT
+
+Keranjang POS merupakan state utama yang harus responsif.
+
+State minimal:
+
+```text
+cartItems
+selectedCategory
+searchQuery
+discountType
+discountValue
+paymentMethod
+cashReceived
+isCartOpen
+isCheckoutLoading
+checkoutError
+```
+
+Aturan:
+
+- State keranjang dapat dikelola melalui React state atau state management library yang ringan.
+- Keranjang tidak boleh menjadi sumber kebenaran nominal transaksi.
+- Harga final dihitung ulang di server/database.
+- Saat produk berubah menjadi tidak tersedia, checkout harus ditolak dengan pesan yang jelas.
+- Saat checkout berhasil, keranjang dibersihkan.
+- Saat checkout gagal, keranjang dipertahankan.
+
+Jangan menyimpan HPP ke state browser Kasir.
+
+# 11. FINANCIAL REPORTING ARCHITECTURE
+
+Laporan keuangan harus berasal dari database.
+
+Jangan menghitung seluruh laporan menggunakan array transaksi yang diunduh ke browser.
+
+Gunakan SQL views atau RPC reporting functions.
+
+Laporan minimal:
+- Daily sales.
+- Weekly sales.
+- Monthly sales.
+- Yearly sales.
+- Product performance.
+- Payment summary.
+- Expense summary.
+- Profit summary.
+
+## 11.1 Reporting Data Flow
+
+```mermaid
+flowchart TD
+    A[Transactions] --> D[Reporting SQL]
+    B[Transaction Items] --> D
+    C[Refunds] --> D
+    E[Operating Expenses] --> D
+    D --> F[Admin Report API]
+    F --> G[Dashboard and Charts]
+    F --> H[Export PDF / CSV / XLSX]
+```
+
+Pastikan setiap agregasi menghindari duplikasi akibat JOIN antar-item, pembayaran, refund, dan pengeluaran.
+
+## 11.2 Timezone
+
+- Database timestamp: UTC.
+- Store timezone: Asia/Makassar.
+- Filter tanggal harus mengikuti timezone store.
+- Batas awal dan akhir periode harus dikonversi secara konsisten.
+
+## 11.3 Financial Security
+
+Endpoint laporan harus memvalidasi Admin.
+
+Kasir tidak boleh mendapatkan:
+- Net HPP.
+- Gross Profit.
+- Net Operating Profit.
+- Net Profit Margin.
+- Expense Summary.
+
+# 12. IMAGE & FILE STORAGE
+
+Supabase Storage digunakan untuk:
+
+- Product images.
+- Store logo.
+- Receipt assets.
+- Expense receipts.
+
+Bucket yang disarankan:
+
+```text
+product-images
+store-assets
+expense-receipts
+```
+
+## 12.1 Upload Flow
+
+1. Pengguna memilih file.
+2. Frontend memvalidasi format dan ukuran.
+3. Server memeriksa role dan store.
+4. File diunggah ke bucket.
+5. Database menyimpan path file.
+6. UI menampilkan preview.
+
+## 12.2 Security
+
+- Validasi MIME type.
+- Batasi ukuran file.
+- Batasi akses upload berdasarkan role.
+- Gunakan path berdasarkan store.
+- Bukti pengeluaran tidak boleh publik secara default.
+- Hindari mengandalkan nama file dari pengguna sebagai nama objek final.
+
+# 13. RECEIPT PRINT ARCHITECTURE
+
+Struk menggunakan HTML dan CSS khusus print.
+
+Gunakan:
+- Printable receipt component.
+- Print stylesheet.
+- CSS `@media print`.
+- CSS `@page`.
+
+Ukuran:
+- 58mm.
+- 80mm.
+
+Alur:
+1. Checkout berhasil.
+2. Server mengembalikan ID transaksi.
+3. Aplikasi mengambil data struk yang diizinkan.
+4. Printable receipt dirender.
+5. Browser membuka dialog cetak.
+6. Kasir memilih printer.
+
+Catatan:
+- Jangan membuat transaksi baru saat cetak ulang.
+- Jangan mencetak HPP.
+- Jangan mengandalkan tampilan layar sebagai satu-satunya layout struk.
+- Uji hasil cetak pada browser dan printer thermal yang digunakan.
+
+# 14. PWA ARCHITECTURE
+
+Aplikasi harus dapat dipasang pada perangkat.
+
+Komponen:
+- Web App Manifest.
+- Service Worker.
+- App Icons.
+- Theme Color.
+- Display Standalone.
+- Install prompt.
+- Offline indicator.
+
+## 14.1 Caching Strategy
+
+Cache:
+- Static assets.
+- App shell.
+- Icon.
+- Font.
+- File CSS dan JS yang aman.
+
+Jangan cache secara sembarangan:
+- Data transaksi pribadi.
+- Response laporan keuangan.
+- Data HPP.
+- Session.
+- API response sensitif.
+
+Gunakan strategi cache yang membatasi data sensitif dan memiliki aturan invalidasi.
+
+## 14.2 Offline Behavior
+
+V1 menggunakan online-only checkout.
+
+Jika offline:
+- Tampilkan status koneksi.
+- Nonaktifkan checkout.
+- Jangan menyimpan transaksi sebagai berhasil.
+- Jangan melakukan sinkronisasi transaksi offline secara otomatis.
+- Berikan pesan agar pengguna kembali online.
+
+## 14.3 Install Experience
+
+Halaman `/install` menjelaskan proses instalasi pada:
+- Android.
+- iOS.
+- Desktop.
+
+Tombol instalasi native hanya muncul jika browser mendukung mekanisme instalasi.
+
+# 15. ENVIRONMENT CONFIGURATION
+
+Gunakan environment terpisah:
+
+- Local Development.
+- Preview.
+- Production.
+
+## 15.1 Environment Variables
+
+Contoh `.env.example`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+SUPABASE_SERVICE_ROLE_KEY=
+
+NEXT_PUBLIC_APP_URL=
+```
+
+Ketentuan:
+- `NEXT_PUBLIC_` hanya untuk nilai yang memang boleh diakses browser.
+- Service Role Key hanya tersedia di server.
+- Jangan memasukkan secret ke GitHub.
+- Jangan menulis credential di source code.
+- Gunakan environment variables Vercel.
+
+Sesuaikan nama environment variable dengan versi SDK Supabase yang dipakai.
+
+# 16. GIT & DEPLOYMENT ARCHITECTURE
+
+## 16.1 Development Flow
+
+```mermaid
+flowchart TD
+    A[Antigravity Local Development]
+    B[Local Testing]
+    C[Git Commit]
+    D[GitHub Repository]
+    E[Vercel Preview]
+    F[Preview Testing]
+    G[Production Deployment]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+```
+
+## 16.2 Branch Strategy
+
+Gunakan:
+
+- `main`: production.
+- `develop`: integrasi development jika diperlukan.
+- `feature/*`: fitur baru.
+- `fix/*`: perbaikan bug.
+
+Untuk proyek kecil, penggunaan `main` dan feature branches sudah cukup.
+
+## 16.3 Deployment Steps
+
+1. Buat project Next.js.
+2. Hubungkan Supabase.
+3. Buat GitHub repository.
+4. Push source code.
+5. Hubungkan GitHub dengan Vercel.
+6. Tambahkan environment variables.
+7. Jalankan database migration.
+8. Verifikasi authentication.
+9. Verifikasi RLS.
+10. Uji checkout.
+11. Uji laporan.
+12. Deploy production demo.
+
+Jangan deploy ke production sebelum pengujian keamanan dasar selesai.
+
+# 17. SECURITY ARCHITECTURE
+
+Keamanan harus diterapkan pada beberapa lapisan.
+
+## 17.1 Frontend
+
+- Route navigation berdasarkan role.
+- Validasi input.
+- Error handling.
+- Tidak menampilkan informasi sensitif.
+- Tidak menyimpan secret.
+
+## 17.2 Server
+
+- Validasi session.
+- Validasi role.
+- Validasi store.
+- Validasi input.
+- Rate limiting untuk endpoint sensitif.
+- Error response aman.
+
+## 17.3 Database
+
+- RLS.
+- Foreign key.
+- Constraints.
+- Atomic RPC.
+- Snapshot transaksi.
+- Audit logs.
+- Privilege separation.
+
+## 17.4 Critical Security Rules
+
+1. Kasir tidak dapat mengakses HPP.
+2. Kasir tidak dapat mengakses laporan keuangan.
+3. Kasir tidak dapat mengubah role.
+4. Kasir tidak dapat melakukan void.
+5. Kasir tidak dapat melakukan refund.
+6. User tidak dapat mengakses store lain.
+7. Checkout tidak mempercayai nominal frontend.
+8. Service Role Key tidak boleh bocor.
+9. Data historis transaksi tidak boleh dimodifikasi sembarangan.
+10. Semua operasi sensitif harus diverifikasi server/database.
+
+# 18. ERROR HANDLING
+
+Gunakan format error yang konsisten.
+
+Contoh:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PRODUCT_UNAVAILABLE",
+    "message": "Produk sudah tidak tersedia."
+  }
+}
+```
+
+Contoh error code:
+
+- AUTH_REQUIRED
+- ACCOUNT_DISABLED
+- FORBIDDEN
+- PRODUCT_NOT_FOUND
+- PRODUCT_UNAVAILABLE
+- INVALID_QUANTITY
+- INVALID_DISCOUNT
+- PAYMENT_INSUFFICIENT
+- DUPLICATE_CHECKOUT
+- TRANSACTION_NOT_FOUND
+- TRANSACTION_ALREADY_VOIDED
+- REFUND_LIMIT_EXCEEDED
+- DATABASE_ERROR
+- NETWORK_ERROR
+
+Jangan mengirim SQL error mentah kepada pengguna.
+
+# 19. TESTING ARCHITECTURE
+
+Gunakan tiga tingkat pengujian.
+
+## 19.1 Unit Testing
+
+Uji:
+- Kalkulasi diskon.
+- Kalkulasi pajak.
+- Kalkulasi kembalian.
+- Format mata uang.
+- Format tanggal.
+- Perhitungan margin.
+- Perhitungan keuntungan.
+
+## 19.2 Integration Testing
+
+Uji:
+- Supabase Auth.
+- Profile dan role.
+- RLS.
+- CRUD produk.
+- Checkout RPC.
+- Idempotency.
+- Refund.
+- Void.
+- Laporan.
+- Storage.
+
+## 19.3 End-to-End Testing
+
+Simulasikan:
+- Login Admin.
+- Tambah produk.
+- Login Kasir.
+- Checkout.
+- Cetak struk.
+- Lihat riwayat transaksi.
+- Admin melihat laporan.
+- Admin memproses refund.
+- Kasir ditolak ketika mencoba membuka laporan.
+
+Gunakan data pengujian, bukan data produksi.
+
+# 20. PERFORMANCE & RELIABILITY
+
+Target teknis:
+
+- Halaman utama terasa responsif.
+- Query menggunakan filter dan pagination.
+- Jangan mengambil seluruh riwayat transaksi sekaligus.
+- Gambar menggunakan optimasi ukuran.
+- Komponen besar dimuat sesuai kebutuhan.
+- Checkout tidak boleh mengirim request ganda.
+- Error jaringan tidak boleh menghapus keranjang.
+- Laporan menggunakan agregasi database.
+- Hindari N+1 queries.
+- Gunakan caching hanya untuk data yang aman dan sesuai kebutuhan.
+
+# 21. DEMO ENVIRONMENT
+
+Karena aplikasi digunakan untuk demonstrasi, siapkan environment demo terpisah dari production.
+
+Ketentuan:
+- Satu store demo.
+- Satu Admin demo.
+- Dua Kasir demo.
+- Produk demo.
+- Transaksi demo.
+- Pengeluaran demo.
+- Laporan demo.
+- Reset demo terkontrol.
+
+Jangan menggunakan credential demo yang sama untuk layanan production sebenarnya.
+
+Fitur reset demo harus:
+- Hanya dapat dijalankan Admin yang terotorisasi.
+- Meminta konfirmasi.
+- Memiliki audit log.
+- Tidak dapat menghapus data di luar store demo.
+- Tidak tersedia sebagai endpoint publik tanpa autentikasi.
+
+# 22. IMPLEMENTATION ORDER
+
+Urutan implementasi teknis:
+
+1. Project initialization.
+2. Install dependencies.
+3. Configure TypeScript and Tailwind.
+4. Configure Supabase.
+5. Create database migrations.
+6. Implement Auth and profile.
+7. Implement role authorization.
+8. Implement RLS.
+9. Implement Admin layout.
+10. Implement Cashier layout.
+11. Implement product services.
+12. Implement POS state.
+13. Implement checkout RPC integration.
+14. Implement receipt.
+15. Implement transaction history.
+16. Implement refund and void.
+17. Implement expenses.
+18. Implement financial reporting.
+19. Implement user management.
+20. Implement settings.
+21. Implement PWA.
+22. Implement tests.
+23. Deploy to Vercel.
+
+Jangan membangun seluruh halaman dengan data statis lalu menganggap aplikasi telah terintegrasi.
+
+# 23. TECHNICAL DEFINITION OF DONE
+
+Technical Architecture dinyatakan siap apabila:
+
+- [ ] Next.js berjalan secara lokal.
+- [ ] TypeScript aktif.
+- [ ] Supabase terhubung.
+- [ ] Auth berjalan.
+- [ ] Server dan browser client dipisahkan.
+- [ ] Role authorization berjalan.
+- [ ] RLS berjalan.
+- [ ] HPP tidak dapat diakses Kasir.
+- [ ] Checkout menggunakan RPC.
+- [ ] Idempotency diterapkan.
+- [ ] Refund dan void aman.
+- [ ] Reporting berasal dari database.
+- [ ] Storage memiliki kebijakan akses.
+- [ ] PWA dapat dipasang.
+- [ ] Offline state berfungsi.
+- [ ] Environment variables aman.
+- [ ] Repository terhubung dengan GitHub.
+- [ ] Deployment Vercel berhasil.
+- [ ] Pengujian Admin dan Kasir lulus.
+
+# 24. INSTRUKSI WAJIB UNTUK ANTIGRAVITY
+
+Sebelum implementasi:
+
+1. Baca semua dokumen spesifikasi sebelumnya.
+2. Periksa kondisi repository.
+3. Periksa versi Next.js dan Supabase SDK yang digunakan.
+4. Jangan mengasumsikan API package tanpa memeriksa dokumentasi versi yang terpasang.
+5. Gunakan struktur folder yang konsisten.
+6. Jangan menaruh business logic kritis di frontend.
+7. Jangan menampilkan HPP ke Kasir.
+8. Jangan menggunakan Service Role di browser.
+9. Jangan mengabaikan RLS.
+10. Jangan membuat transaksi hanya melalui request insert biasa dari frontend.
+11. Gunakan migration untuk perubahan database.
+12. Uji setiap fitur sebelum melanjutkan ke fitur berikutnya.
+13. Catat perubahan arsitektur dalam dokumentasi.
+
+**PRINSIP UTAMA: Frontend bertanggung jawab atas pengalaman pengguna, server bertanggung jawab atas validasi dan otorisasi aplikasi, sedangkan PostgreSQL menjadi sumber kebenaran untuk data, transaksi, dan perhitungan keuangan.**

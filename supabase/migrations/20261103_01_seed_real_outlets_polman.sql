@@ -86,3 +86,24 @@ ON CONFLICT (id) DO UPDATE SET
   address = EXCLUDED.address,
   phone = EXCLUDED.phone,
   updated_at = now();
+
+-- 3. ASSIGN STAFF TO REAL OUTLETS & CENTRAL WAREHOUSE
+UPDATE public.profiles
+SET primary_warehouse_id = 'wh-00000000-0000-0000-0000-000000000001'
+WHERE id = 'w0000000-0000-0000-0000-000000000001' OR role = 'warehouse_operator';
+
+UPDATE public.profiles
+SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000001',
+    full_name = 'Budi Santoso (Kasir Cityfood)'
+WHERE id = 'c0000000-0000-0000-0000-000000000001';
+
+UPDATE public.profiles
+SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000002',
+    full_name = 'Siti (Kasir Sentral)'
+WHERE id = 'c0000000-0000-0000-0000-000000000002';
+
+UPDATE public.profiles
+SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000003',
+    full_name = 'Dewi (Kasir Pantai Bahari)'
+WHERE id = 'c0000000-0000-0000-0000-000000000003';
+

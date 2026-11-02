@@ -17,17 +17,24 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ==========================================
--- 1. PROFILES TABLE (Linked with auth.users)
+-- 1. PROFILES TABLE (Multi-Role Operational Staff)
 -- ==========================================
 CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT NOT NULL,
+    username TEXT,
+    password TEXT,
     full_name TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('admin', 'cashier')) DEFAULT 'cashier',
+    role TEXT NOT NULL CHECK (role IN ('admin', 'cashier', 'warehouse_operator')) DEFAULT 'cashier',
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+-- Ensure foreign key constraint to auth.users is removed so staff profiles can operate independently
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS password TEXT;
 
 -- ==========================================
 -- 2. STORE SETTINGS (Singleton)
@@ -988,14 +995,26 @@ BEGIN
     DELETE FROM public.operating_expenses;
     DELETE FROM public.audit_logs;
 
+    -- Ensure profiles can be seeded without auth.users foreign key constraint
+    ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS password TEXT;
+
     -- 2. SEED OR UPDATE DEMO USERS (PROFILES)
-    INSERT INTO public.profiles (id, email, full_name, role, is_active)
+    INSERT INTO public.profiles (id, email, username, password, full_name, role, is_active)
     VALUES 
-        (v_admin_id, 'admin@cafepos.demo', 'Rian (Store Manager)', 'admin', true),
-        (v_kasir1_id, 'budi@cafepos.demo', 'Budi Santoso', 'cashier', true),
-        (v_kasir2_id, 'siti@cafepos.demo', 'Siti Rahmawati', 'cashier', true)
+        (v_admin_id, 'admin@obathaus.id', 'admin', '123456', 'Owner / Admin Obat Haus', 'admin', true),
+        (v_kasir1_id, 'kasir1@obathaus.id', 'kasir1', '123456', 'Budi Santoso (Kasir Cityfood)', 'cashier', true),
+        (v_kasir2_id, 'kasir2@obathaus.id', 'kasir2', '123456', 'Siti (Kasir Sentral)', 'cashier', true),
+        ('c0000000-0000-0000-0000-000000000003'::uuid, 'kasir3@obathaus.id', 'kasir3', '123456', 'Dewi (Kasir Pantai Bahari)', 'cashier', true),
+        ('w0000000-0000-0000-0000-000000000001'::uuid, 'gudang@obathaus.id', 'gudang', '123456', 'Faisal (Operator Gudang Pusat)', 'warehouse_operator', true)
     ON CONFLICT (id) DO UPDATE 
-    SET full_name = EXCLUDED.full_name, role = EXCLUDED.role, is_active = EXCLUDED.is_active;
+    SET full_name = EXCLUDED.full_name,
+        role = EXCLUDED.role,
+        is_active = EXCLUDED.is_active,
+        email = EXCLUDED.email,
+        username = EXCLUDED.username,
+        password = EXCLUDED.password;
 
     -- 3. SEED 8 CATEGORIES
     INSERT INTO public.categories (id, name, slug, description, icon_name, sort_order, is_active)
@@ -2240,4 +2259,25 @@ ON CONFLICT (id) DO UPDATE SET
   address = EXCLUDED.address,
   phone = EXCLUDED.phone,
   updated_at = now();
+
+-- 3. ASSIGN STAFF TO REAL OUTLETS & CENTRAL WAREHOUSE
+UPDATE public.profiles
+SET primary_warehouse_id = 'wh-00000000-0000-0000-0000-000000000001'
+WHERE id = 'w0000000-0000-0000-0000-000000000001' OR role = 'warehouse_operator';
+
+UPDATE public.profiles
+SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000001',
+    full_name = 'Budi Santoso (Kasir Cityfood)'
+WHERE id = 'c0000000-0000-0000-0000-000000000001';
+
+UPDATE public.profiles
+SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000002',
+    full_name = 'Siti (Kasir Sentral)'
+WHERE id = 'c0000000-0000-0000-0000-000000000002';
+
+UPDATE public.profiles
+SET primary_outlet_id = 'out-00000000-0000-0000-0000-000000000003',
+    full_name = 'Dewi (Kasir Pantai Bahari)'
+WHERE id = 'c0000000-0000-0000-0000-000000000003';
+
 

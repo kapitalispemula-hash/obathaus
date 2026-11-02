@@ -68,14 +68,26 @@ BEGIN
     DELETE FROM public.operating_expenses;
     DELETE FROM public.audit_logs;
 
+    -- Ensure profiles can be seeded without auth.users foreign key constraint
+    ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS password TEXT;
+
     -- 2. SEED OR UPDATE DEMO USERS (PROFILES)
-    INSERT INTO public.profiles (id, email, full_name, role, is_active)
+    INSERT INTO public.profiles (id, email, username, password, full_name, role, is_active)
     VALUES 
-        (v_admin_id, 'admin@cafepos.demo', 'Rian (Store Manager)', 'admin', true),
-        (v_kasir1_id, 'budi@cafepos.demo', 'Budi Santoso', 'cashier', true),
-        (v_kasir2_id, 'siti@cafepos.demo', 'Siti Rahmawati', 'cashier', true)
+        (v_admin_id, 'admin@obathaus.id', 'admin', '123456', 'Owner / Admin Obat Haus', 'admin', true),
+        (v_kasir1_id, 'kasir1@obathaus.id', 'kasir1', '123456', 'Budi Santoso (Kasir Cityfood)', 'cashier', true),
+        (v_kasir2_id, 'kasir2@obathaus.id', 'kasir2', '123456', 'Siti (Kasir Sentral)', 'cashier', true),
+        ('c0000000-0000-0000-0000-000000000003'::uuid, 'kasir3@obathaus.id', 'kasir3', '123456', 'Dewi (Kasir Pantai Bahari)', 'cashier', true),
+        ('w0000000-0000-0000-0000-000000000001'::uuid, 'gudang@obathaus.id', 'gudang', '123456', 'Faisal (Operator Gudang Pusat)', 'warehouse_operator', true)
     ON CONFLICT (id) DO UPDATE 
-    SET full_name = EXCLUDED.full_name, role = EXCLUDED.role, is_active = EXCLUDED.is_active;
+    SET full_name = EXCLUDED.full_name,
+        role = EXCLUDED.role,
+        is_active = EXCLUDED.is_active,
+        email = EXCLUDED.email,
+        username = EXCLUDED.username,
+        password = EXCLUDED.password;
 
     -- 3. SEED 8 CATEGORIES
     INSERT INTO public.categories (id, name, slug, description, icon_name, sort_order, is_active)

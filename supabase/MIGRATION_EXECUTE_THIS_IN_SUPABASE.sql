@@ -88,27 +88,24 @@ ON CONFLICT (id) DO UPDATE SET
   updated_at = now();
 
 -- 5. SEED CENTRAL WAREHOUSE
-INSERT INTO public.warehouses (id, code, name, address, phone, is_active)
+INSERT INTO public.warehouses (code, name, address, phone, is_active)
 VALUES (
-  'e0000000-0000-0000-0000-000000000001'::uuid,
   'WH-01',
   'Gudang Logistik Pusat Obat Haus (Central Warehouse Polman)',
   'Polewali Mandar, Sulawesi Barat',
   '0811-4409-900',
   true
 )
-ON CONFLICT (id) DO UPDATE SET
-  code = EXCLUDED.code,
+ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
   address = EXCLUDED.address,
   phone = EXCLUDED.phone,
   updated_at = now();
 
 -- 6. SEED 7 REAL OUTLETS (POLMAN & MAJENE)
-INSERT INTO public.outlets (id, code, name, address, phone, invoice_prefix, receipt_header, receipt_footer, is_active)
+INSERT INTO public.outlets (code, name, address, phone, invoice_prefix, receipt_header, receipt_footer, is_active)
 VALUES
   (
-    'd0000000-0000-0000-0000-000000000001'::uuid,
     'OUT-01',
     'OBATHAUS Cityfood (pusat)',
     'Jl. Todilaling, Kel. Pekkabata, Polewali, Polewali Mandar',
@@ -119,7 +116,6 @@ VALUES
     true
   ),
   (
-    'd0000000-0000-0000-0000-000000000002'::uuid,
     'OUT-02',
     'OBATHAUS Sentral',
     'Jl. Mr. Muh. Yamin, Kel. Pekkabata, Polewali, Polewali Mandar',
@@ -130,7 +126,6 @@ VALUES
     true
   ),
   (
-    'd0000000-0000-0000-0000-000000000003'::uuid,
     'OUT-03',
     'OBATHAUS Pantai Bahari',
     'Jl. Bahari, Kel. Polewali, Polewali, Polewali Mandar',
@@ -141,7 +136,6 @@ VALUES
     true
   ),
   (
-    'd0000000-0000-0000-0000-000000000004'::uuid,
     'OUT-04',
     'OBATHAUS Wonomulyo',
     'Jl. Jenderal Soedirman (Jensu), Wonomulyo, Polewali Mandar',
@@ -152,7 +146,6 @@ VALUES
     true
   ),
   (
-    'd0000000-0000-0000-0000-000000000005'::uuid,
     'OUT-05',
     'OBATHAUS Campalagian',
     'Jl. Poros Polman-Majene (samping PKM Campa), Campalagian, Polewali Mandar',
@@ -163,7 +156,6 @@ VALUES
     true
   ),
   (
-    'd0000000-0000-0000-0000-000000000006'::uuid,
     'OUT-06',
     'OBATHAUS Tinambung',
     'Jl. Poros Polman-Majene (samping Indomaret Tinambung), Tinambung, Polewali Mandar',
@@ -174,7 +166,6 @@ VALUES
     true
   ),
   (
-    'd0000000-0000-0000-0000-000000000007'::uuid,
     'OUT-07',
     'OBATHAUS Majene',
     'Jl. KH. Daeng (depan Masjid Tanjung Batu Majene) Banggae, Majene',
@@ -184,8 +175,7 @@ VALUES
     'Terima kasih atas kunjungan Anda' || E'\n' || 'Follow IG: @obathaus.id',
     true
   )
-ON CONFLICT (id) DO UPDATE SET
-  code = EXCLUDED.code,
+ON CONFLICT (code) DO UPDATE SET
   name = EXCLUDED.name,
   address = EXCLUDED.address,
   phone = EXCLUDED.phone,
@@ -195,7 +185,7 @@ ON CONFLICT (id) DO UPDATE SET
   updated_at = now();
 
 -- 7. SEED CORE ADMIN PROFILE ONLY (ADMIN CAN CREATE REAL USERS IN ADMIN PANEL)
-INSERT INTO public.profiles (id, email, username, password, full_name, role, is_active, primary_outlet_id, primary_warehouse_id)
+INSERT INTO public.profiles (id, email, username, password, full_name, role, is_active)
 VALUES
   (
     'a0000000-0000-0000-0000-000000000001'::uuid,
@@ -204,9 +194,7 @@ VALUES
     '123456',
     'Owner / Admin Obat Haus',
     'admin',
-    true,
-    NULL,
-    NULL
+    true
   )
 ON CONFLICT (id) DO UPDATE SET
   email = EXCLUDED.email,
@@ -214,25 +202,22 @@ ON CONFLICT (id) DO UPDATE SET
   password = EXCLUDED.password,
   full_name = EXCLUDED.full_name,
   role = EXCLUDED.role,
-  is_active = EXCLUDED.is_active,
-  primary_outlet_id = EXCLUDED.primary_outlet_id,
-  primary_warehouse_id = EXCLUDED.primary_warehouse_id,
+  is_active = true,
   updated_at = now();
 
 -- 8. SEED CATEGORIES
-INSERT INTO public.categories (id, name, slug, description, icon_name, sort_order, is_active)
+INSERT INTO public.categories (name, slug, description, icon_name, sort_order, is_active)
 VALUES
-  ('11111111-0000-0000-0000-000000000001'::uuid, 'Espresso Based', 'espresso-based', 'Kopi klasik berbasis espresso murni dan susu segar', 'Coffee', 1, true),
-  ('11111111-0000-0000-0000-000000000002'::uuid, 'Manual Brew', 'manual-brew', 'Kopi pour over single origin Nusantara pilihan barista', 'Flame', 2, true),
-  ('11111111-0000-0000-0000-000000000003'::uuid, 'Non-Coffee', 'non-coffee', 'Minuman signature manis, creamy, dan segar tanpa kafein', 'Milk', 3, true),
-  ('11111111-0000-0000-0000-000000000004'::uuid, 'Artisanal Tea', 'artisanal-tea', 'Teh racikan premium dengan aroma bunga dan buah alami', 'CupSoda', 4, true),
-  ('11111111-0000-0000-0000-000000000005'::uuid, 'Pastry & Bakery', 'pastry-bakery', 'Kue kering, croissant renyah, dan roti hangat fresh', 'Croissant', 5, true),
-  ('11111111-0000-0000-0000-000000000006'::uuid, 'Main Course', 'main-course', 'Menu makanan berat spesial cafe untuk santap siang & malam', 'UtensilsCrossed', 6, true),
-  ('11111111-0000-0000-0000-000000000007'::uuid, 'Light Bites', 'light-bites', 'Camilan gurih dan manis pelengkap nongkrong', 'Cookie', 7, true),
-  ('11111111-0000-0000-0000-000000000008'::uuid, 'Bottled Beverages', 'bottled-beverages', 'Kemasan botol takeaway siap minum dan simpan kulkas', 'Wine', 8, true)
-ON CONFLICT (id) DO UPDATE SET
+  ('Espresso Based', 'espresso-based', 'Kopi klasik berbasis espresso murni dan susu segar', 'Coffee', 1, true),
+  ('Manual Brew', 'manual-brew', 'Kopi pour over single origin Nusantara pilihan barista', 'Flame', 2, true),
+  ('Non-Coffee', 'non-coffee', 'Minuman signature manis, creamy, dan segar tanpa kafein', 'Milk', 3, true),
+  ('Artisanal Tea', 'artisanal-tea', 'Teh racikan premium dengan aroma bunga dan buah alami', 'CupSoda', 4, true),
+  ('Pastry & Bakery', 'pastry-bakery', 'Kue kering, croissant renyah, dan roti hangat fresh', 'Croissant', 5, true),
+  ('Main Course', 'main-course', 'Menu makanan berat spesial cafe untuk santap siang & malam', 'UtensilsCrossed', 6, true),
+  ('Light Bites', 'light-bites', 'Camilan gurih dan manis pelengkap nongkrong', 'Cookie', 7, true),
+  ('Bottled Beverages', 'bottled-beverages', 'Kemasan botol takeaway siap minum dan simpan kulkas', 'Wine', 8, true)
+ON CONFLICT (slug) DO UPDATE SET
   name = EXCLUDED.name,
-  slug = EXCLUDED.slug,
   description = EXCLUDED.description,
   icon_name = EXCLUDED.icon_name,
   sort_order = EXCLUDED.sort_order,
@@ -240,25 +225,23 @@ ON CONFLICT (id) DO UPDATE SET
   updated_at = now();
 
 -- 9. SEED PRODUCTS
-INSERT INTO public.products (id, name, sku, category_id, description, image_url, selling_price, hpp, is_active)
+INSERT INTO public.products (name, sku, description, image_url, selling_price, hpp, is_active)
 VALUES
-  ('33333333-0000-0000-0000-000000000001'::uuid, 'Espresso Single', 'ESP-01', '11111111-0000-0000-0000-000000000001'::uuid, 'Ekstrak kopi pekat 30ml blend Arabika Gayo & Toraja', 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=500&auto=format&fit=crop&q=60', 18000, 5000, true),
-  ('33333333-0000-0000-0000-000000000002'::uuid, 'Americano / Long Black', 'ESP-02', '11111111-0000-0000-0000-000000000001'::uuid, 'Double shot espresso dengan air murni panas atau dingin', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500&auto=format&fit=crop&q=60', 25000, 7000, true),
-  ('33333333-0000-0000-0000-000000000003'::uuid, 'Caffe Latte', 'ESP-03', '11111111-0000-0000-0000-000000000001'::uuid, 'Espresso dipadu steamed milk lembut dan thin microfoam', 'https://images.unsplash.com/photo-1561882468-9110e03e0f78?w=500&auto=format&fit=crop&q=60', 32000, 11500, true),
-  ('33333333-0000-0000-0000-000000000004'::uuid, 'Cappuccino', 'ESP-04', '11111111-0000-0000-0000-000000000001'::uuid, 'Espresso seimbang dengan tebalnya foam susu dan taburan cocoa', 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=500&auto=format&fit=crop&q=60', 32000, 11500, true),
-  ('33333333-0000-0000-0000-000000000005'::uuid, 'Caramel Macchiato', 'ESP-05', '11111111-0000-0000-0000-000000000001'::uuid, 'Vanilla infused milk, espresso shot, dan saus karamel lezat', 'https://images.unsplash.com/photo-1485808191629-50ac43088c15?w=500&auto=format&fit=crop&q=60', 38000, 14000, true),
-  ('33333333-0000-0000-0000-000000000006'::uuid, 'Kopi Susu Gula Aren', 'ESP-06', '11111111-0000-0000-0000-000000000001'::uuid, 'Signature house blend espresso dengan sirup aren organik dan susu', 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=500&auto=format&fit=crop&q=60', 28000, 9500, true),
-  ('33333333-0000-0000-0000-000000000007'::uuid, 'V60 Aceh Gayo Anaerobic', 'MBR-01', '11111111-0000-0000-0000-000000000002'::uuid, 'Notes buah berry segar, keasaman manis, floral', 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500&auto=format&fit=crop&q=60', 35000, 13000, true),
-  ('33333333-0000-0000-0000-000000000008'::uuid, 'V60 Toraja Sapan Washed', 'MBR-02', '11111111-0000-0000-0000-000000000002'::uuid, 'Aroma rempah halus, dark chocolate, aftertaste lembut', 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500&auto=format&fit=crop&q=60', 35000, 13000, true),
-  ('33333333-0000-0000-0000-000000000011'::uuid, 'Kyoto Matcha Latte', 'NCF-01', '11111111-0000-0000-0000-000000000003'::uuid, 'Pure Uji matcha Jepang dengan susu segar pilihan', 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=500&auto=format&fit=crop&q=60', 36000, 13000, true),
-  ('33333333-0000-0000-0000-000000000012'::uuid, 'Belgian Dark Chocolate', 'NCF-02', '11111111-0000-0000-0000-000000000003'::uuid, 'Cokelat hitam pekat Belgia 70% kaya antioksidan', 'https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?w=500&auto=format&fit=crop&q=60', 35000, 12500, true),
-  ('33333333-0000-0000-0000-000000000015'::uuid, 'Earl Grey Blossom Tea', 'TEA-01', '11111111-0000-0000-0000-000000000004'::uuid, 'Teh hitam bergamot dengan kelopak bunga cornflower biru', 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=60', 28000, 7500, true),
-  ('33333333-0000-0000-0000-000000000019'::uuid, 'Classic Butter Croissant', 'PAS-01', '11111111-0000-0000-0000-000000000005'::uuid, 'Croissant mentega Prancis dengan lapisan flaky renyah', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&auto=format&fit=crop&q=60', 26000, 9500, true),
-  ('33333333-0000-0000-0000-000000000023'::uuid, 'Truffle French Fries', 'SNK-01', '11111111-0000-0000-0000-000000000007'::uuid, 'Kentang goreng renyah dengan minyak truffle murni dan parmesan', 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=500&auto=format&fit=crop&q=60', 32000, 11000, true)
-ON CONFLICT (id) DO UPDATE SET
+  ('Espresso Single', 'ESP-01', 'Ekstrak kopi pekat 30ml blend Arabika Gayo & Toraja', 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=500&auto=format&fit=crop&q=60', 18000, 5000, true),
+  ('Americano / Long Black', 'ESP-02', 'Double shot espresso dengan air murni panas atau dingin', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500&auto=format&fit=crop&q=60', 25000, 7000, true),
+  ('Caffe Latte', 'ESP-03', 'Espresso dipadu steamed milk lembut dan thin microfoam', 'https://images.unsplash.com/photo-1561882468-9110e03e0f78?w=500&auto=format&fit=crop&q=60', 32000, 11500, true),
+  ('Cappuccino', 'ESP-04', 'Espresso seimbang dengan tebalnya foam susu dan taburan cocoa', 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=500&auto=format&fit=crop&q=60', 32000, 11500, true),
+  ('Caramel Macchiato', 'ESP-05', 'Vanilla infused milk, espresso shot, dan saus karamel lezat', 'https://images.unsplash.com/photo-1485808191629-50ac43088c15?w=500&auto=format&fit=crop&q=60', 38000, 14000, true),
+  ('Kopi Susu Gula Aren', 'ESP-06', 'Signature house blend espresso dengan sirup aren organik dan susu', 'https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=500&auto=format&fit=crop&q=60', 28000, 9500, true),
+  ('V60 Aceh Gayo Anaerobic', 'MBR-01', 'Notes buah berry segar, keasaman manis, floral', 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500&auto=format&fit=crop&q=60', 35000, 13000, true),
+  ('V60 Toraja Sapan Washed', 'MBR-02', 'Aroma rempah halus, dark chocolate, aftertaste lembut', 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500&auto=format&fit=crop&q=60', 35000, 13000, true),
+  ('Kyoto Matcha Latte', 'NCF-01', 'Pure Uji matcha Jepang dengan susu segar pilihan', 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?w=500&auto=format&fit=crop&q=60', 36000, 13000, true),
+  ('Belgian Dark Chocolate', 'NCF-02', 'Cokelat hitam pekat Belgia 70% kaya antioksidan', 'https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?w=500&auto=format&fit=crop&q=60', 35000, 12500, true),
+  ('Earl Grey Blossom Tea', 'TEA-01', 'Teh hitam bergamot dengan kelopak bunga cornflower biru', 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=60', 28000, 7500, true),
+  ('Classic Butter Croissant', 'PAS-01', 'Croissant mentega Prancis dengan lapisan flaky renyah', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=500&auto=format&fit=crop&q=60', 26000, 9500, true),
+  ('Truffle French Fries', 'SNK-01', 'Kentang goreng renyah dengan minyak truffle murni dan parmesan', 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=500&auto=format&fit=crop&q=60', 32000, 11000, true)
+ON CONFLICT (sku) DO UPDATE SET
   name = EXCLUDED.name,
-  sku = EXCLUDED.sku,
-  category_id = EXCLUDED.category_id,
   description = EXCLUDED.description,
   image_url = EXCLUDED.image_url,
   selling_price = EXCLUDED.selling_price,
@@ -267,15 +250,14 @@ ON CONFLICT (id) DO UPDATE SET
   updated_at = now();
 
 -- 10. SEED EXPENSE CATEGORIES
-INSERT INTO public.expense_categories (id, category_name, description, is_active)
+INSERT INTO public.expense_categories (category_name, description, is_active)
 VALUES
-  ('22222222-0000-0000-0000-000000000001'::uuid, 'Bahan Baku & Dapur (COGS Direct)', 'Pembelian bahan baku segar, susu, es batu harian di outlet', true),
-  ('22222222-0000-0000-0000-000000000002'::uuid, 'Listrik, Air & Gas (Utilities)', 'Pembayaran token PLN, PDAM, dan tabung gas barista outlet', true),
-  ('22222222-0000-0000-0000-000000000003'::uuid, 'Gaji & Uang Makan (Payroll)', 'Gaji bulanan barista, kasir, bonus insentif dan konsumsi', true),
-  ('22222222-0000-0000-0000-000000000004'::uuid, 'Operasional & Perlengkapan Toko', 'Kantong takeaway, sedotan, cup sealer, sabun cuci, tisu', true),
-  ('22222222-0000-0000-0000-000000000005'::uuid, 'Pemeliharaan & Kebersihan Mesin', 'Service rutin mesin espresso, filter air, descaling', true)
-ON CONFLICT (id) DO UPDATE SET
-  category_name = EXCLUDED.category_name,
+  ('Bahan Baku & Dapur (COGS Direct)', 'Pembelian bahan baku segar, susu, es batu harian di outlet', true),
+  ('Listrik, Air & Gas (Utilities)', 'Pembayaran token PLN, PDAM, dan tabung gas barista outlet', true),
+  ('Gaji & Uang Makan (Payroll)', 'Gaji bulanan barista, kasir, bonus insentif dan konsumsi', true),
+  ('Operasional & Perlengkapan Toko', 'Kantong takeaway, sedotan, cup sealer, sabun cuci, tisu', true),
+  ('Pemeliharaan & Kebersihan Mesin', 'Service rutin mesin espresso, filter air, descaling', true)
+ON CONFLICT (category_name) DO UPDATE SET
   description = EXCLUDED.description,
   is_active = EXCLUDED.is_active,
   updated_at = now();

@@ -8,6 +8,7 @@ import { useOutlet } from '@/lib/outlet-context';
 import { Transaction, StoreSettings } from '@/types/database';
 import { formatRupiah, formatDateTime } from '@/lib/format';
 import { ReceiptModal } from '@/components/receipt/ReceiptModal';
+import { DateRangeCalendarPicker } from '@/components/common/DateRangeCalendarPicker';
 import {
   Receipt,
   Search,
@@ -37,7 +38,8 @@ export default function AdminTransactionsPage() {
 
   // Filters
   const [selectedOutlet, setSelectedOutlet] = useState<string>('all');
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7days' | '30days'>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
@@ -207,21 +209,16 @@ export default function AdminTransactionsPage() {
       const matchesPayment = paymentFilter === 'all' || t.payment_method === paymentFilter;
 
       let matchesPeriod = true;
-      if (periodFilter !== 'all') {
-        const tDate = new Date(t.created_at).getTime();
-        const now = new Date('2026-11-01T12:00:00+08:00').getTime();
-        if (periodFilter === 'today') {
-          matchesPeriod = now - tDate <= 24 * 60 * 60 * 1000;
-        } else if (periodFilter === '7days') {
-          matchesPeriod = now - tDate <= 7 * 24 * 60 * 60 * 1000;
-        } else if (periodFilter === '30days') {
-          matchesPeriod = now - tDate <= 30 * 24 * 60 * 60 * 1000;
-        }
+      if (startDate) {
+        const tDateStr = new Date(t.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
+        const start = startDate;
+        const end = endDate || startDate;
+        matchesPeriod = tDateStr >= start && tDateStr <= end;
       }
 
       return matchesSearch && matchesStatus && matchesPayment && matchesPeriod;
     });
-  }, [transactions, search, statusFilter, paymentFilter, periodFilter]);
+  }, [transactions, search, statusFilter, paymentFilter, startDate, endDate]);
 
   const stats = useMemo(() => {
     const completedTrxs = filtered.filter((t) => t.status === 'completed');
@@ -342,20 +339,16 @@ export default function AdminTransactionsPage() {
             </select>
           </div>
 
-          {/* Period Filter */}
-          <div className="flex items-center gap-2 bg-[#FAFAFA] border border-borderline rounded-xl px-3 py-2 text-xs font-bold text-heading shrink-0">
-            <Calendar className="w-4 h-4 text-mutedtext" />
-            <select
-              value={periodFilter}
-              onChange={(e) => setPeriodFilter(e.target.value as any)}
-              className="bg-transparent focus:outline-none cursor-pointer text-xs"
-            >
-              <option value="all">Semua Waktu</option>
-              <option value="today">Hari Ini</option>
-              <option value="7days">7 Hari Terakhir</option>
-              <option value="30days">30 Hari Terakhir</option>
-            </select>
-          </div>
+          {/* Monthly Calendar Date Range Picker */}
+          <DateRangeCalendarPicker
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+            }}
+            align="left"
+          />
 
           {/* Search Box */}
           <div className="relative flex-1 min-w-[200px]">

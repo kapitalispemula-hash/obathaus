@@ -1337,8 +1337,20 @@ export const dbService = {
         startDate = new Date(now.getFullYear(), 0, 1);
         break;
       case 'custom':
-        startDate = customStart ? new Date(customStart) : new Date(now);
-        if (customEnd) endDate = new Date(customEnd);
+        if (customStart) {
+          startDate = new Date(customStart);
+          startDate.setHours(0, 0, 0, 0);
+        } else {
+          startDate = new Date(now);
+          startDate.setHours(0, 0, 0, 0);
+        }
+        if (customEnd) {
+          endDate = new Date(customEnd);
+          endDate.setHours(23, 59, 59, 999);
+        } else {
+          endDate = new Date(startDate);
+          endDate.setHours(23, 59, 59, 999);
+        }
         break;
       default:
         startDate = new Date(now);

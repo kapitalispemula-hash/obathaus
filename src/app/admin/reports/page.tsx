@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { DateRangeCalendarPicker } from '@/components/common/DateRangeCalendarPicker';
 
 export default function AdminReportsPage() {
   const { availableOutlets, activeOutlet, isAllOutletsSelected, setActiveOutletId } = useOutlet();
@@ -46,9 +47,15 @@ export default function AdminReportsPage() {
   // Filters
   const [period, setPeriod] = useState<
     'today' | 'yesterday' | '7days' | '30days' | 'this_month' | 'this_year' | 'custom'
-  >('30days');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  >('custom');
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return d.toISOString().slice(0, 10);
+  });
+  const [customEnd, setCustomEnd] = useState(() => {
+    return new Date().toISOString().slice(0, 10);
+  });
   const [selectedOutletId, setSelectedOutletId] = useState<string>('all');
 
   // Data States
@@ -82,6 +89,8 @@ export default function AdminReportsPage() {
         dbService.getInventoryValuationReport(),
         dbService.getShifts({
           outletId: selectedOutletId !== 'all' ? selectedOutletId : undefined,
+          startDate: customStart || undefined,
+          endDate: customEnd ? `${customEnd}T23:59:59` : undefined,
         }),
         dbService.getStoreSettings(),
       ]);
@@ -365,51 +374,18 @@ export default function AdminReportsPage() {
               </select>
             </div>
 
-            {/* Period Tabs */}
-            <div className="flex items-center gap-1 bg-[#FAFAFA] p-1 rounded-2xl border border-[#ECEEF1] overflow-x-auto">
-              {[
-                { id: 'today', label: 'Hari Ini' },
-                { id: 'yesterday', label: 'Kemarin' },
-                { id: '7days', label: '7 Hari' },
-                { id: '30days', label: '30 Hari' },
-                { id: 'this_month', label: 'Bulan Ini' },
-                { id: 'this_year', label: 'Tahun Ini' },
-                { id: 'custom', label: 'Kustom' },
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPeriod(p.id as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    period === p.id
-                      ? 'bg-[#FF6B00] text-white shadow-xs'
-                      : 'text-[#71717A] hover:text-[#18181B] hover:bg-white'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            {/* Monthly Calendar Date Range Picker */}
+            <DateRangeCalendarPicker
+              startDate={customStart}
+              endDate={customEnd}
+              onChange={(start, end) => {
+                setPeriod('custom');
+                setCustomStart(start);
+                setCustomEnd(end);
+              }}
+              align="right"
+            />
           </div>
-
-          {/* Custom Date Pickers */}
-          {period === 'custom' && (
-            <div className="flex items-center gap-2 text-xs">
-              <input
-                type="date"
-                value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-                className="p-2 bg-[#FAFAFA] border border-[#ECEEF1] rounded-xl text-[#18181B] text-xs focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20"
-              />
-              <span className="text-[#71717A]">s/d</span>
-              <input
-                type="date"
-                value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-                className="p-2 bg-[#FAFAFA] border border-[#ECEEF1] rounded-xl text-[#18181B] text-xs focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20"
-              />
-            </div>
-          )}
         </div>
 
         {/* 3. Navigation Tabs: 4 Specialized Reports */}

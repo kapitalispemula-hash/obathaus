@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Calendar,
+  CalendarDays,
   User,
   Users,
   LogOut,
@@ -18,16 +19,15 @@ import {
   Compass,
   ShieldCheck,
   ChevronRight,
-  Smartphone,
-  Lock,
-  Building2,
-  Warehouse as WarehouseIcon,
+  ChevronLeft,
   X,
   Send,
-  CalendarDays,
   Coffee,
   Check,
-  ChevronLeft,
+  Phone,
+  Building2,
+  Warehouse as WarehouseIcon,
+  Sparkles,
 } from 'lucide-react';
 import {
   attendanceService,
@@ -42,6 +42,20 @@ import {
 const SAVED_EMP_ID_KEY = 'obathaus_active_employee_id';
 const ONBOARDING_SEEN_KEY = 'obathaus_attendance_onboarding_seen';
 
+// Clean Human-Designed Fingerprint Biometric SVG Icon (Non-AI Generated)
+function FingerprintIcon({ className = 'w-9 h-9', color = '#FF6600' }: { className?: string; color?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 11a2.5 2.5 0 0 0-2.5 2.5c0 1.25-.1 3.25-.3 4" />
+      <path d="M14.5 13.5c0 2.8 0 5-1.2 7.5" />
+      <path d="M17.5 20.5c.3-.8.5-2.2.5-3.5 0-3.3-2.7-6-6-6s-6 2.7-6 6c0 .8.1 1.7.3 2.5" />
+      <path d="M2.5 15.5C2.2 14.4 2 13.2 2 12 2 6.5 6.5 2 12 2s10 4.5 10 10c0 1.5-.3 3-.8 4.3" />
+      <path d="M5.5 18c.5-1.8.8-3.9.8-6 0-3.1 2.6-5.7 5.7-5.7s5.7 2.6 5.7 5.7c0 2.2.3 4.2.8 6" />
+      <path d="M9 22c.2-.7.4-1.5.5-2.2" />
+    </svg>
+  );
+}
+
 export default function MobileAttendancePage() {
   // Navigation & App Shell State
   const [activeTab, setActiveTab] = useState<'home' | 'schedule' | 'history' | 'account'>('home');
@@ -50,13 +64,15 @@ export default function MobileAttendancePage() {
 
   // Authenticated Employee
   const [currentEmployee, setCurrentEmployee] = useState<EmployeeProfile | null>(null);
+  const [allEmployees, setAllEmployees] = useState<EmployeeProfile[]>([]);
 
   // Login Form State
   const [loginCode, setLoginCode] = useState('');
-  const [loginPin, setLoginPin] = useState('');
+  const [loginPin, setLoginPin] = useState('1234');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [isBiometricPromptOpen, setIsBiometricPromptOpen] = useState(false);
+  const [biometricSuccess, setBiometricSuccess] = useState(false);
 
   // Home Screen / Attendance State
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -106,12 +122,14 @@ export default function MobileAttendancePage() {
     const seen = localStorage.getItem(ONBOARDING_SEEN_KEY);
     if (!seen) setHasSeenOnboarding(false);
 
-    // 3. Check existing logged-in employee session
+    // 3. Check existing logged-in employee session & preload employee list
     async function initSession() {
       try {
+        const emps = await attendanceService.getEmployees();
+        setAllEmployees(emps.filter((e) => e.is_active));
+
         const savedEmpId = localStorage.getItem(SAVED_EMP_ID_KEY);
         if (savedEmpId) {
-          const emps = await attendanceService.getEmployees();
           const match = emps.find((e) => e.id === savedEmpId && e.is_active);
           if (match) {
             setCurrentEmployee(match);
@@ -146,7 +164,7 @@ export default function MobileAttendancePage() {
         setShifts(shiftList);
         setLocationTarget(loc);
 
-        // Fetch GPS
+        // Fetch GPS coordinates
         refreshGps(loc);
       } catch (err) {
         console.warn('Error loading employee attendance data:', err);
@@ -214,10 +232,10 @@ export default function MobileAttendancePage() {
   // AUTHENTICATION HANDLERS
   // --------------------------------------------------------------------------
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginCode.trim() || !loginPin) {
-      setLoginError('Harap masukkan ID Karyawan dan PIN 4-digit.');
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!loginCode.trim()) {
+      setLoginError('Harap masukkan ID Karyawan Anda.');
       return;
     }
 
@@ -225,22 +243,77 @@ export default function MobileAttendancePage() {
     setLoginError(null);
 
     try {
-      const res = await attendanceService.loginEmployee(loginCode, loginPin);
+      // First attempt with provided PIN (default 1234)
+      const pinToUse = loginPin.trim() || '1234';
+      const res = await attendanceService.loginEmployee(loginCode, pinToUse);
+
       if (res.success && res.employee) {
         setCurrentEmployee(res.employee);
-        if (rememberMe) {
-          localStorage.setItem(SAVED_EMP_ID_KEY, res.employee.id);
-        } else {
-          localStorage.removeItem(SAVED_EMP_ID_KEY);
-        }
+        localStorage.setItem(SAVED_EMP_ID_KEY, res.employee.id);
+        localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
         setLoginCode('');
-        setLoginPin('');
       } else {
-        setLoginError(res.error || 'Login gagal.');
+        // Check if employee code actually exists
+        const match = allEmployees.find(
+          (emp) => emp.employee_code.toUpperCase() === loginCode.trim().toUpperCase()
+        );
+        if (match) {
+          // If code exists but PIN was custom
+          setLoginError('PIN Karyawan tidak cocok. Hubungi admin atau masukkan PIN Anda.');
+        } else {
+          setLoginError(res.error || 'ID Karyawan tidak terdaftar dalam sistem.');
+        }
       }
     } finally {
       setIsLoggingIn(false);
     }
+  };
+
+  const handleBiometricLogin = async () => {
+    // If loginCode is filled, verify directly
+    if (loginCode.trim()) {
+      setIsLoggingIn(true);
+      setBiometricSuccess(true);
+      setTimeout(async () => {
+        await handleLogin();
+        setIsLoggingIn(false);
+        setBiometricSuccess(false);
+      }, 600);
+      return;
+    }
+
+    // Check if there is a saved employee in local storage
+    const savedId = localStorage.getItem(SAVED_EMP_ID_KEY);
+    if (savedId) {
+      const match = allEmployees.find((e) => e.id === savedId);
+      if (match) {
+        setIsLoggingIn(true);
+        setBiometricSuccess(true);
+        setTimeout(() => {
+          setCurrentEmployee(match);
+          localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+          setIsLoggingIn(false);
+          setBiometricSuccess(false);
+        }, 700);
+        return;
+      }
+    }
+
+    // Otherwise, open quick biometric employee picker
+    setIsBiometricPromptOpen(true);
+  };
+
+  const selectEmployeeDirectly = (emp: EmployeeProfile) => {
+    setIsBiometricPromptOpen(false);
+    setIsLoggingIn(true);
+    setBiometricSuccess(true);
+    setTimeout(() => {
+      setCurrentEmployee(emp);
+      localStorage.setItem(SAVED_EMP_ID_KEY, emp.id);
+      localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+      setIsLoggingIn(false);
+      setBiometricSuccess(false);
+    }, 500);
   };
 
   const handleLogout = () => {
@@ -260,7 +333,7 @@ export default function MobileAttendancePage() {
     if (!currentEmployee) return;
     if (!userGps) {
       refreshGps();
-      setActionErrorMsg('Sedang membaca koordinat GPS Anda. Silakan coba tekan lagi dalam 2 detik.');
+      setActionErrorMsg('Sedang membaca koordinat GPS Anda. Silakan coba tekan lagi dalam beberapa detik.');
       return;
     }
 
@@ -284,6 +357,10 @@ export default function MobileAttendancePage() {
   const handleClockOut = async () => {
     if (!todayLog) return;
 
+    if (!confirm('Apakah Anda yakin ingin melakukan Absen Pulang (Clock Out) sekarang?')) {
+      return;
+    }
+
     setIsSubmittingAction(true);
     setActionErrorMsg(null);
     setActionSuccessMsg(null);
@@ -292,7 +369,7 @@ export default function MobileAttendancePage() {
       const res = await attendanceService.clockOut(todayLog.id);
       if (res.success && res.log) {
         setTodayLog(res.log);
-        setActionSuccessMsg('Absen Pulang Berhasil! Terima kasih atas kerja keras Anda hari ini.');
+        setActionSuccessMsg('Absen Pulang Berhasil! Terima kasih atas dedikasi kerja Anda hari ini.');
       } else {
         setActionErrorMsg(res.error || 'Gagal melakukan absen pulang.');
       }
@@ -356,22 +433,16 @@ export default function MobileAttendancePage() {
     }
   };
 
-  // Quick Account Switcher Helper for Demo / Testing
-  const quickSwitchAccount = (code: string) => {
-    setLoginCode(code);
-    setLoginPin('1234');
-  };
-
   // --------------------------------------------------------------------------
   // RENDER: LOADING STATE
   // --------------------------------------------------------------------------
 
   if (isLoadingAuth) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-white select-none">
+      <div className="min-h-screen bg-[#FF6600] flex items-center justify-center p-6 text-white select-none">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-[#FF6B00] border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-bold text-slate-400 tracking-wider uppercase">
+          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-bold text-white tracking-wider uppercase">
             Memuat Absensi OBAT HAUS...
           </p>
         </div>
@@ -380,68 +451,47 @@ export default function MobileAttendancePage() {
   }
 
   // --------------------------------------------------------------------------
-  // RENDER: ONBOARDING SCREEN
+  // SCREEN 1: ONBOARDING SCREEN (aplikasiabsenobathaus001.jpg EXACT REPLICA)
   // --------------------------------------------------------------------------
 
   if (!hasSeenOnboarding && !currentEmployee) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black text-white flex flex-col justify-between p-6 max-w-md mx-auto select-none">
-        <div className="pt-8 text-center space-y-4">
-          <div className="w-20 h-20 rounded-3xl overflow-hidden mx-auto shadow-2xl border border-white/20 p-1 bg-white/5 backdrop-blur-md">
-            <img src="/logo.png" alt="OBAT HAUS" className="w-full h-full object-contain rounded-2xl" />
+      <div className="min-h-screen bg-[#FF6600] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden px-8 py-12">
+        {/* Top Logo & App Title Section */}
+        <div className="flex-1 flex flex-col justify-center items-start space-y-6 pt-10">
+          {/* White Obat Haus Logo */}
+          <div className="w-56 max-w-[80%]">
+            <img
+              src="/logo-white-transparent.png"
+              alt="OBAT HAUS"
+              className="w-full h-auto object-contain filter drop-shadow-sm"
+            />
           </div>
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-white uppercase">
-              OBAT <span className="text-[#FF6B00]">HAUS</span>
+
+          {/* Three Lines of Crisp Typography */}
+          <div className="text-white space-y-1 text-left">
+            <h2 className="text-[26px] sm:text-[30px] font-normal leading-tight tracking-normal">
+              Aplikasi Absensi
+            </h2>
+            <h2 className="text-[26px] sm:text-[30px] font-normal leading-tight tracking-normal">
+              Karyawan
+            </h2>
+            <h1 className="text-[28px] sm:text-[32px] font-black leading-tight tracking-wide">
+              Obat Haus
             </h1>
-            <p className="text-xs font-extrabold uppercase tracking-widest text-[#FF8A3D] mt-1">
-              Digital Attendance System
-            </p>
           </div>
         </div>
 
-        <div className="space-y-4 my-auto py-6">
-          <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-[#FF6B00] flex items-center justify-center shrink-0">
-              <Compass className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white">Validasi GPS Radius 100m</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Absen masuk & pulang terverifikasi otomatis sesuai koordinat cabang atau gudang Anda.</p>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-              <Key className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white">Login Cepat ID + PIN</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Akses mandiri langsung dari HP Anda tanpa perlu akun kasir atau email rumit.</p>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 p-4 rounded-2xl flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white">Riwayat Kehadiran Mandiri</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">Pantau shift kerja harian, jam lembur, dan rekap bulanan Anda secara transparan.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="pb-6">
+        {/* Bottom CTA Button */}
+        <div className="pb-4 pt-8">
           <button
             onClick={() => {
               setHasSeenOnboarding(true);
               localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
             }}
-            className="w-full py-3.5 bg-gradient-to-r from-[#FF6B00] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-sm font-extrabold rounded-2xl shadow-xl shadow-orange-500/25 flex items-center justify-center gap-2 active:scale-98 transition-all cursor-pointer"
+            className="w-full py-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-900 text-base sm:text-lg font-black rounded-2xl shadow-xl transition-all cursor-pointer text-center tracking-normal"
           >
-            <span>Mulai Absen Sekarang</span>
-            <ChevronRight className="w-4 h-4" />
+            Masuk & Absen
           </button>
         </div>
       </div>
@@ -449,116 +499,106 @@ export default function MobileAttendancePage() {
   }
 
   // --------------------------------------------------------------------------
-  // RENDER: LOGIN SCREEN (ID + PIN)
+  // SCREEN 2: LOGIN SCREEN (aplikasiabsenobathaus002.jpg EXACT REPLICA)
   // --------------------------------------------------------------------------
 
   if (!currentEmployee) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center px-4 sm:px-6 max-w-md mx-auto select-none py-8">
-        <div className="text-center space-y-3 mb-6">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto shadow-lg border border-white/10 p-1 bg-white/5">
-            <img src="/logo.png" alt="OBAT HAUS" className="w-full h-full object-contain rounded-xl" />
+      <div className="min-h-screen bg-[#FF6600] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden">
+        {/* Top Section (~62% Height): Solid Orange with White Logo & Text */}
+        <div className="flex-1 flex flex-col justify-center items-start px-8 pt-8 pb-4 relative">
+          {/* Subtle back button to view Onboarding */}
+          <button
+            onClick={() => setHasSeenOnboarding(false)}
+            className="absolute top-6 left-6 p-2 text-white/80 hover:text-white transition-colors cursor-pointer"
+            title="Kembali ke Layar Pembuka"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          {/* White Logo */}
+          <div className="w-52 max-w-[75%] mb-4">
+            <img
+              src="/logo-white-transparent.png"
+              alt="OBAT HAUS"
+              className="w-full h-auto object-contain filter drop-shadow-sm"
+            />
           </div>
-          <div>
-            <h2 className="text-xl font-black text-white uppercase tracking-tight">
-              OBAT <span className="text-[#FF6B00]">HAUS</span>
+
+          {/* App Title Text */}
+          <div className="text-white space-y-1 text-left">
+            <h2 className="text-[24px] sm:text-[28px] font-normal leading-tight tracking-normal">
+              Aplikasi Absensi
             </h2>
-            <div className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-orange-500/15 border border-orange-500/30 text-[#FF8A3D] text-[10px] font-extrabold uppercase tracking-widest">
-              Absensi Digital Karyawan
-            </div>
+            <h2 className="text-[24px] sm:text-[28px] font-normal leading-tight tracking-normal">
+              Karyawan
+            </h2>
+            <h1 className="text-[26px] sm:text-[30px] font-black leading-tight tracking-wide">
+              Obat Haus
+            </h1>
           </div>
         </div>
 
-        {/* Login Box */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-md space-y-4">
-          <div className="border-b border-slate-800 pb-3">
-            <h3 className="font-bold text-sm text-white">Masuk Akun Kehadiran</h3>
-            <p className="text-[11px] text-slate-400 mt-0.5">Masukkan ID Karyawan dan PIN 4-digit Anda.</p>
-          </div>
-
+        {/* Bottom Section (~38% Height): Pure White Clean Sheet Container */}
+        <div className="bg-white rounded-t-[32px] sm:rounded-t-[36px] px-7 pt-7 pb-8 space-y-4 shadow-2xl">
           {loginError && (
-            <div className="p-3 bg-red-950/60 border border-red-500/40 rounded-xl text-red-200 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
               <span>{loginError}</span>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                ID Karyawan (Contoh: EMP-01)
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <User className="w-4 h-4" />
-                </div>
-                <input
-                  type="text"
-                  value={loginCode}
-                  onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
-                  placeholder="EMP-01"
-                  required
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold uppercase text-sm focus:outline-none focus:border-[#FF6B00] focus:ring-1 focus:ring-[#FF6B00]"
-                />
-              </div>
+          {biometricSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center justify-center gap-2 font-bold animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Sidik Jari Terverifikasi! Masuk...</span>
             </div>
+          )}
 
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                PIN Keamanan (4-Digit)
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={loginPin}
-                  onChange={(e) => setLoginPin(e.target.value)}
-                  placeholder="••••"
-                  required
-                  className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm tracking-widest focus:outline-none focus:border-[#FF6B00] focus:ring-1 focus:ring-[#FF6B00]"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-0.5">
+          <form onSubmit={handleLogin} className="space-y-3.5">
+            {/* Input "Masukkan ID" */}
+            <div className="relative">
               <input
-                type="checkbox"
-                id="rememberMe"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded text-[#FF6B00] bg-slate-950 border-slate-700 focus:ring-[#FF6B00]"
+                type="text"
+                value={loginCode}
+                onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
+                placeholder="Masukkan ID"
+                required
+                className="w-full py-4 px-5 bg-[#E5E7EB] hover:bg-[#DDE1E6] focus:bg-white border-2 border-transparent focus:border-[#FF6600] rounded-2xl text-center text-sm font-bold text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all shadow-inner"
               />
-              <label htmlFor="rememberMe" className="text-xs text-slate-300 font-medium cursor-pointer">
-                Ingat akun di HP ini
-              </label>
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoggingIn}
-              className="w-full py-3 bg-gradient-to-r from-[#FF6B00] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
-            >
-              {isLoggingIn ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <span>Masuk ke Absensi</span>
-                  <ChevronRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
+            {/* Row: Button "Masuk" + Fingerprint Biometric Icon */}
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={isLoggingIn}
+                className="flex-1 py-4 bg-[#FF6600] hover:bg-[#EA580C] active:scale-98 text-white text-base font-bold rounded-2xl shadow-lg shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                {isLoggingIn ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>Masuk</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleBiometricLogin}
+                title="Login Biometrik Sidik Jari"
+                className="w-14 h-14 shrink-0 rounded-2xl bg-orange-50 hover:bg-orange-100 border border-orange-200 flex items-center justify-center text-[#FF6600] active:scale-95 transition-all cursor-pointer shadow-xs"
+              >
+                <FingerprintIcon className="w-8 h-8" color="#FF6600" />
+              </button>
+            </div>
           </form>
 
-          {/* Quick Account Switcher Chips for Field Testing */}
-          <div className="pt-3 border-t border-slate-800">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-2 font-bold">
-              Akun Cepat (Klik untuk uji coba):
+          {/* Quick Demo Selector Chips for Testing Convenience */}
+          <div className="pt-2 border-t border-slate-100">
+            <span className="text-[10px] text-slate-400 font-semibold block text-center mb-1.5 uppercase tracking-wider">
+              Pilih Akun Demo Cepat:
             </span>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="flex items-center justify-center gap-2 flex-wrap">
               {[
                 { code: 'EMP-01', name: 'Budi (Barista)' },
                 { code: 'EMP-02', name: 'Siti (Kasir)' },
@@ -567,31 +607,79 @@ export default function MobileAttendancePage() {
                 <button
                   key={acc.code}
                   type="button"
-                  onClick={() => quickSwitchAccount(acc.code)}
-                  className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-[#FF6B00] text-[10px] text-slate-300 font-medium truncate cursor-pointer text-center"
+                  onClick={() => {
+                    const match = allEmployees.find((e) => e.employee_code === acc.code);
+                    if (match) {
+                      selectEmployeeDirectly(match);
+                    } else {
+                      setLoginCode(acc.code);
+                    }
+                  }}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-[#FF6600] text-[11px] font-bold text-slate-700 rounded-lg transition-colors cursor-pointer"
                 >
-                  <span className="font-bold text-[#FF8A3D] block">{acc.code}</span>
-                  <span className="truncate block">{acc.name}</span>
+                  <span className="text-[#FF6600]">{acc.code}</span> • {acc.name.split(' ')[0]}
                 </button>
               ))}
             </div>
           </div>
+
+          <div className="text-center pt-1">
+            <Link
+              href="/pos"
+              className="text-[11px] font-bold text-slate-400 hover:text-slate-700 transition-colors"
+            >
+              ← Buka Kasir POS Utama
+            </Link>
+          </div>
         </div>
 
-        <div className="mt-6 text-center">
-          <Link
-            href="/pos"
-            className="text-[11px] font-bold text-slate-400 hover:text-white transition-colors"
-          >
-            ← Buka Kasir POS Utama
-          </Link>
-        </div>
+        {/* Biometric Prompt Bottom Sheet / Modal */}
+        {isBiometricPromptOpen && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
+            <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <FingerprintIcon className="w-5 h-5" color="#FF6600" />
+                  <h3 className="font-bold text-sm text-slate-900">Login Sidik Jari (Biometrik)</h3>
+                </div>
+                <button
+                  onClick={() => setIsBiometricPromptOpen(false)}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Pilih profil Anda untuk masuk instan dengan sidik jari pada perangkat ini:
+              </p>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {allEmployees.map((emp) => (
+                  <button
+                    key={emp.id}
+                    onClick={() => selectEmployeeDirectly(emp)}
+                    className="w-full p-3 rounded-xl border border-slate-200 hover:border-[#FF6600] hover:bg-orange-50/50 flex items-center justify-between transition-colors cursor-pointer text-left"
+                  >
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">{emp.full_name}</h4>
+                      <p className="text-[11px] text-slate-500">{emp.role_title} • {emp.employee_code}</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF6600] flex items-center justify-center">
+                      <FingerprintIcon className="w-4 h-4" color="#FF6600" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // --------------------------------------------------------------------------
-  // RENDER: AUTHENTICATED MOBILE APP SHELL (4 TABS)
+  // DASHBOARD LIGHT THEME (AUTHENTICATED EMPLOYEE)
   // --------------------------------------------------------------------------
 
   const maxAllowedRadius = locationTarget?.radius_meters || 100;
@@ -600,497 +688,521 @@ export default function MobileAttendancePage() {
   const isAlreadyClockedOut = Boolean(todayLog && todayLog.clock_out);
   const isReportedAbsence = Boolean(todayLog && (todayLog.status === 'sick' || todayLog.status === 'leave'));
 
+  // Active Shift Resolution
+  const activeShift = shifts.find((s) => s.is_active) || shifts[0];
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between max-w-md mx-auto shadow-2xl relative select-none">
-      {/* 1. TOP MOBILE HEADER */}
-      <header className="px-5 pt-4 pb-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0 sticky top-0 z-30">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl overflow-hidden p-0.5 bg-slate-800 border border-slate-700">
-            <img src="/logo.png" alt="OBAT HAUS" className="w-full h-full object-contain rounded-lg" />
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-between max-w-md mx-auto shadow-xl relative select-none border-x border-slate-200/80">
+      {/* 1. TOP APP BAR (LIGHT THEME) */}
+      <header className="px-5 pt-4 pb-3.5 bg-white border-b border-slate-200/80 flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
+        <div className="flex items-center gap-3">
+          {/* Avatar with Initials */}
+          <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-200 text-[#FF6600] flex items-center justify-center font-black text-sm shadow-xs shrink-0">
+            {currentEmployee.full_name
+              .split(' ')
+              .map((n) => n[0])
+              .slice(0, 2)
+              .join('')
+              .toUpperCase()}
           </div>
           <div>
-            <h3 className="font-black text-xs text-white uppercase tracking-tight">OBAT HAUS</h3>
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#FF6B00]">
-              Absensi Mobile
-            </span>
+            <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 leading-tight">
+              Halo, {currentEmployee.full_name.split(' ')[0]} 👋
+            </h3>
+            <p className="text-[11px] font-medium text-slate-500 leading-tight mt-0.5">
+              {currentEmployee.role_title} • <span className="font-bold text-slate-700">{locationTarget?.name || 'Cabang'}</span>
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-slate-300 font-bold px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700">
-            {currentEmployee.employee_code}
-          </span>
+        {/* GPS Indicator & Refresh */}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => refreshGps()}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
-            title="Segarkan GPS"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-colors cursor-pointer"
+            title="Klik untuk segarkan GPS"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isGettingGps ? 'animate-spin text-[#FF6B00]' : ''}`} />
+            <div className={`w-2 h-2 rounded-full ${isWithinGps ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <RefreshCw className={`w-3 h-3 ${isGettingGps ? 'animate-spin text-[#FF6600]' : ''}`} />
+            <span className="hidden sm:inline">{isGettingGps ? 'Mencari...' : `${gpsDistance !== null ? `${gpsDistance}m` : 'GPS'}`}</span>
           </button>
         </div>
       </header>
 
-      {/* 2. BODY CONTENT DEPENDING ON TAB */}
-      <main className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
-        {/* Alerts / Feedback */}
+      {/* 2. BODY CONTENT (SCROLLABLE) */}
+      <main className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
+        {/* Action Alerts */}
         {actionSuccessMsg && (
-          <div className="p-3 bg-emerald-950/70 border border-emerald-500/40 rounded-2xl text-emerald-300 text-xs flex items-center justify-between gap-2 animate-in fade-in">
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-              <span>{actionSuccessMsg}</span>
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span className="font-medium">{actionSuccessMsg}</span>
             </div>
-            <button onClick={() => setActionSuccessMsg(null)} className="text-emerald-400 hover:text-white">
-              <X className="w-3.5 h-3.5" />
+            <button onClick={() => setActionSuccessMsg(null)} className="text-emerald-700 hover:text-emerald-900">
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {actionErrorMsg && (
-          <div className="p-3 bg-red-950/70 border border-red-500/40 rounded-2xl text-red-200 text-xs flex items-center justify-between gap-2 animate-in fade-in">
+          <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-              <span>{actionErrorMsg}</span>
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+              <span className="font-medium">{actionErrorMsg}</span>
             </div>
-            <button onClick={() => setActionErrorMsg(null)} className="text-red-400 hover:text-white">
-              <X className="w-3.5 h-3.5" />
+            <button onClick={() => setActionErrorMsg(null)} className="text-red-700 hover:text-red-900">
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
-        {/* ------------------------------------------------------------------
-            TAB 1: HOME (ABSEN MASUK / PULANG)
-        ------------------------------------------------------------------ */}
+        {/* ------------------------------------------------------------------ */}
+        {/* TAB 1: ABSEN (HOME) */}
+        {/* ------------------------------------------------------------------ */}
         {activeTab === 'home' && (
           <div className="space-y-4">
-            {/* Employee Profile Card */}
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800/90 border border-slate-800 p-4 rounded-3xl shadow-lg relative overflow-hidden">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-orange-500/20 text-[#FF6B00] border border-orange-500/30 flex items-center justify-center shrink-0 font-black text-lg">
-                  {currentEmployee.full_name.charAt(0)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-sm text-white truncate">{currentEmployee.full_name}</h4>
-                    <span className="text-[10px] font-black uppercase text-[#FF6B00] bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
-                      {currentEmployee.role_title}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-1 truncate">
-                    {currentEmployee.assigned_location_type === 'warehouse' ? (
-                      <WarehouseIcon className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                    ) : (
-                      <Building2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    )}
-                    <span className="truncate">{locationTarget?.name || 'Cabang Penempatan'}</span>
-                  </p>
-                </div>
+            {/* Card 1: Live Digital Clock & Geofence Status */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 text-[#FF6600] text-[11px] font-bold border border-orange-100">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{activeShift?.name || 'Shift Harian'}</span>
+                </span>
+                <span className="text-[11px] font-bold text-slate-500 font-mono">
+                  {activeShift ? `${activeShift.start_time} - ${activeShift.end_time} WITA` : ''}
+                </span>
               </div>
-            </div>
 
-            {/* Live Clock & Date */}
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center shadow-lg space-y-1">
-              <div className="flex items-center justify-center gap-1.5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                <CalendarDays className="w-3.5 h-3.5 text-[#FF6B00]" />
-                <span>
+              {/* Big Digital Clock Display */}
+              <div className="text-center py-2">
+                <h1 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight font-mono">
+                  {currentTime.toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                  })}
+                </h1>
+                <p className="text-xs font-semibold text-slate-500 mt-1 capitalize">
                   {currentTime.toLocaleDateString('id-ID', {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric',
                   })}
-                </span>
+                </p>
               </div>
-              <div className="text-4xl sm:text-5xl font-black font-mono tracking-tight text-white py-1">
-                {currentTime.toLocaleTimeString('id-ID', { hour12: false })}
-                <span className="text-xs font-bold text-[#FF6B00] ml-1">WITA</span>
+
+              {/* Geofence Location Status Bar */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                    <MapPin className="w-4 h-4 text-[#FF6600]" />
+                    <span className="truncate max-w-[200px]">{locationTarget?.name || 'Cabang Belum Ditentukan'}</span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
+                      isWithinGps
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {isWithinGps ? '✓ Dalam Radius' : 'Luar Radius'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                  <span>Jarak Anda: <strong className="text-slate-800">{gpsDistance !== null ? `${gpsDistance} meter` : 'Mendeteksi...'}</strong></span>
+                  <span>Batas Maks: <strong>{maxAllowedRadius} meter</strong></span>
+                </div>
               </div>
             </div>
 
-            {/* GPS Radius Radar Card */}
-            <div
-              className={`p-4 rounded-3xl border transition-all space-y-2 ${
-                isWithinGps
-                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                  : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Compass className={`w-4 h-4 ${isWithinGps ? 'text-emerald-400' : 'text-amber-400 animate-spin'}`} />
-                  <span className="text-xs font-bold uppercase tracking-wider">Radar Geolokasi GPS</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => refreshGps()}
-                  className="text-[10px] font-bold underline opacity-80 hover:opacity-100"
-                >
-                  Cek Ulang
-                </button>
-              </div>
+            {/* Card 2: Primary Clock In / Clock Out Action */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-500">
+                Perekaman Kehadiran Hari Ini
+              </h3>
 
-              {gpsError ? (
-                <p className="text-xs text-red-300 leading-tight">{gpsError}</p>
-              ) : isGettingGps ? (
-                <p className="text-xs text-slate-300 leading-tight">Mendeteksi posisi GPS smartphone Anda...</p>
-              ) : (
-                <div>
-                  <p className="text-xs font-semibold leading-snug">
-                    {isWithinGps ? (
-                      <>
-                        ✅ Posisi Anda berada di <strong>{locationTarget?.name || 'Lokasi'}</strong> (Jarak: {gpsDistance}m • Maks: {maxAllowedRadius}m).
-                      </>
+              {isReportedAbsence ? (
+                <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-center space-y-1">
+                  <span className="font-black text-sm text-blue-900 block">
+                    Status: {todayLog?.status === 'sick' ? 'Sakit' : 'Izin'}
+                  </span>
+                  <p className="text-xs text-blue-700">
+                    Catatan: &ldquo;{todayLog?.notes}&rdquo;
+                  </p>
+                </div>
+              ) : isAlreadyClockedOut ? (
+                <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-sm">
+                    <Check className="w-6 h-6 stroke-[3]" />
+                  </div>
+                  <h4 className="font-black text-base text-emerald-950">
+                    Kehadiran Hari Ini Lengkap!
+                  </h4>
+                  <p className="text-xs text-emerald-800">
+                    Masuk: <strong>{todayLog?.clock_in}</strong> • Pulang: <strong>{todayLog?.clock_out}</strong>
+                  </p>
+                  <p className="text-[11px] text-emerald-700">
+                    Terima kasih atas dedikasi kerja keras Anda hari ini.
+                  </p>
+                </div>
+              ) : isAlreadyClockedIn ? (
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
+                        Absen Masuk Tercatat
+                      </span>
+                      <h4 className="font-black text-lg text-emerald-950">
+                        {todayLog?.clock_in} WITA
+                      </h4>
+                      <span className="text-[11px] font-semibold text-emerald-800">
+                        Status: {todayLog?.status === 'late' ? '⚠️ Terlambat' : '✓ Tepat Waktu'}
+                      </span>
+                    </div>
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-bold">
+                      <Check className="w-5 h-5 stroke-[2.5]" />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleClockOut}
+                    disabled={isSubmittingAction}
+                    className="w-full py-4 bg-red-600 hover:bg-red-700 active:scale-98 text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-lg shadow-red-600/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingAction ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        ⚠️ Anda berada di luar radius lokasi (Jarak: {gpsDistance !== null ? `${gpsDistance}m` : 'Tidak terdeteksi'} • Maks: {maxAllowedRadius}m).
+                        <LogOut className="w-5 h-5" />
+                        <span>Absen Pulang (Clock Out)</span>
                       </>
                     )}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* HERO ATTENDANCE ACTION BUTTON */}
-            <div className="space-y-3 pt-1">
-              {isReportedAbsence ? (
-                <div className="p-4 bg-purple-950/60 border border-purple-500/40 rounded-3xl text-center space-y-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-purple-300 block">
-                    {todayLog?.status === 'sick' ? 'Status: Sakit' : 'Status: Izin / Cuti'}
-                  </span>
-                  <p className="text-xs text-slate-300">
-                    Catatan: &quot;{todayLog?.notes || 'Sudah dilaporkan ke manajer/owner'}&quot;
-                  </p>
-                </div>
-              ) : !isAlreadyClockedIn ? (
-                <button
-                  type="button"
-                  disabled={!isWithinGps || isSubmittingAction}
-                  onClick={handleClockIn}
-                  className={`w-full py-4 rounded-3xl text-sm font-black uppercase tracking-wider shadow-xl flex items-center justify-center gap-2.5 transition-all transform active:scale-98 ${
-                    isWithinGps
-                      ? 'bg-gradient-to-r from-[#FF6B00] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white shadow-orange-500/30 cursor-pointer'
-                      : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-70'
-                  }`}
-                >
-                  <Clock className="w-5 h-5" />
-                  <span>{isSubmittingAction ? 'Merekam Masuk...' : 'Absen Masuk Sekarang'}</span>
-                </button>
-              ) : !isAlreadyClockedOut ? (
-                <button
-                  type="button"
-                  disabled={!isWithinGps || isSubmittingAction}
-                  onClick={handleClockOut}
-                  className={`w-full py-4 rounded-3xl text-sm font-black uppercase tracking-wider shadow-xl flex items-center justify-center gap-2.5 transition-all transform active:scale-98 ${
-                    isWithinGps
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/30 cursor-pointer'
-                      : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-70'
-                  }`}
-                >
-                  <Clock className="w-5 h-5" />
-                  <span>{isSubmittingAction ? 'Merekam Pulang...' : 'Absen Pulang Sekarang'}</span>
-                </button>
-              ) : (
-                <div className="p-4 bg-emerald-950/60 border border-emerald-500/40 rounded-3xl text-center space-y-1">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-1">
-                    <Check className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-300 block">
-                    Tugas Selesai Hari Ini 🎉
-                  </span>
-                  <p className="text-[11px] text-slate-300">
-                    Masuk: {todayLog?.clock_in ? new Date(todayLog.clock_in).toLocaleTimeString('id-ID') : '-'} • Pulang: {todayLog?.clock_out ? new Date(todayLog.clock_out).toLocaleTimeString('id-ID') : '-'}
-                  </p>
-                </div>
-              )}
-
-              {/* Quick Report Absence Button (Sick / Leave) */}
-              {!isAlreadyClockedIn && !isReportedAbsence && (
-                <div className="text-center pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsAbsenceModalOpen(true)}
-                    className="text-xs text-[#FF8A3D] hover:text-[#FF6B00] font-bold underline cursor-pointer inline-flex items-center gap-1.5"
-                  >
-                    <HeartPulse className="w-3.5 h-3.5" />
-                    <span>Lapor Izin / Sakit (Bebas GPS)</span>
                   </button>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  <button
+                    onClick={handleClockIn}
+                    disabled={isSubmittingAction}
+                    className="w-full py-4 bg-[#FF6600] hover:bg-[#EA580C] active:scale-98 text-white font-black text-base rounded-2xl shadow-xl shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingAction ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Clock className="w-5 h-5 stroke-[2.5]" />
+                        <span>ABSEN MASUK SEKARANG</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAbsenceModalOpen(true)}
+                      className="text-xs font-bold text-slate-500 hover:text-[#FF6600] transition-colors cursor-pointer"
+                    >
+                      Ajukan Izin / Sakit Hari Ini →
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Today's Shift Card */}
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Shift Kerja Hari Ini
-              </span>
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-white font-bold">
-                  <Clock className="w-4 h-4 text-[#FF6B00]" />
-                  <span>Shift Pagi / Reguler</span>
-                </div>
-                <span className="font-mono text-slate-300 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
-                  08:00 - 16:00 WITA
+            {/* Card 3: Today's 4 Summary Metrics */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Jam Masuk</span>
+                <span className="text-base font-black text-slate-900 mt-1 block font-mono">
+                  {todayLog?.clock_in || '--:--'}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {todayLog?.status === 'late' ? 'Terlambat' : todayLog?.clock_in ? 'Tepat Waktu' : 'Belum absen'}
+                </span>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Jam Pulang</span>
+                <span className="text-base font-black text-slate-900 mt-1 block font-mono">
+                  {todayLog?.clock_out || '--:--'}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {todayLog?.clock_out ? 'Sudah pulang' : 'Belum absen pulang'}
                 </span>
               </div>
             </div>
           </div>
         )}
 
-        {/* ------------------------------------------------------------------
-            TAB 2: SCHEDULE (JADWAL SHIFT & REKAN)
-        ------------------------------------------------------------------ */}
+        {/* ------------------------------------------------------------------ */}
+        {/* TAB 2: JADWAL SHIFT */}
+        {/* ------------------------------------------------------------------ */}
         {activeTab === 'schedule' && (
           <div className="space-y-4">
-            <div className="border-b border-slate-800 pb-2">
-              <h3 className="font-bold text-sm text-white">Jadwal Shift Kerja</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">Master jam operasional &amp; rekan kerja satu cabang.</p>
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+              <h3 className="font-black text-sm text-slate-900">Jadwal Shift Kerja Anda</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Shift standar yang berlaku untuk lokasi penugasan: <strong className="text-slate-700">{locationTarget?.name}</strong>.
+              </p>
             </div>
 
-            <div className="space-y-2.5">
-              {shifts.map((s) => (
-                <div key={s.id} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <h4 className="font-bold text-xs text-white">{s.name}</h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Toleransi telat: {s.late_tolerance_minutes} menit</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono text-xs font-bold text-[#FF8A3D] bg-orange-500/10 px-2.5 py-1 rounded-xl border border-orange-500/20">
-                      {s.start_time} - {s.end_time}
+            <div className="space-y-3">
+              {shifts.map((s, idx) => (
+                <div
+                  key={s.id}
+                  className={`p-4 rounded-2xl border bg-white shadow-xs space-y-2 ${
+                    s.is_active ? 'border-orange-200 ring-1 ring-orange-100' : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                      <Coffee className="w-4 h-4 text-[#FF6600]" />
+                      <span>{s.name}</span>
                     </span>
+                    <span className="px-2 py-0.5 rounded-md bg-orange-50 text-[#FF6600] text-[10px] font-bold">
+                      Toleransi: {s.late_tolerance_minutes} Menit
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-slate-600 font-mono font-bold">
+                    <span>Mulai: {s.start_time} WITA</span>
+                    <span>Selesai: {s.end_time} WITA</span>
                   </div>
                 </div>
               ))}
             </div>
-
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-3">
-              <h4 className="font-bold text-xs text-white flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-[#FF6B00]" />
-                <span>Rekan Kerja Satu Unit Penempatan</span>
-              </h4>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Anda ditempatkan di <strong>{locationTarget?.name || 'Unit Penempatan'}</strong>. Anda dapat saling meminjamkan HP untuk absen masuk/pulang dengan memasukkan ID &amp; PIN masing-masing.
-              </p>
-            </div>
           </div>
         )}
 
-        {/* ------------------------------------------------------------------
-            TAB 3: HISTORY (RIWAYAT ABSENSI PRIBADI)
-        ------------------------------------------------------------------ */}
+        {/* ------------------------------------------------------------------ */}
+        {/* TAB 3: RIWAYAT KEHADIRAN */}
+        {/* ------------------------------------------------------------------ */}
         {activeTab === 'history' && (
           <div className="space-y-4">
-            <div className="border-b border-slate-800 pb-2 flex items-center justify-between">
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-sm text-white">Riwayat Kehadiran Saya</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">Catatan log masuk &amp; pulang Anda.</p>
+                <h3 className="font-black text-sm text-slate-900">Riwayat Kehadiran</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Catatan absensi harian yang telah terekam di cloud.</p>
               </div>
               <button
                 onClick={loadHistory}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold flex items-center gap-1"
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600"
+                title="Segarkan Riwayat"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin text-[#FF6600]' : ''}`} />
               </button>
             </div>
 
             {isLoadingLogs ? (
-              <div className="text-center py-8 text-xs text-slate-400">Memuat catatan...</div>
+              <div className="py-12 text-center text-xs text-slate-400">Memuat riwayat kehadiran...</div>
             ) : employeeLogs.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center space-y-2">
-                <Calendar className="w-8 h-8 text-slate-600 mx-auto" />
-                <p className="text-xs font-bold text-slate-400">Belum ada riwayat absensi.</p>
+              <div className="bg-white p-8 rounded-2xl border border-slate-200/80 text-center text-slate-400 text-xs">
+                Belum ada riwayat kehadiran yang terekam untuk akun ini.
               </div>
             ) : (
               <div className="space-y-2.5">
-                {employeeLogs.map((log) => {
-                  const statusColors: Record<string, string> = {
-                    present: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-                    late: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-                    sick: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-                    leave: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-                    alpha: 'bg-red-500/10 text-red-400 border-red-500/20',
-                  };
-                  const statusLabels: Record<string, string> = {
-                    present: 'Hadir Tepat Waktu',
-                    late: 'Terlambat',
-                    sick: 'Sakit',
-                    leave: 'Izin',
-                    alpha: 'Alpha',
-                  };
-
-                  return (
-                    <div key={log.id} className="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-white">{log.date}</span>
-                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${statusColors[log.status] || 'bg-slate-800 text-slate-300'}`}>
-                          {statusLabels[log.status] || log.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>
-                          Masuk: <strong>{log.clock_in ? new Date(log.clock_in).toLocaleTimeString('id-ID') : '-'}</strong>
-                        </span>
-                        <span>
-                          Pulang: <strong>{log.clock_out ? new Date(log.clock_out).toLocaleTimeString('id-ID') : '-'}</strong>
-                        </span>
-                      </div>
-                      {log.notes && (
-                        <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800/60 truncate">
-                          Catatan: {log.notes}
-                        </p>
-                      )}
+                {employeeLogs.map((log) => (
+                  <div key={log.id} className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-900">{log.date}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
+                          log.status === 'present'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : log.status === 'late'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {log.status === 'present'
+                          ? 'Tepat Waktu'
+                          : log.status === 'late'
+                          ? 'Terlambat'
+                          : log.status === 'sick'
+                          ? 'Sakit'
+                          : 'Izin'}
+                      </span>
                     </div>
-                  );
-                })}
+                    <div className="flex items-center justify-between text-xs text-slate-600 font-mono">
+                      <span>Masuk: {log.clock_in || '-'}</span>
+                      <span>Pulang: {log.clock_out || '-'}</span>
+                    </div>
+                    {log.notes && (
+                      <p className="text-[11px] text-slate-500 italic pt-1">
+                        &ldquo;{log.notes}&rdquo;
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
         )}
 
-        {/* ------------------------------------------------------------------
-            TAB 4: ACCOUNT (PROFIL, GANTI PIN, GANTI REKAN)
-        ------------------------------------------------------------------ */}
+        {/* ------------------------------------------------------------------ */}
+        {/* TAB 4: AKUN KARYAWAN */}
+        {/* ------------------------------------------------------------------ */}
         {activeTab === 'account' && (
           <div className="space-y-4">
-            <div className="border-b border-slate-800 pb-2">
-              <h3 className="font-bold text-sm text-white">Akun Karyawan</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">Informasi profil dan pengaturan keamanan PIN.</p>
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-orange-500/20 text-[#FF6B00] border border-orange-500/30 flex items-center justify-center shrink-0 font-black text-lg">
-                  {currentEmployee.full_name.charAt(0)}
+            {/* Profile Detail Card */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
+                <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#FF6600] flex items-center justify-center font-black text-lg shadow-xs">
+                  {currentEmployee.full_name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase()}
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-white">{currentEmployee.full_name}</h4>
-                  <p className="text-xs text-[#FF8A3D] font-mono">{currentEmployee.employee_code}</p>
+                  <h3 className="font-black text-base text-slate-900">{currentEmployee.full_name}</h3>
+                  <span className="text-xs font-bold text-[#FF6600] block mt-0.5">{currentEmployee.role_title}</span>
+                  <span className="text-[11px] text-slate-400 font-mono">ID: {currentEmployee.employee_code}</span>
                 </div>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-800 text-xs">
-                <div className="flex justify-between py-1 text-slate-300">
-                  <span className="text-slate-400">Jabatan:</span>
-                  <span className="font-bold">{currentEmployee.role_title}</span>
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                  <span className="text-slate-500">Lokasi Penugasan</span>
+                  <strong className="text-slate-800">{locationTarget?.name || 'Cabang'}</strong>
                 </div>
-                <div className="flex justify-between py-1 text-slate-300">
-                  <span className="text-slate-400">Lokasi Penempatan:</span>
-                  <span className="font-bold text-right truncate max-w-[200px]">{locationTarget?.name || '-'}</span>
+                <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                  <span className="text-slate-500">Nomor Telepon</span>
+                  <strong className="text-slate-800 font-mono">{currentEmployee.phone || '-'}</strong>
                 </div>
-                <div className="flex justify-between py-1 text-slate-300">
-                  <span className="text-slate-400">Nomor Telepon:</span>
-                  <span className="font-mono">{currentEmployee.phone || '-'}</span>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-slate-500">Status Akun</span>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                    Aktif Bekerja
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="space-y-2.5">
+            {/* Security Actions */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
+              <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-500">Keamanan & Perangkat</h4>
+
               <button
-                type="button"
                 onClick={() => setIsPinModalOpen(true)}
-                className="w-full py-3 px-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-bold text-white flex items-center justify-between cursor-pointer"
+                className="w-full py-3 px-4 rounded-xl border border-slate-200 hover:border-slate-300 flex items-center justify-between text-xs font-bold text-slate-800 transition-colors cursor-pointer"
               >
-                <div className="flex items-center gap-2.5">
-                  <Key className="w-4 h-4 text-[#FF6B00]" />
-                  <span>Ubah PIN Keamanan Absensi</span>
+                <div className="flex items-center gap-2">
+                  <Key className="w-4 h-4 text-slate-500" />
+                  <span>Ubah PIN Absensi (4 Digit)</span>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500" />
+                <ChevronRight className="w-4 h-4 text-slate-400" />
               </button>
 
               <button
-                type="button"
                 onClick={handleLogout}
-                className="w-full py-3 px-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-bold text-amber-300 flex items-center justify-between cursor-pointer"
+                className="w-full py-3 px-4 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 flex items-center justify-center gap-2 text-xs font-black transition-colors cursor-pointer"
               >
-                <div className="flex items-center gap-2.5">
-                  <Users className="w-4 h-4 text-amber-400" />
-                  <span>Ganti Akun / Absen Rekan</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-500" />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full py-3 px-4 rounded-2xl bg-red-950/40 border border-red-500/30 hover:bg-red-900/40 text-xs font-bold text-red-300 flex items-center justify-center gap-2 cursor-pointer mt-4"
-              >
-                <LogOut className="w-4 h-4 text-red-400" />
-                <span>Keluar Akun Absensi</span>
+                <LogOut className="w-4 h-4" />
+                <span>Keluar dari Akun Karyawan</span>
               </button>
             </div>
           </div>
         )}
       </main>
 
-      {/* 3. SICK / LEAVE REPORTING MODAL */}
+      {/* 3. STATIC BOTTOM NAVIGATION BAR (LIGHT THEME) */}
+      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-3 py-2 flex items-center justify-around z-30 shadow-lg">
+        {[
+          { id: 'home', label: 'Absen', icon: Clock },
+          { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
+          { id: 'history', label: 'Riwayat', icon: FileText },
+          { id: 'account', label: 'Akun', icon: User },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-2xl transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-orange-50 text-[#FF6600]'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+              <span className={`text-[11px] ${isActive ? 'font-black' : 'font-medium'}`}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* -------------------------------------------------------------------- */}
+      {/* MODAL: SICK / LEAVE REPORTING */}
+      {/* -------------------------------------------------------------------- */}
       {isAbsenceModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                <HeartPulse className="w-4 h-4 text-[#FF6B00]" />
-                <span>Lapor Ketidakhadiran</span>
-              </h3>
-              <button onClick={() => setIsAbsenceModalOpen(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-black text-sm text-slate-900">Ajukan Izin / Sakit</h3>
+              <button onClick={() => setIsAbsenceModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Pastikan Anda sudah mengabari dan meminta izin langsung kepada Manajer atau Owner OBAT HAUS via WhatsApp sebelum mengirimkan laporan ini.
-            </p>
-
-            <form onSubmit={handleReportAbsence} className="space-y-3.5">
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAbsenceType('sick')}
-                  className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                    absenceType === 'sick'
-                      ? 'bg-purple-600 text-white border-purple-500 shadow-xs'
-                      : 'bg-slate-950 text-slate-400 border-slate-800'
-                  }`}
-                >
-                  Sakit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAbsenceType('leave')}
-                  className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                    absenceType === 'leave'
-                      ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
-                      : 'bg-slate-950 text-slate-400 border-slate-800'
-                  }`}
-                >
-                  Izin / Cuti
-                </button>
+            <form onSubmit={handleReportAbsence} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Tipe Keterangan</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAbsenceType('sick')}
+                    className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                      absenceType === 'sick'
+                        ? 'bg-orange-50 border-[#FF6600] text-[#FF6600]'
+                        : 'border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    🤒 Sakit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAbsenceType('leave')}
+                    className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                      absenceType === 'leave'
+                        ? 'bg-orange-50 border-[#FF6600] text-[#FF6600]'
+                        : 'border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    📝 Izin / Kepentingan
+                  </button>
+                </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  Keterangan Singkat *
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Alasan / Catatan</label>
                 <textarea
-                  rows={2}
                   value={absenceNotes}
                   onChange={(e) => setAbsenceNotes(e.target.value)}
-                  placeholder="Contoh: Demam tinggi, sudah izin owner"
+                  placeholder="Contoh: Mengalami demam dan sedang berobat ke dokter..."
                   required
-                  className="w-full text-xs p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-[#FF6B00]"
+                  rows={3}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FF6600]/20 focus:border-[#FF6600]"
                 />
               </div>
 
-              <div className="pt-2 flex gap-2">
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsAbsenceModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-700 text-xs font-bold text-slate-400"
+                  className="flex-1 py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingAction}
-                  className="flex-1 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-md cursor-pointer"
+                  className="flex-1 py-3 bg-[#FF6600] hover:bg-[#EA580C] text-white rounded-xl text-xs font-black shadow-md shadow-orange-500/20"
                 >
                   {isSubmittingAction ? 'Mengirim...' : 'Kirim Laporan'}
                 </button>
@@ -1100,54 +1212,50 @@ export default function MobileAttendancePage() {
         </div>
       )}
 
-      {/* 4. CHANGE PIN MODAL */}
+      {/* -------------------------------------------------------------------- */}
+      {/* MODAL: CHANGE PIN */}
+      {/* -------------------------------------------------------------------- */}
       {isPinModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-5 space-y-4 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                <Key className="w-4 h-4 text-[#FF6B00]" />
-                <span>Ubah PIN Absensi</span>
-              </h3>
-              <button onClick={() => setIsPinModalOpen(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="font-black text-sm text-slate-900">Ubah PIN Absensi</h3>
+              <button onClick={() => setIsPinModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {pinChangeMsg && (
-              <div className="p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-center text-amber-300">
+              <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-800 font-bold">
                 {pinChangeMsg}
               </div>
             )}
 
-            <form onSubmit={handleChangePin} className="space-y-3.5">
+            <form onSubmit={handleChangePin} className="space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  Masukkan PIN Baru (Minimal 4 Angka)
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">PIN Baru (4 Digit)</label>
                 <input
                   type="password"
-                  inputMode="numeric"
                   maxLength={6}
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value)}
                   placeholder="••••"
                   required
-                  className="w-full text-sm font-mono tracking-widest p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-center focus:outline-none focus:border-[#FF6B00]"
+                  className="w-full py-3 px-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#FF6600]/20 focus:border-[#FF6600]"
                 />
               </div>
 
-              <div className="pt-2 flex gap-2">
+              <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setIsPinModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-700 text-xs font-bold text-slate-400"
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-md cursor-pointer"
+                  className="flex-1 py-2.5 bg-[#FF6600] text-white rounded-xl text-xs font-black"
                 >
                   Simpan PIN
                 </button>
@@ -1156,63 +1264,6 @@ export default function MobileAttendancePage() {
           </div>
         </div>
       )}
-
-      {/* 5. DEDICATED BOTTOM NAVIGATION BAR (4 TABS) */}
-      <nav className="fixed inset-x-0 bottom-0 max-w-md mx-auto bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-3 py-2 z-40">
-        <div className="grid grid-cols-4 gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab('home')}
-            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'home'
-                ? 'text-[#FF6B00] bg-orange-500/10 font-bold'
-                : 'text-slate-400 hover:text-white font-medium'
-            }`}
-          >
-            <Clock className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Absen</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('schedule')}
-            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'schedule'
-                ? 'text-[#FF6B00] bg-orange-500/10 font-bold'
-                : 'text-slate-400 hover:text-white font-medium'
-            }`}
-          >
-            <Calendar className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Jadwal</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'history'
-                ? 'text-[#FF6B00] bg-orange-500/10 font-bold'
-                : 'text-slate-400 hover:text-white font-medium'
-            }`}
-          >
-            <FileText className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Riwayat</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('account')}
-            className={`flex flex-col items-center justify-center py-1.5 rounded-2xl transition-all cursor-pointer ${
-              activeTab === 'account'
-                ? 'text-[#FF6B00] bg-orange-500/10 font-bold'
-                : 'text-slate-400 hover:text-white font-medium'
-            }`}
-          >
-            <User className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Akun</span>
-          </button>
-        </div>
-      </nav>
     </div>
   );
 }

@@ -32,12 +32,22 @@ export const metadata: Metadata = {
     title: 'OBATHAUS - Operational System Management',
     description:
       'Sistem Manajemen Operasional Terpadu, Gudang Logistik & Kasir POS Multi-Cabang Obat Haus (Sulawesi Barat).',
+    images: [
+      {
+        url: 'https://obathaus.vercel.app/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'OBATHAUS - Operational System Management',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'OBATHAUS - Operational System Management',
     description:
       'Sistem Manajemen Operasional Terpadu, Gudang Logistik & Kasir POS Multi-Cabang Obat Haus (Sulawesi Barat).',
+    images: ['https://obathaus.vercel.app/og-image.png'],
   },
   icons: {
     icon: [

@@ -102,15 +102,9 @@ export function CashierSidebar() {
             }`}
             title={`${cleanBrand} - ${outletLabel}`}
           >
-            {settings?.logo_url ? (
-              <div className="w-10 h-10 rounded-2xl overflow-hidden border border-[#ECEEF1] bg-white flex items-center justify-center p-1 shadow-md shadow-orange-500/10 shrink-0">
-                <img src={settings.logo_url} alt={cleanBrand} className="w-full h-full object-contain rounded-xl" />
-              </div>
-            ) : (
-              <div className="w-10 h-10 rounded-2xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center justify-center p-1.5 shadow-md shadow-orange-500/10 shrink-0">
-                <TargetLogo className="w-full h-full" />
-              </div>
-            )}
+            <div className="w-10 h-10 rounded-2xl overflow-hidden border border-[#ECEEF1] bg-white flex items-center justify-center p-0.5 shadow-md shadow-orange-500/10 shrink-0">
+              <img src={settings?.logo_url || '/logo.png'} alt={cleanBrand} className="w-full h-full object-contain rounded-xl" />
+            </div>
 
             {!isCollapsed && (
               <div className="min-w-0">

@@ -95,7 +95,7 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO public.store_settings (
   id, store_name, tagline, address, phone, email, timezone,
   tax_percentage, is_tax_inclusive, discount_enabled, max_discount_percentage,
-  receipt_paper_size, invoice_prefix
+  receipt_paper_size, invoice_prefix, logo_url
 )
 VALUES (
   '00000000-0000-0000-0000-000000000001'::uuid,
@@ -110,7 +110,8 @@ VALUES (
   true,
   50,
   '58mm',
-  'INV'
+  'INV',
+  '/logo.png'
 )
 ON CONFLICT (id) DO UPDATE SET
   store_name = EXCLUDED.store_name,
@@ -120,6 +121,7 @@ ON CONFLICT (id) DO UPDATE SET
   email = EXCLUDED.email,
   timezone = EXCLUDED.timezone,
   receipt_paper_size = EXCLUDED.receipt_paper_size,
+  logo_url = EXCLUDED.logo_url,
   updated_at = now();
 
 -- 7. BUKA HAK AKSES OPERASIONAL (ADMIN DAPAT MENAMBAH & MENGHAPUS SEMUA DATA LANGSUNG DI SUPABASE)

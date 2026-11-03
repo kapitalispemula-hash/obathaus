@@ -42,7 +42,7 @@ export const INITIAL_STORE_SETTINGS: StoreSettings = {
   address: 'Polewali Mandar & Majene, Sulawesi Barat',
   phone: '0811-4409-900',
   email: 'hasan@obathaus.id',
-  logo_url: null,
+  logo_url: '/logo.png',
   timezone: 'Asia/Makassar',
   invoice_prefix: 'INV',
   invoice_counter: 1,

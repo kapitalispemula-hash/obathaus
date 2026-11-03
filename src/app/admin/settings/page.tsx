@@ -412,28 +412,19 @@ export default function AdminSettingsPage() {
 
                   <div className="flex items-center gap-4">
                     <div className="w-24 h-24 rounded-2xl bg-white border border-borderline p-2 flex items-center justify-center overflow-hidden shadow-xs shrink-0 relative group">
-                      {logoPreview ? (
-                        <img
-                          src={logoPreview}
-                          alt="Logo Preview"
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-center p-2">
-                          <TargetLogo className="w-10 h-10 mb-1" />
-                          <span className="text-[10px] font-bold text-mutedtext">Default</span>
-                        </div>
-                      )}
+                      <img
+                        src={logoPreview || '/logo.png'}
+                        alt="Logo Preview"
+                        className="w-full h-full object-contain rounded-xl"
+                      />
                     </div>
 
                     <div className="space-y-1.5 flex-1 min-w-0">
                       <div className="text-xs font-bold text-heading truncate">
-                        {logoPreview ? 'Logo Khusus Terpasang' : 'Logo Bawaan Sistem'}
+                        Logo Resmi OBAT HAUS Aktif
                       </div>
                       <p className="text-[11px] text-mutedtext leading-relaxed">
-                        {logoPreview
-                          ? 'Logo ini sedang aktif dan ditampilkan di seluruh antarmuka cafe.'
-                          : 'Belum ada file logo kustom. Sistem menggunakan logo resmi OBAT HAUS.'}
+                        Logo ini aktif di seluruh sistem, nota struk kasir, thumbnail sosial media, dan ikon aplikasi HP.
                       </p>
                       {logoPreview && (
                         <button
@@ -457,11 +448,7 @@ export default function AdminSettingsPage() {
                   </div>
                   <div className="flex items-center gap-2 p-2 bg-[#18181B] text-white rounded-xl text-xs shadow-inner">
                     <div className="w-4 h-4 rounded-full overflow-hidden bg-white shrink-0 flex items-center justify-center p-0.5">
-                      {logoPreview ? (
-                        <img src={logoPreview} alt="Favicon" className="w-full h-full object-contain" />
-                      ) : (
-                        <span className="w-2 h-2 rounded-full bg-[#FF6B00]" />
-                      )}
+                      <img src={logoPreview || '/logo.png'} alt="Favicon" className="w-full h-full object-contain" />
                     </div>
                     <span className="font-semibold truncate text-[11px] text-white/90">
                       {storeName || 'OBATHAUS'} — Operational System Management
@@ -653,8 +640,8 @@ export default function AdminSettingsPage() {
           <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-7 rounded-3xl shadow-xl border border-slate-700/60 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-700/60">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-white p-2 flex items-center justify-center shrink-0 shadow-md">
-                  <TargetLogo className="w-full h-full" />
+                <div className="w-12 h-12 rounded-2xl overflow-hidden flex items-center justify-center shrink-0 shadow-md border border-slate-700 bg-black/20">
+                  <img src="/logo.png" alt="OBAT HAUS" className="w-full h-full object-contain rounded-xl" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">

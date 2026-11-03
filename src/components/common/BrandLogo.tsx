@@ -39,15 +39,9 @@ export function BrandLogo({
       className={`inline-flex items-center gap-2.5 group cursor-pointer select-none ${className}`}
     >
       {showImage ? (
-        logoUrl ? (
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden border border-[#ECEEF1] bg-white flex items-center justify-center shrink-0 p-0.5 shadow-2xs">
-            <img src={logoUrl} alt={cleanBrand} className="w-full h-full object-contain rounded-lg" />
-          </div>
-        ) : (
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-            <TargetLogo className="w-full h-full" />
-          </div>
-        )
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl overflow-hidden border border-[#ECEEF1] bg-white flex items-center justify-center shrink-0 p-0.5 shadow-2xs">
+          <img src={logoUrl || '/logo.png'} alt={cleanBrand} className="w-full h-full object-contain rounded-lg" />
+        </div>
       ) : null}
       <div className="flex items-center tracking-tight font-black text-lg sm:text-xl text-[#18181B] uppercase">
         <span>{firstWord}</span>

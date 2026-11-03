@@ -162,8 +162,8 @@ export function PwaSupport() {
 
             <div className="flex items-start gap-3.5 pr-6">
               {/* Logo container */}
-              <div className="w-12 h-12 rounded-2xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center justify-center shrink-0 p-2 shadow-xs">
-                <TargetLogo className="w-full h-full" />
+              <div className="w-12 h-12 rounded-2xl overflow-hidden flex items-center justify-center shrink-0 shadow-xs border border-slate-100">
+                <img src="/logo.png" alt="OBAT HAUS" className="w-full h-full object-contain rounded-xl" />
               </div>
 
               <div>

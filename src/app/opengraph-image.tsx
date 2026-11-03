@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { OBATHAUS_LOGO_BASE64 } from '@/lib/logo-base64';
 
 export const runtime = 'edge';
 export const alt = 'OBATHAUS - Operational System Management';
@@ -26,34 +27,38 @@ export default async function Image() {
         <div
           style={{
             position: 'absolute',
-            width: 400,
-            height: 400,
+            width: 440,
+            height: 440,
             borderRadius: '50%',
-            backgroundColor: 'rgba(255, 107, 0, 0.12)',
-            filter: 'blur(80px)',
-            top: 60,
+            backgroundColor: 'rgba(255, 107, 0, 0.15)',
+            filter: 'blur(90px)',
+            top: 50,
           }}
         />
 
-        {/* Bullseye Target Logo Card */}
+        {/* Official OBAT HAUS Brand Logo */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 140,
-            height: 140,
+            width: 150,
+            height: 150,
             borderRadius: 36,
-            backgroundColor: '#FFFFFF',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
-            marginBottom: 28,
+            overflow: 'hidden',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.15)',
+            marginBottom: 24,
+            backgroundColor: '#FF6B00',
           }}
         >
-          <svg width="84" height="84" viewBox="0 0 44 44" fill="none">
-            <circle cx="22" cy="22" r="18" stroke="#FF6B00" strokeWidth="3.5" strokeLinecap="round" />
-            <circle cx="22" cy="22" r="10" stroke="#FF6B00" strokeWidth="3.5" strokeLinecap="round" />
-            <circle cx="22" cy="22" r="3" fill="#FF6B00" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={OBATHAUS_LOGO_BASE64}
+            alt="OBAT HAUS Logo"
+            width="150"
+            height="150"
+            style={{ objectFit: 'contain' }}
+          />
         </div>
 
         {/* Title */}
@@ -61,12 +66,12 @@ export default async function Image() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            fontSize: 56,
+            fontSize: 54,
             fontWeight: 900,
             color: '#FFFFFF',
             letterSpacing: -1,
             textTransform: 'uppercase',
-            marginBottom: 8,
+            marginBottom: 10,
           }}
         >
           <span>OBAT</span>
@@ -79,7 +84,7 @@ export default async function Image() {
             display: 'flex',
             alignItems: 'center',
             backgroundColor: 'rgba(255, 107, 0, 0.15)',
-            border: '1px solid rgba(255, 107, 0, 0.4)',
+            border: '1px solid rgba(255, 107, 0, 0.45)',
             borderRadius: 9999,
             padding: '8px 24px',
             marginBottom: 20,

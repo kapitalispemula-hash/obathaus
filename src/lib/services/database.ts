@@ -616,8 +616,9 @@ export const dbService = {
       if (existing) return existing;
     }
 
-    // 2. Validate Cashier
-    const cashier = localProfiles.find((p) => p.id === payload.cashier_id);
+    // 2. Validate Cashier (Check Cloud Supabase & Local)
+    const profiles = await this.getProfiles();
+    const cashier = profiles.find((p) => p.id === payload.cashier_id) || localProfiles.find((p) => p.id === payload.cashier_id);
     if (!cashier || !cashier.is_active) {
       throw new Error('Akun kasir tidak valid atau sedang dinonaktifkan.');
     }
@@ -626,6 +627,16 @@ export const dbService = {
     if (!payload.items || payload.items.length === 0) {
       throw new Error('Keranjang belanja kosong.');
     }
+
+    // Determine target outlet early so we can check branch-specific availability & prices
+    const targetOutletId = payload.outlet_id || cashier.primary_outlet_id || 'd0000000-0000-0000-0000-000000000001';
+    const [currentOutlets, outletMenus, allProducts] = await Promise.all([
+      this.getOutlets(),
+      this.getOutletMenus(targetOutletId),
+      this.getProducts(),
+    ]);
+    localProducts = allProducts;
+    const targetOutlet = currentOutlets.find((o) => o.id === targetOutletId) || currentOutlets[0];
 
     // 4. Server-Side Price & HPP Lookup from Products DB (Zero trust on client)
     let subtotal = 0;
@@ -637,14 +648,29 @@ export const dbService = {
 
     for (const item of payload.items) {
       if (item.quantity <= 0) throw new Error('Kuantitas item harus lebih dari 0.');
-      const prod = localProducts.find((p) => p.id === item.product_id);
+      const prod = allProducts.find((p) => p.id === item.product_id) || localProducts.find((p) => p.id === item.product_id);
       if (!prod) throw new Error(`Produk dengan ID ${item.product_id} tidak ditemukan.`);
       if (!prod.is_active) throw new Error(`Produk "${prod.name}" saat ini dinonaktifkan.`);
 
-      const itemSubtotal = prod.selling_price * item.quantity;
+      // Check branch-specific availability
+      const branchRule = outletMenus.find((m) => m.product_id === prod.id);
+      if (branchRule && branchRule.is_available === false) {
+        throw new Error(`Produk "${prod.name}" sedang habis / tidak tersedia di cabang ${targetOutlet?.name || 'ini'}.`);
+      }
+
+      // Check branch-specific price override
+      const unitPrice =
+        branchRule && branchRule.price_override !== null && branchRule.price_override !== undefined && Number(branchRule.price_override) > 0
+          ? Number(branchRule.price_override)
+          : prod.selling_price;
+
+      const itemSubtotal = unitPrice * item.quantity;
       subtotal += itemSubtotal;
       validatedItems.push({
-        product: prod,
+        product: {
+          ...prod,
+          selling_price: unitPrice,
+        },
         quantity: item.quantity,
         itemSubtotal,
       });
@@ -692,11 +718,6 @@ export const dbService = {
       amountReceived = grandTotal;
       changeAmount = 0;
     }
-
-    // Determine target outlet
-    const targetOutletId = payload.outlet_id || cashier.primary_outlet_id || 'd0000000-0000-0000-0000-000000000001';
-    const currentOutlets = await this.getOutlets();
-    const targetOutlet = currentOutlets.find((o) => o.id === targetOutletId) || currentOutlets[0];
 
     // 8. Generate Invoice Number safely with Outlet Custom Prefix
     localInvoiceCounter++;
@@ -2091,9 +2112,28 @@ export const dbService = {
   },
 
   // =========================================================================
-  // PHASE 2: OUTLET MENUS & PRICING OVERRIDE
+  // PHASE 2: OUTLET MENUS & PRICING OVERRIDE (CLOUD SUPABASE INTEGRATED)
   // =========================================================================
   async getOutletMenus(outletId?: string): Promise<OutletMenu[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase.from('outlet_menus').select('*, product:products(*), outlet:outlets(*)');
+        if (outletId) {
+          query = query.eq('outlet_id', outletId);
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          return data as OutletMenu[];
+        }
+        if (error) {
+          console.warn('Supabase getOutletMenus error:', error);
+        }
+      } catch (e) {
+        console.warn('Falling back to local getOutletMenus:', e);
+      }
+    }
+
     const all = getStorageItem<OutletMenu[]>(STORAGE_KEYS.OUTLET_MENUS, localOutletMenus);
     const products = await this.getProducts();
     const outlets = await this.getOutlets();
@@ -2107,6 +2147,34 @@ export const dbService = {
   },
 
   async setOutletMenuPrice(outletId: string, productId: string, priceOverride: number | null): Promise<OutletMenu> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('outlet_menus')
+          .upsert(
+            {
+              outlet_id: outletId,
+              product_id: productId,
+              price_override: priceOverride,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'outlet_id,product_id' }
+          )
+          .select('*, product:products(*), outlet:outlets(*)')
+          .single();
+
+        if (!error && data) {
+          return data as OutletMenu;
+        }
+        if (error) {
+          console.warn('Supabase setOutletMenuPrice error:', error);
+        }
+      } catch (e) {
+        console.warn('Falling back to local setOutletMenuPrice:', e);
+      }
+    }
+
     const current = getStorageItem<OutletMenu[]>(STORAGE_KEYS.OUTLET_MENUS, localOutletMenus);
     let target = current.find((m) => m.outlet_id === outletId && m.product_id === productId);
 
@@ -2132,6 +2200,34 @@ export const dbService = {
   },
 
   async toggleOutletMenuAvailability(outletId: string, productId: string, isAvailable: boolean): Promise<OutletMenu> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('outlet_menus')
+          .upsert(
+            {
+              outlet_id: outletId,
+              product_id: productId,
+              is_available: isAvailable,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'outlet_id,product_id' }
+          )
+          .select('*, product:products(*), outlet:outlets(*)')
+          .single();
+
+        if (!error && data) {
+          return data as OutletMenu;
+        }
+        if (error) {
+          console.warn('Supabase toggleOutletMenuAvailability error:', error);
+        }
+      } catch (e) {
+        console.warn('Falling back to local toggleOutletMenuAvailability:', e);
+      }
+    }
+
     const current = getStorageItem<OutletMenu[]>(STORAGE_KEYS.OUTLET_MENUS, localOutletMenus);
     let target = current.find((m) => m.outlet_id === outletId && m.product_id === productId);
 

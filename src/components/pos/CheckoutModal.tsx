@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useCart } from '@/lib/cart-context';
 import { useAuth } from '@/lib/auth-context';
+import { useOutlet } from '@/lib/outlet-context';
 import { dbService } from '@/lib/services/database';
 import { formatRupiah } from '@/lib/format';
 import { PaymentMethod, Transaction } from '@/types/database';
@@ -32,6 +33,7 @@ export function CheckoutModal({
 }: CheckoutModalProps) {
   const { items, discountTotal, grandTotal, orderNotes, clearCart } = useCart();
   const { user } = useAuth();
+  const { activeOutlet } = useOutlet();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(initialPaymentMethod);
   const [amountReceived, setAmountReceived] = useState<number>(grandTotal);
@@ -92,6 +94,7 @@ export function CheckoutModal({
 
       const transaction = await dbService.processCheckout({
         cashier_id: user.id,
+        outlet_id: activeOutlet?.id,
         idempotency_key: idempotencyKey,
         payment_method: paymentMethod,
         amount_received: paymentMethod === 'cash' ? amountReceived : grandTotal,
@@ -140,9 +143,25 @@ export function CheckoutModal({
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-5 bg-white">
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs sm:text-sm flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{errorMsg}</span>
+              </div>
+              {errorMsg.toLowerCase().includes('tidak ditemukan') ||
+              errorMsg.toLowerCase().includes('habis') ||
+              errorMsg.toLowerCase().includes('tidak tersedia') ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearCart();
+                    onClose();
+                  }}
+                  className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-800 text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+                >
+                  Kosongkan Keranjang
+                </button>
+              ) : null}
             </div>
           )}
 

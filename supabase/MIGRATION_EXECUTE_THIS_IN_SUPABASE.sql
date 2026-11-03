@@ -211,6 +211,7 @@ BEGIN
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE profiles; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE store_settings; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE outlets; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE outlet_menus; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE supplier_pos; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE outlet_orders; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE dispatches; EXCEPTION WHEN duplicate_object THEN NULL; END;

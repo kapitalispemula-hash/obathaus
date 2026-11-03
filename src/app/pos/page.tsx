@@ -9,6 +9,7 @@ import { TransactionSuccessModal } from '@/components/pos/TransactionSuccessModa
 import { ReceiptModal } from '@/components/receipt/ReceiptModal';
 import { useCart } from '@/lib/cart-context';
 import { useShift } from '@/lib/shift-context';
+import { useOutlet } from '@/lib/outlet-context';
 import { dbService } from '@/lib/services/database';
 import { Category, Product, Transaction, PaymentMethod } from '@/types/database';
 import {
@@ -24,6 +25,7 @@ import { CategoryIcon } from '@/components/common/CategoryIcon';
 export default function PosPage() {
   const { addItem, items, itemCount, grandTotal, settings, orderNotes, setOrderNotes } = useCart();
   const { activeShift, openShiftModal, refreshActiveShift } = useShift();
+  const { activeOutlet } = useOutlet();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -45,18 +47,44 @@ export default function PosPage() {
   useEffect(() => {
     async function loadCatalog() {
       try {
-        const [cats, prods] = await Promise.all([
+        setLoading(true);
+        const outletId = activeOutlet?.id;
+        const [cats, rawProds, outletMenus] = await Promise.all([
           dbService.getCategories(true),
           dbService.getProducts({ onlyActive: true }),
+          outletId ? dbService.getOutletMenus(outletId) : Promise.resolve([]),
         ]);
+
+        // Branch Menu Logic:
+        // 1. If marked as unavailable (is_available === false) in this outlet, STRICTLY HIDE (never show to cashier)!
+        // 2. If price_override exists, use branch-specific selling price!
+        const availableProds: Product[] = [];
+        for (const p of rawProds || []) {
+          const rule = (outletMenus || []).find((m) => m.product_id === p.id);
+          // Strictly hidden if unavailable in this outlet
+          if (rule && rule.is_available === false) {
+            continue;
+          }
+          if (rule && rule.price_override !== null && rule.price_override !== undefined && Number(rule.price_override) > 0) {
+            availableProds.push({
+              ...p,
+              selling_price: Number(rule.price_override),
+            });
+          } else {
+            availableProds.push(p);
+          }
+        }
+
         setCategories(cats || []);
-        setProducts(prods || []);
+        setProducts(availableProds);
       } catch (err) {
         console.error('Failed to load POS catalog:', err);
+      } finally {
+        setLoading(false);
       }
     }
     loadCatalog();
-  }, []);
+  }, [activeOutlet?.id]);
 
   const currentCategoryName =
     selectedCategory === 'all'

@@ -16,6 +16,9 @@ export interface Outlet {
   invoice_prefix?: string | null;
   receipt_header?: string | null;
   receipt_footer?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  radius_meters?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +30,9 @@ export interface Warehouse {
   address?: string | null;
   phone?: string | null;
   is_active: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+  radius_meters?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -701,4 +707,57 @@ export interface AppNotification {
   action_url?: string | null;
   is_read: boolean;
   created_at: string;
+}
+
+// ============================================================================
+// DIGITAL EMPLOYEE ATTENDANCE SYSTEM (OBATHAUS)
+// ============================================================================
+
+export type LocationType = 'outlet' | 'warehouse';
+export type AttendanceStatus = 'present' | 'late' | 'sick' | 'leave' | 'alpha';
+
+export interface AttendanceShift {
+  id: string;
+  name: string;
+  start_time: string; // "08:00"
+  end_time: string;   // "16:00"
+  late_tolerance_minutes: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface EmployeeProfile {
+  id: string;
+  employee_code: string;
+  pin: string;
+  full_name: string;
+  role_title: string;
+  assigned_location_type: LocationType;
+  assigned_location_id: string;
+  phone?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  // joined relations
+  outlet?: Outlet | null;
+  warehouse?: Warehouse | null;
+}
+
+export interface AttendanceLog {
+  id: string;
+  employee_id: string;
+  date: string; // YYYY-MM-DD
+  shift_id?: string | null;
+  clock_in?: string | null;
+  clock_out?: string | null;
+  clock_in_lat?: number | null;
+  clock_in_lng?: number | null;
+  clock_in_distance_meters?: number | null;
+  status: AttendanceStatus;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  // joined relations
+  employee?: EmployeeProfile;
+  shift?: AttendanceShift;
 }

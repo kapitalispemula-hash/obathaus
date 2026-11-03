@@ -29,6 +29,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  CalendarCheck,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
@@ -194,6 +195,13 @@ export function AdminSidebar() {
     {
       title: 'SISTEM & PENGGUNA',
       items: [
+        {
+          id: 'attendance',
+          name: 'Absensi & Kehadiran',
+          href: '/admin/attendance',
+          icon: CalendarCheck,
+          isActive: pathname.startsWith('/admin/attendance'),
+        },
         {
           id: 'audit-logs',
           name: 'Audit Trail Sistem',

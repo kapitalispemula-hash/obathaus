@@ -33,6 +33,9 @@ import {
   ShiftCashMovement,
   AuditLog,
   AppNotification,
+  AttendanceShift,
+  EmployeeProfile,
+  AttendanceLog,
 } from '@/types/database';
 
 export const INITIAL_STORE_SETTINGS: StoreSettings = {
@@ -286,3 +289,81 @@ export const INITIAL_SHIFT_CASH_MOVEMENTS: ShiftCashMovement[] = [];
 export const INITIAL_CASHIER_SHIFTS: CashierShift[] = [];
 export const INITIAL_AUDIT_LOGS: AuditLog[] = [];
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [];
+
+// ============================================================================
+// DIGITAL ATTENDANCE SYSTEM MOCK DATA
+// ============================================================================
+
+export const INITIAL_ATTENDANCE_SHIFTS: AttendanceShift[] = [
+  {
+    id: 'b0000000-0000-0000-0000-000000000001',
+    name: 'Shift Pagi (Outlet)',
+    start_time: '08:00',
+    end_time: '16:00',
+    late_tolerance_minutes: 15,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'b0000000-0000-0000-0000-000000000002',
+    name: 'Shift Sore / Malam (Outlet)',
+    start_time: '15:00',
+    end_time: '23:00',
+    late_tolerance_minutes: 15,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'b0000000-0000-0000-0000-000000000003',
+    name: 'Shift Gudang Logistik',
+    start_time: '08:30',
+    end_time: '17:00',
+    late_tolerance_minutes: 15,
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+  },
+];
+
+export const INITIAL_EMPLOYEE_PROFILES: EmployeeProfile[] = [
+  {
+    id: 'emp-001',
+    employee_code: 'EMP-01',
+    pin: '1234',
+    full_name: 'Budi Santoso',
+    role_title: 'Head Barista',
+    assigned_location_type: 'outlet',
+    assigned_location_id: 'd0000000-0000-0000-0000-000000000001',
+    phone: '0812-3456-7891',
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'emp-002',
+    employee_code: 'EMP-02',
+    pin: '1234',
+    full_name: 'Siti Rahma',
+    role_title: 'Kasir Outlet',
+    assigned_location_type: 'outlet',
+    assigned_location_id: 'd0000000-0000-0000-0000-000000000001',
+    phone: '0812-3456-7892',
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'emp-003',
+    employee_code: 'EMP-03',
+    pin: '1234',
+    full_name: 'Andi Pratama',
+    role_title: 'Staf Logistik Gudang',
+    assigned_location_type: 'warehouse',
+    assigned_location_id: 'e0000000-0000-0000-0000-000000000001',
+    phone: '0812-3456-7893',
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+];
+
+export const INITIAL_ATTENDANCE_LOGS: AttendanceLog[] = [];

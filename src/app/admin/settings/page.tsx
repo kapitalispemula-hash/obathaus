@@ -29,6 +29,8 @@ import {
   Download,
   Share2,
   ExternalLink,
+  CalendarCheck,
+  QrCode,
 } from 'lucide-react';
 
 function updateBrowserFavicon(iconUrl: string) {
@@ -733,6 +735,47 @@ export default function AdminSettingsPage() {
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-xs font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
                   <span>Berjalan full screen selayaknya aplikasi iOS native</span>
+                </div>
+              </div>
+
+              {/* Attendance App Card for Employees */}
+              <div className="md:col-span-2 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent border border-orange-500/30 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-2.5 rounded-xl bg-orange-500/20 text-[#FF8A3D] shrink-0">
+                      <CalendarCheck className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-sm text-white flex items-center gap-2 flex-wrap">
+                        <span>Aplikasi Absensi Karyawan Mobile-First</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FF6B00] text-white">
+                          /absen
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Khusus staf barista, kitchen, kasir, dan gudang. Login cepat PIN 4-digit &amp; validasi GPS Geofencing radius 100 meter.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+                  <a
+                    href="/absen"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Buka Web App Absen</span>
+                  </a>
+                  <a
+                    href="/admin/attendance"
+                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>Cetak Poster QR</span>
+                  </a>
                 </div>
               </div>
             </div>

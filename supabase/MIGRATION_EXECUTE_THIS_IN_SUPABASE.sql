@@ -30,8 +30,57 @@ ALTER TABLE IF EXISTS public.operating_expenses ADD COLUMN IF NOT EXISTS outlet_
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS invoice_prefix TEXT;
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS receipt_header TEXT;
 ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS receipt_footer TEXT;
+ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS latitude NUMERIC;
+ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS longitude NUMERIC;
+ALTER TABLE IF EXISTS public.outlets ADD COLUMN IF NOT EXISTS radius_meters INTEGER DEFAULT 100;
+
+ALTER TABLE IF EXISTS public.warehouses ADD COLUMN IF NOT EXISTS latitude NUMERIC;
+ALTER TABLE IF EXISTS public.warehouses ADD COLUMN IF NOT EXISTS longitude NUMERIC;
+ALTER TABLE IF EXISTS public.warehouses ADD COLUMN IF NOT EXISTS radius_meters INTEGER DEFAULT 100;
+
 ALTER TABLE IF EXISTS public.store_settings ADD COLUMN IF NOT EXISTS receipt_paper_size TEXT DEFAULT '58mm';
 ALTER TABLE IF EXISTS public.store_settings ADD COLUMN IF NOT EXISTS invoice_prefix TEXT DEFAULT 'INV';
+
+-- 3.1. DIGITAL ATTENDANCE SYSTEM TABLES
+CREATE TABLE IF NOT EXISTS public.attendance_shifts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  late_tolerance_minutes INTEGER DEFAULT 15,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.employee_profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_code TEXT UNIQUE NOT NULL,
+  pin TEXT NOT NULL DEFAULT '1234',
+  full_name TEXT NOT NULL,
+  role_title TEXT NOT NULL DEFAULT 'Barista',
+  assigned_location_type TEXT NOT NULL DEFAULT 'outlet',
+  assigned_location_id UUID,
+  phone TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.attendance_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id UUID REFERENCES public.employee_profiles(id) ON DELETE CASCADE,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  shift_id UUID REFERENCES public.attendance_shifts(id) ON DELETE SET NULL,
+  clock_in TIMESTAMPTZ,
+  clock_out TIMESTAMPTZ,
+  clock_in_lat NUMERIC,
+  clock_in_lng NUMERIC,
+  clock_in_distance_meters INTEGER,
+  status TEXT NOT NULL DEFAULT 'present',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
 -- 4. BERSIHKAN TOTAL SEMUA DATA DUMMY (PRODUK, KATEGORI, TRANSAKSI, SHIFT, LOGISTIK)
 DELETE FROM public.transaction_refund_items;
@@ -124,6 +173,14 @@ ON CONFLICT (id) DO UPDATE SET
   logo_url = EXCLUDED.logo_url,
   updated_at = now();
 
+-- 6.1. MASTER SHIFT KERJA DEFAULT OBAT HAUS
+INSERT INTO public.attendance_shifts (id, name, start_time, end_time, late_tolerance_minutes, is_active)
+VALUES 
+  ('b0000000-0000-0000-0000-000000000001'::uuid, 'Shift Pagi (Outlet)', '08:00', '16:00', 15, true),
+  ('b0000000-0000-0000-0000-000000000002'::uuid, 'Shift Sore / Malam (Outlet)', '15:00', '23:00', 15, true),
+  ('b0000000-0000-0000-0000-000000000003'::uuid, 'Shift Gudang Logistik', '08:30', '17:00', 15, true)
+ON CONFLICT (id) DO NOTHING;
+
 -- 7. BUKA HAK AKSES OPERASIONAL (ADMIN DAPAT MENAMBAH & MENGHAPUS SEMUA DATA LANGSUNG DI SUPABASE)
 DO $$
 DECLARE
@@ -138,7 +195,7 @@ DECLARE
     'recipe_items', 'outlet_stocks', 'stock_ledger', 'cashier_shifts',
     'shift_cash_movements', 'transactions', 'transaction_items', 'transaction_refunds',
     'transaction_refund_items', 'operating_expenses', 'expense_categories', 'audit_logs',
-    'app_notifications'
+    'app_notifications', 'attendance_shifts', 'employee_profiles', 'attendance_logs'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
@@ -162,4 +219,7 @@ BEGIN
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE transactions; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE cashier_shifts; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE app_notifications; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE attendance_shifts; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE employee_profiles; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE attendance_logs; EXCEPTION WHEN duplicate_object THEN NULL; END;
 END $$;

@@ -5,8 +5,10 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
 import { INITIAL_EXPENSE_CATEGORIES } from '@/lib/mock-data';
 import { useAuth } from '@/lib/auth-context';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { ExpenseCategory, OperatingExpense, Outlet } from '@/types/database';
 import { formatRupiah, formatDateTime } from '@/lib/format';
+import { DateRangeCalendarPicker } from '@/components/common/DateRangeCalendarPicker';
 import {
   ReceiptText,
   Plus,
@@ -31,6 +33,8 @@ export default function AdminExpensesPage() {
   const [search, setSearch] = useState('');
   const [selectedOutlet, setSelectedOutlet] = useState('all');
   const [selectedCat, setSelectedCat] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Form Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -65,6 +69,46 @@ export default function AdminExpensesPage() {
 
   useEffect(() => {
     loadData();
+
+    // Listen to local update events (e.g. from POS modal or other components)
+    const handleLocalUpdate = () => loadData();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_expenses_updated', handleLocalUpdate);
+    }
+
+    // Subscribe to Supabase Realtime changes on operating_expenses
+    let realtimeChannel: any = null;
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        realtimeChannel = supabase
+          .channel('obathaus_admin_expenses_realtime')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'operating_expenses' },
+            () => {
+              loadData();
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime expenses subscription error:', err);
+      }
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_expenses_updated', handleLocalUpdate);
+      }
+      if (realtimeChannel && isSupabaseConfigured()) {
+        try {
+          const supabase = createClient();
+          supabase.removeChannel(realtimeChannel);
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
   }, []);
 
   const openAddModal = () => {
@@ -169,7 +213,11 @@ export default function AdminExpensesPage() {
 
     const matchesCat = selectedCat === 'all' || e.category_id === selectedCat;
 
-    return matchesSearch && matchesOutlet && matchesCat;
+    const matchesDate =
+      (!startDate || e.expense_date >= startDate) &&
+      (!endDate || e.expense_date <= endDate);
+
+    return matchesSearch && matchesOutlet && matchesCat && matchesDate;
   });
 
   const totalExpenseSum = filtered.reduce((acc, e) => acc + e.amount, 0);
@@ -230,6 +278,17 @@ export default function AdminExpensesPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Visual Monthly Calendar Date Picker */}
+            <DateRangeCalendarPicker
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(start, end) => {
+                setStartDate(start);
+                setEndDate(end);
+              }}
+              align="right"
+            />
+
             {/* Outlet Filter Dropdown */}
             <select
               value={selectedOutlet}

@@ -5,6 +5,7 @@ import { CashierLayout } from '@/components/layout/CashierLayout';
 import { dbService } from '@/lib/services/database';
 import { useAuth } from '@/lib/auth-context';
 import { useOutlet } from '@/lib/outlet-context';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { ExpenseCategory, OperatingExpense } from '@/types/database';
 import { formatRupiah, formatDateTime } from '@/lib/format';
 import {
@@ -69,6 +70,44 @@ export default function PosExpensesPage() {
 
   useEffect(() => {
     loadData();
+
+    // Listen to local update events
+    const handleLocalUpdate = () => loadData();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_expenses_updated', handleLocalUpdate);
+    }
+
+    // Live WebSockets Realtime Channel for POS expenses
+    let realtimeChannel: any = null;
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        realtimeChannel = supabase
+          .channel('obathaus_pos_expenses_realtime')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'operating_expenses' },
+            () => loadData()
+          )
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime POS expenses subscription error:', err);
+      }
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_expenses_updated', handleLocalUpdate);
+      }
+      if (realtimeChannel && isSupabaseConfigured()) {
+        try {
+          const supabase = createClient();
+          supabase.removeChannel(realtimeChannel);
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
   }, [targetOutletId]);
 
   const openAddModal = () => {

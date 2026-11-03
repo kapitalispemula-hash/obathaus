@@ -181,6 +181,19 @@ VALUES
   ('b0000000-0000-0000-0000-000000000003'::uuid, 'Shift Gudang Logistik', '08:30', '17:00', 15, true)
 ON CONFLICT (id) DO NOTHING;
 
+-- 6.2. KATEGORI PENGELUARAN OPERASIONAL DEFAULT
+INSERT INTO public.expense_categories (id, category_name, description, is_active)
+VALUES 
+  ('22222222-0000-0000-0000-000000000001'::uuid, 'Sewa & Utilitas', 'Biaya sewa gedung, listrik, air PAM, dan internet broadband', true),
+  ('22222222-0000-0000-0000-000000000002'::uuid, 'Gaji & Kesejahteraan', 'Gaji barista, uang makan operasional, bonus penjualan', true),
+  ('22222222-0000-0000-0000-000000000003'::uuid, 'Bahan Operasional Toko', 'Cup takeaway, sedotan ramah lingkungan, tissue, sabun sanitasi', true),
+  ('22222222-0000-0000-0000-000000000004'::uuid, 'Pemasaran & Konten', 'Promosi media sosial Instagram/TikTok, banner promo, influencer', true),
+  ('22222222-0000-0000-0000-000000000005'::uuid, 'Pemeliharaan & Perbaikan', 'Servis mesin espresso, grinder, AC outlet, peralatan bar', true)
+ON CONFLICT (id) DO UPDATE SET
+  category_name = EXCLUDED.category_name,
+  description = EXCLUDED.description,
+  is_active = true;
+
 -- 7. BUKA HAK AKSES OPERASIONAL (ADMIN DAPAT MENAMBAH & MENGHAPUS SEMUA DATA LANGSUNG DI SUPABASE)
 DO $$
 DECLARE
@@ -222,6 +235,8 @@ BEGIN
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE warehouse_stocks; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE outlet_stocks; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE transactions; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE operating_expenses; EXCEPTION WHEN duplicate_object THEN NULL; END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE expense_categories; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE cashier_shifts; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE app_notifications; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE attendance_shifts; EXCEPTION WHEN duplicate_object THEN NULL; END;

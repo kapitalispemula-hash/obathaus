@@ -1186,7 +1186,57 @@ export const dbService = {
   // OPERATING EXPENSES
   // =========================================================================
   async getExpenseCategories(): Promise<ExpenseCategory[]> {
-    return [...localExpenseCategories];
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('expense_categories')
+          .select('*')
+          .order('category_name');
+        if (!error && data && data.length > 0) {
+          localExpenseCategories = data as ExpenseCategory[];
+          setStorageItem(STORAGE_KEYS.EXPENSE_CATEGORIES, localExpenseCategories);
+          return localExpenseCategories;
+        }
+        // Auto-seed if table is empty in Supabase
+        if (!error && (!data || data.length === 0)) {
+          const { data: inserted, error: insErr } = await supabase
+            .from('expense_categories')
+            .upsert(INITIAL_EXPENSE_CATEGORIES, { onConflict: 'id' })
+            .select();
+          if (!insErr && inserted && inserted.length > 0) {
+            localExpenseCategories = inserted as ExpenseCategory[];
+            setStorageItem(STORAGE_KEYS.EXPENSE_CATEGORIES, localExpenseCategories);
+            return localExpenseCategories;
+          }
+        }
+        if (error) console.warn('Supabase getExpenseCategories error:', error);
+      } catch (e) {
+        console.warn('Falling back to local getExpenseCategories:', e);
+      }
+    }
+    return getStorageItem<ExpenseCategory[]>(STORAGE_KEYS.EXPENSE_CATEGORIES, localExpenseCategories);
+  },
+
+  async createExpenseCategory(category: { category_name: string; description?: string }): Promise<ExpenseCategory> {
+    const newCat: ExpenseCategory = {
+      id: crypto.randomUUID(),
+      category_name: category.category_name.trim(),
+      description: category.description?.trim() || null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    };
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('expense_categories').insert([newCat]);
+      } catch (e) {
+        console.warn('Fallback to local for createExpenseCategory:', e);
+      }
+    }
+    localExpenseCategories.push(newCat);
+    setStorageItem(STORAGE_KEYS.EXPENSE_CATEGORIES, localExpenseCategories);
+    return newCat;
   },
 
   async getOperatingExpenses(filter?: {
@@ -1195,11 +1245,68 @@ export const dbService = {
     outletId?: string;
     categoryId?: string;
   }): Promise<OperatingExpense[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase.from('operating_expenses').select('*');
+
+        if (filter?.outletId && filter.outletId !== 'all') {
+          query = query.eq('outlet_id', filter.outletId);
+        }
+        if (filter?.categoryId && filter.categoryId !== 'all') {
+          query = query.eq('category_id', filter.categoryId);
+        }
+        if (filter?.startDate) {
+          query = query.gte('expense_date', filter.startDate);
+        }
+        if (filter?.endDate) {
+          query = query.lte('expense_date', filter.endDate);
+        }
+
+        query = query.order('expense_date', { ascending: false }).order('created_at', { ascending: false });
+
+        const { data, error } = await query;
+        if (!error && data) {
+          const [categories, outlets, profiles] = await Promise.all([
+            this.getExpenseCategories(),
+            this.getOutlets(),
+            this.getProfiles(),
+          ]);
+
+          const hydrated: OperatingExpense[] = data.map((exp: any) => ({
+            id: exp.id,
+            category_id: exp.category_id,
+            outlet_id: exp.outlet_id || null,
+            title: exp.title,
+            amount: Number(exp.amount),
+            expense_date: exp.expense_date,
+            description: exp.description || null,
+            created_by: exp.created_by || null,
+            created_at: exp.created_at,
+            updated_at: exp.updated_at,
+            category: categories.find((c) => c.id === exp.category_id),
+            outlet: outlets.find((o) => o.id === exp.outlet_id),
+            creator: profiles.find((p) => p.id === exp.created_by),
+          }));
+
+          localOperatingExpenses = hydrated;
+          setStorageItem(STORAGE_KEYS.EXPENSES, localOperatingExpenses);
+          return hydrated;
+        }
+        if (error) console.warn('Supabase getOperatingExpenses error:', error);
+      } catch (e) {
+        console.warn('Falling back to local getOperatingExpenses:', e);
+      }
+    }
+
+    // Local / Offline fallback
     const outlets = await this.getOutlets();
-    let list = localOperatingExpenses.map((e) => ({
+    const categories = await this.getExpenseCategories();
+    const profiles = await this.getProfiles();
+    let list = getStorageItem<OperatingExpense[]>(STORAGE_KEYS.EXPENSES, localOperatingExpenses).map((e) => ({
       ...e,
-      category: localExpenseCategories.find((c) => c.id === e.category_id),
-      creator: localProfiles.find((p) => p.id === e.created_by),
+      category: categories.find((c) => c.id === e.category_id),
+      creator: profiles.find((p) => p.id === e.created_by),
       outlet: outlets.find((o) => o.id === e.outlet_id),
     }));
     if (filter?.outletId && filter.outletId !== 'all') {
@@ -1219,13 +1326,69 @@ export const dbService = {
 
   async createOperatingExpense(expense: Omit<OperatingExpense, 'id' | 'created_at' | 'updated_at'>): Promise<OperatingExpense> {
     if (expense.amount <= 0) throw new Error('Nominal pengeluaran harus lebih besar dari 0.');
+    const newExpId = crypto.randomUUID();
+    const now = new Date().toISOString();
     const newExp: OperatingExpense = {
       ...expense,
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      id: newExpId,
+      created_at: now,
+      updated_at: now,
     };
-    localOperatingExpenses.unshift(newExp);
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await this.getExpenseCategories(); // Ensure default categories exist
+
+        const insertPayload: any = {
+          id: newExp.id,
+          category_id: newExp.category_id,
+          outlet_id: newExp.outlet_id || null,
+          title: newExp.title,
+          amount: newExp.amount,
+          expense_date: newExp.expense_date,
+          description: newExp.description || null,
+          created_at: newExp.created_at,
+          updated_at: newExp.updated_at,
+        };
+
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (newExp.created_by && uuidRegex.test(newExp.created_by)) {
+          insertPayload.created_by = newExp.created_by;
+        } else {
+          insertPayload.created_by = null;
+        }
+
+        let { data, error } = await supabase
+          .from('operating_expenses')
+          .insert([insertPayload])
+          .select()
+          .single();
+
+        if (error && error.message?.includes('foreign key constraint') && insertPayload.created_by) {
+          // Retry with created_by = null if profiles foreign key fails
+          insertPayload.created_by = null;
+          const retry = await supabase.from('operating_expenses').insert([insertPayload]).select().single();
+          data = retry.data;
+          error = retry.error;
+        }
+
+        if (error) {
+          console.error('Supabase createOperatingExpense error:', error);
+          throw error;
+        }
+      } catch (e) {
+        console.warn('Falling back to local for createOperatingExpense:', e);
+      }
+    }
+
+    localOperatingExpenses = [newExp, ...localOperatingExpenses.filter((e) => e.id !== newExp.id)];
+    setStorageItem(STORAGE_KEYS.EXPENSES, localOperatingExpenses);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('obathaus_expenses_updated'));
+    }
+
     const outlets = await this.getOutlets();
     const outlet = outlets.find((o) => o.id === newExp.outlet_id);
 
@@ -1244,35 +1407,83 @@ export const dbService = {
       console.warn('Gagal memicu notifikasi pengeluaran:', e);
     }
 
+    const categories = await this.getExpenseCategories();
+    const profiles = await this.getProfiles();
+
     return {
       ...newExp,
-      category: localExpenseCategories.find((c) => c.id === newExp.category_id),
-      creator: localProfiles.find((p) => p.id === newExp.created_by),
+      category: categories.find((c) => c.id === newExp.category_id),
+      creator: profiles.find((p) => p.id === newExp.created_by),
       outlet,
     };
   },
 
   async updateOperatingExpense(id: string, updates: Partial<OperatingExpense>): Promise<OperatingExpense> {
-    const idx = localOperatingExpenses.findIndex((e) => e.id === id);
-    if (idx === -1) throw new Error('Pengeluaran tidak ditemukan.');
     if (updates.amount !== undefined && updates.amount <= 0) {
       throw new Error('Nominal pengeluaran harus lebih besar dari 0.');
     }
-    localOperatingExpenses[idx] = {
-      ...localOperatingExpenses[idx],
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
-    const outlets = await this.getOutlets();
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const payload: any = {
+          updated_at: new Date().toISOString(),
+        };
+        if (updates.category_id !== undefined) payload.category_id = updates.category_id;
+        if (updates.outlet_id !== undefined) payload.outlet_id = updates.outlet_id || null;
+        if (updates.title !== undefined) payload.title = updates.title;
+        if (updates.amount !== undefined) payload.amount = updates.amount;
+        if (updates.expense_date !== undefined) payload.expense_date = updates.expense_date;
+        if (updates.description !== undefined) payload.description = updates.description || null;
+
+        const { error } = await supabase.from('operating_expenses').update(payload).eq('id', id);
+        if (error) console.error('Supabase updateOperatingExpense error:', error);
+      } catch (e) {
+        console.warn('Falling back to local for updateOperatingExpense:', e);
+      }
+    }
+
+    const idx = localOperatingExpenses.findIndex((e) => e.id === id);
+    if (idx !== -1) {
+      localOperatingExpenses[idx] = {
+        ...localOperatingExpenses[idx],
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+      setStorageItem(STORAGE_KEYS.EXPENSES, localOperatingExpenses);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('obathaus_expenses_updated'));
+    }
+
+    const [categories, outlets] = await Promise.all([this.getExpenseCategories(), this.getOutlets()]);
+    const current = localOperatingExpenses.find((e) => e.id === id) || (updates as OperatingExpense);
     return {
-      ...localOperatingExpenses[idx],
-      category: localExpenseCategories.find((c) => c.id === localOperatingExpenses[idx].category_id),
-      outlet: outlets.find((o) => o.id === localOperatingExpenses[idx].outlet_id),
+      ...current,
+      category: categories.find((c) => c.id === current.category_id),
+      outlet: outlets.find((o) => o.id === current.outlet_id),
     };
   },
 
   async deleteOperatingExpense(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { error } = await supabase.from('operating_expenses').delete().eq('id', id);
+        if (error) console.error('Supabase deleteOperatingExpense error:', error);
+      } catch (e) {
+        console.warn('Falling back to local for deleteOperatingExpense:', e);
+      }
+    }
+
     localOperatingExpenses = localOperatingExpenses.filter((e) => e.id !== id);
+    setStorageItem(STORAGE_KEYS.EXPENSES, localOperatingExpenses);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('obathaus_expenses_updated'));
+    }
+
     return true;
   },
 
@@ -1410,15 +1621,12 @@ export const dbService = {
     // 5. Operating Expenses
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
-    const validExpenses = localOperatingExpenses.filter((e) => {
-      const inDateRange = e.expense_date >= startDateStr && e.expense_date <= endDateStr;
-      if (!inDateRange) return false;
-      if (outletId && outletId !== 'all') {
-        return e.outlet_id === outletId;
-      }
-      return true;
+    const validExpenses = await this.getOperatingExpenses({
+      startDate: startDateStr,
+      endDate: endDateStr,
+      outletId: outletId && outletId !== 'all' ? outletId : undefined,
     });
-    const operatingExpenses = validExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const operatingExpenses = validExpenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
 
     // 6. Net Operating Profit (Keuntungan Bersih Operasional)
     const netOperatingProfit = grossProfit - operatingExpenses;

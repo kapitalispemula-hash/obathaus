@@ -146,23 +146,25 @@ export default function MobileAttendancePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // When currentEmployee is active, load today's log & location & shifts
+  // When currentEmployee is active, load today's log & location & shifts & recent history
   useEffect(() => {
     if (!currentEmployee) return;
 
     async function loadEmployeeData() {
       try {
-        const [today, shiftList, loc] = await Promise.all([
+        const [today, shiftList, loc, logs] = await Promise.all([
           attendanceService.getTodayAttendance(currentEmployee!.id),
           attendanceService.getShifts(),
           attendanceService.getLocationTarget(
             currentEmployee!.assigned_location_type,
             currentEmployee!.assigned_location_id
           ),
+          attendanceService.getAllAttendanceLogs({ employeeId: currentEmployee!.id }),
         ]);
         setTodayLog(today);
         setShifts(shiftList);
         setLocationTarget(loc);
+        setEmployeeLogs(logs);
 
         // Fetch GPS coordinates
         refreshGps(loc);
@@ -174,12 +176,12 @@ export default function MobileAttendancePage() {
     loadEmployeeData();
   }, [currentEmployee]);
 
-  // When switching to History tab, load logs
+  // When switching to History tab, refresh logs
   useEffect(() => {
     if (activeTab === 'history' && currentEmployee) {
       loadHistory();
     }
-  }, [activeTab, currentEmployee]);
+  }, [activeTab]);
 
   const loadHistory = async () => {
     if (!currentEmployee) return;
@@ -243,7 +245,6 @@ export default function MobileAttendancePage() {
     setLoginError(null);
 
     try {
-      // First attempt with provided PIN (default 1234)
       const pinToUse = loginPin.trim() || '1234';
       const res = await attendanceService.loginEmployee(loginCode, pinToUse);
 
@@ -253,12 +254,10 @@ export default function MobileAttendancePage() {
         localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
         setLoginCode('');
       } else {
-        // Check if employee code actually exists
         const match = allEmployees.find(
           (emp) => emp.employee_code.toUpperCase() === loginCode.trim().toUpperCase()
         );
         if (match) {
-          // If code exists but PIN was custom
           setLoginError('PIN Karyawan tidak cocok. Hubungi admin atau masukkan PIN Anda.');
         } else {
           setLoginError(res.error || 'ID Karyawan tidak terdaftar dalam sistem.');
@@ -270,7 +269,6 @@ export default function MobileAttendancePage() {
   };
 
   const handleBiometricLogin = async () => {
-    // If loginCode is filled, verify directly
     if (loginCode.trim()) {
       setIsLoggingIn(true);
       setBiometricSuccess(true);
@@ -282,7 +280,6 @@ export default function MobileAttendancePage() {
       return;
     }
 
-    // Check if there is a saved employee in local storage
     const savedId = localStorage.getItem(SAVED_EMP_ID_KEY);
     if (savedId) {
       const match = allEmployees.find((e) => e.id === savedId);
@@ -299,7 +296,6 @@ export default function MobileAttendancePage() {
       }
     }
 
-    // Otherwise, open quick biometric employee picker
     setIsBiometricPromptOpen(true);
   };
 
@@ -345,6 +341,7 @@ export default function MobileAttendancePage() {
       const res = await attendanceService.clockIn(currentEmployee.id, userGps.lat, userGps.lng);
       if (res.success && res.log) {
         setTodayLog(res.log);
+        setEmployeeLogs((prev) => [res.log!, ...prev.filter((l) => l.id !== res.log!.id)]);
         setActionSuccessMsg(`Absen Masuk Berhasil! ${res.log.status === 'late' ? 'Status: Terlambat' : 'Status: Tepat Waktu'}.`);
       } else {
         setActionErrorMsg(res.error || 'Gagal melakukan absen masuk.');
@@ -369,6 +366,7 @@ export default function MobileAttendancePage() {
       const res = await attendanceService.clockOut(todayLog.id);
       if (res.success && res.log) {
         setTodayLog(res.log);
+        setEmployeeLogs((prev) => [res.log!, ...prev.filter((l) => l.id !== res.log!.id)]);
         setActionSuccessMsg('Absen Pulang Berhasil! Terima kasih atas dedikasi kerja Anda hari ini.');
       } else {
         setActionErrorMsg(res.error || 'Gagal melakukan absen pulang.');
@@ -397,6 +395,7 @@ export default function MobileAttendancePage() {
       );
       if (res.success && res.log) {
         setTodayLog(res.log);
+        setEmployeeLogs((prev) => [res.log!, ...prev.filter((l) => l.id !== res.log!.id)]);
         setIsAbsenceModalOpen(false);
         setAbsenceNotes('');
         setActionSuccessMsg(`Laporan ${absenceType === 'sick' ? 'Sakit' : 'Izin'} berhasil direkam.`);
@@ -459,7 +458,6 @@ export default function MobileAttendancePage() {
       <div className="min-h-screen bg-[#FF6600] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden px-8 py-12">
         {/* Top Logo & App Title Section */}
         <div className="flex-1 flex flex-col justify-center items-start space-y-6 pt-10">
-          {/* White Obat Haus Logo */}
           <div className="w-56 max-w-[80%]">
             <img
               src="/logo-white-transparent.png"
@@ -468,7 +466,6 @@ export default function MobileAttendancePage() {
             />
           </div>
 
-          {/* Three Lines of Crisp Typography */}
           <div className="text-white space-y-1 text-left">
             <h2 className="text-[26px] sm:text-[30px] font-normal leading-tight tracking-normal">
               Aplikasi Absensi
@@ -507,7 +504,6 @@ export default function MobileAttendancePage() {
       <div className="min-h-screen bg-[#FF6600] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden">
         {/* Top Section (~62% Height): Solid Orange with White Logo & Text */}
         <div className="flex-1 flex flex-col justify-center items-start px-8 pt-8 pb-4 relative">
-          {/* Subtle back button to view Onboarding */}
           <button
             onClick={() => setHasSeenOnboarding(false)}
             className="absolute top-6 left-6 p-2 text-white/80 hover:text-white transition-colors cursor-pointer"
@@ -516,7 +512,6 @@ export default function MobileAttendancePage() {
             <ChevronLeft className="w-6 h-6" />
           </button>
 
-          {/* White Logo */}
           <div className="w-52 max-w-[75%] mb-4">
             <img
               src="/logo-white-transparent.png"
@@ -525,7 +520,6 @@ export default function MobileAttendancePage() {
             />
           </div>
 
-          {/* App Title Text */}
           <div className="text-white space-y-1 text-left">
             <h2 className="text-[24px] sm:text-[28px] font-normal leading-tight tracking-normal">
               Aplikasi Absensi
@@ -556,7 +550,6 @@ export default function MobileAttendancePage() {
           )}
 
           <form onSubmit={handleLogin} className="space-y-3.5">
-            {/* Input "Masukkan ID" */}
             <div className="relative">
               <input
                 type="text"
@@ -568,7 +561,6 @@ export default function MobileAttendancePage() {
               />
             </div>
 
-            {/* Row: Button "Masuk" + Fingerprint Biometric Icon */}
             <div className="flex items-center gap-3">
               <button
                 type="submit"
@@ -593,7 +585,6 @@ export default function MobileAttendancePage() {
             </div>
           </form>
 
-          {/* Quick Demo Selector Chips for Testing Convenience */}
           <div className="pt-2 border-t border-slate-100">
             <span className="text-[10px] text-slate-400 font-semibold block text-center mb-1.5 uppercase tracking-wider">
               Pilih Akun Demo Cepat:
@@ -679,7 +670,7 @@ export default function MobileAttendancePage() {
   }
 
   // --------------------------------------------------------------------------
-  // DASHBOARD LIGHT THEME (AUTHENTICATED EMPLOYEE)
+  // DASHBOARD LAYOUT (MATCHING MOCKUP: HERO BANNER + 3 CARDS + ACTIONS + FLOATING DOCK)
   // --------------------------------------------------------------------------
 
   const maxAllowedRadius = locationTarget?.radius_meters || 100;
@@ -687,56 +678,18 @@ export default function MobileAttendancePage() {
   const isAlreadyClockedIn = Boolean(todayLog && todayLog.clock_in);
   const isAlreadyClockedOut = Boolean(todayLog && todayLog.clock_out);
   const isReportedAbsence = Boolean(todayLog && (todayLog.status === 'sick' || todayLog.status === 'leave'));
-
-  // Active Shift Resolution
   const activeShift = shifts.find((s) => s.is_active) || shifts[0];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-between max-w-md mx-auto shadow-xl relative select-none border-x border-slate-200/80">
-      {/* 1. TOP APP BAR (LIGHT THEME) */}
-      <header className="px-5 pt-4 pb-3.5 bg-white border-b border-slate-200/80 flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
-        <div className="flex items-center gap-3">
-          {/* Avatar with Initials */}
-          <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-200 text-[#FF6600] flex items-center justify-center font-black text-sm shadow-xs shrink-0">
-            {currentEmployee.full_name
-              .split(' ')
-              .map((n) => n[0])
-              .slice(0, 2)
-              .join('')
-              .toUpperCase()}
-          </div>
-          <div>
-            <h3 className="font-extrabold text-xs sm:text-sm text-slate-900 leading-tight">
-              Halo, {currentEmployee.full_name.split(' ')[0]} 👋
-            </h3>
-            <p className="text-[11px] font-medium text-slate-500 leading-tight mt-0.5">
-              {currentEmployee.role_title} • <span className="font-bold text-slate-700">{locationTarget?.name || 'Cabang'}</span>
-            </p>
-          </div>
-        </div>
-
-        {/* GPS Indicator & Refresh */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => refreshGps()}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition-colors cursor-pointer"
-            title="Klik untuk segarkan GPS"
-          >
-            <div className={`w-2 h-2 rounded-full ${isWithinGps ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            <RefreshCw className={`w-3 h-3 ${isGettingGps ? 'animate-spin text-[#FF6600]' : ''}`} />
-            <span className="hidden sm:inline">{isGettingGps ? 'Mencari...' : `${gpsDistance !== null ? `${gpsDistance}m` : 'GPS'}`}</span>
-          </button>
-        </div>
-      </header>
-
-      {/* 2. BODY CONTENT (SCROLLABLE) */}
-      <main className="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
-        {/* Action Alerts */}
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-between max-w-md mx-auto shadow-2xl relative select-none border-x border-slate-200/80">
+      {/* SCROLLABLE MAIN CONTENT */}
+      <main className="flex-1 overflow-y-auto pb-28">
+        {/* Action Alerts (Fixed under header) */}
         {actionSuccessMsg && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+          <div className="m-3 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="font-medium">{actionSuccessMsg}</span>
+              <span className="font-semibold">{actionSuccessMsg}</span>
             </div>
             <button onClick={() => setActionSuccessMsg(null)} className="text-emerald-700 hover:text-emerald-900">
               <X className="w-4 h-4" />
@@ -745,10 +698,10 @@ export default function MobileAttendancePage() {
         )}
 
         {actionErrorMsg && (
-          <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+          <div className="m-3 p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-              <span className="font-medium">{actionErrorMsg}</span>
+              <span className="font-semibold">{actionErrorMsg}</span>
             </div>
             <button onClick={() => setActionErrorMsg(null)} className="text-red-700 hover:text-red-900">
               <X className="w-4 h-4" />
@@ -756,200 +709,271 @@ export default function MobileAttendancePage() {
           </div>
         )}
 
-        {/* ------------------------------------------------------------------ */}
-        {/* TAB 1: ABSEN (HOME) */}
-        {/* ------------------------------------------------------------------ */}
+        {/* ================================================================ */}
+        {/* TAB 1: ABSEN (HOME) — LAYOUT MATCHING USER'S MOCKUP EXACTLY      */}
+        {/* ================================================================ */}
         {activeTab === 'home' && (
-          <div className="space-y-4">
-            {/* Card 1: Live Digital Clock & Geofence Status */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 text-[#FF6600] text-[11px] font-bold border border-orange-100">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>{activeShift?.name || 'Shift Harian'}</span>
-                </span>
-                <span className="text-[11px] font-bold text-slate-500 font-mono">
-                  {activeShift ? `${activeShift.start_time} - ${activeShift.end_time} WITA` : ''}
-                </span>
+          <div className="space-y-5">
+            {/* 1. TOP HERO BANNER (OBAT HAUS ORANGE WITH ROUNDED BOTTOM) */}
+            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg relative overflow-hidden">
+              {/* Header Row: Avatar & Name on Left, GPS Status on Right */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0">
+                    {currentEmployee.full_name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-white/80 text-[11px] font-medium leading-tight">Selamat Datang,</p>
+                    <h3 className="text-white font-black text-sm sm:text-base leading-tight">
+                      {currentEmployee.full_name}
+                    </h3>
+                  </div>
+                </div>
+
+                {/* GPS Status & Refresh Button */}
+                <button
+                  onClick={() => refreshGps()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold backdrop-blur-md transition-all cursor-pointer border border-white/20"
+                  title="Segarkan Koordinat GPS"
+                >
+                  <div className={`w-2 h-2 rounded-full ${isWithinGps ? 'bg-emerald-300 animate-pulse' : 'bg-amber-300'}`} />
+                  <span>{isGettingGps ? 'Mencari...' : `${gpsDistance !== null ? `${gpsDistance}m` : 'GPS'}`}</span>
+                  <RefreshCw className={`w-3 h-3 ${isGettingGps ? 'animate-spin' : ''}`} />
+                </button>
               </div>
 
-              {/* Big Digital Clock Display */}
-              <div className="text-center py-2">
-                <h1 className="text-4xl sm:text-5xl font-black text-slate-900 tracking-tight font-mono">
-                  {currentTime.toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                  })}
-                </h1>
-                <p className="text-xs font-semibold text-slate-500 mt-1 capitalize">
-                  {currentTime.toLocaleDateString('id-ID', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
+              {/* Main Headline & Digital Clock Display */}
+              <div className="space-y-1 mb-5">
+                <p className="text-white/80 text-xs font-semibold tracking-wide uppercase">
+                  {locationTarget?.name || 'Cabang OBAT HAUS'} • {activeShift?.name || 'Shift Harian'}
                 </p>
-              </div>
-
-              {/* Geofence Location Status Bar */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                    <MapPin className="w-4 h-4 text-[#FF6600]" />
-                    <span className="truncate max-w-[200px]">{locationTarget?.name || 'Cabang Belum Ditentukan'}</span>
-                  </div>
-                  <span
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
-                      isWithinGps
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {isWithinGps ? '✓ Dalam Radius' : 'Luar Radius'}
+                <div className="flex items-baseline justify-between">
+                  <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight font-mono">
+                    {currentTime.toLocaleTimeString('id-ID', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })} <span className="text-sm font-normal text-white/80">WITA</span>
+                  </h1>
+                  <span className="text-xs font-bold text-white/90 capitalize">
+                    {currentTime.toLocaleDateString('id-ID', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    })}
                   </span>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                  <span>Jarak Anda: <strong className="text-slate-800">{gpsDistance !== null ? `${gpsDistance} meter` : 'Mendeteksi...'}</strong></span>
-                  <span>Batas Maks: <strong>{maxAllowedRadius} meter</strong></span>
+              {/* 3 Horizontal Quick Status Cards (Like Mockup) */}
+              <div className="grid grid-cols-3 gap-2.5 pt-1">
+                {/* Card 1: Shift */}
+                <div className="bg-white rounded-[20px] p-3 text-slate-900 shadow-md flex flex-col justify-between">
+                  <div className="w-7 h-7 rounded-lg bg-orange-50 text-[#FF6600] flex items-center justify-center mb-1.5">
+                    <Coffee className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Shift</span>
+                    <span className="text-xs font-black text-slate-900 truncate block mt-0.5">
+                      {activeShift?.start_time || '08:00'}
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-medium truncate block">s/d {activeShift?.end_time || '16:00'}</span>
+                  </div>
+                </div>
+
+                {/* Card 2: Jam Masuk */}
+                <div className="bg-white rounded-[20px] p-3 text-slate-900 shadow-md flex flex-col justify-between">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Masuk</span>
+                    <span className="text-xs font-black text-slate-900 truncate block mt-0.5 font-mono">
+                      {todayLog?.clock_in || '--:--'}
+                    </span>
+                    <span className={`text-[9px] font-bold truncate block ${todayLog?.status === 'late' ? 'text-amber-600' : todayLog?.clock_in ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {todayLog?.status === 'late' ? 'Terlambat' : todayLog?.clock_in ? 'Tepat Waktu' : 'Belum Absen'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 3: Radius GPS */}
+                <div className="bg-white rounded-[20px] p-3 text-slate-900 shadow-md flex flex-col justify-between">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-1.5">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Radius</span>
+                    <span className="text-xs font-black text-slate-900 truncate block mt-0.5 font-mono">
+                      {gpsDistance !== null ? `${gpsDistance}m` : '...'}
+                    </span>
+                    <span className={`text-[9px] font-bold truncate block ${isWithinGps ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {isWithinGps ? '✓ Dalam Radius' : 'Luar Radius'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Card 2: Primary Clock In / Clock Out Action */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-              <h3 className="font-extrabold text-xs uppercase tracking-wider text-slate-500">
-                Perekaman Kehadiran Hari Ini
-              </h3>
+            {/* 2. BODY CONTENT SECTION (WHITE CANVAS) */}
+            <div className="px-5 space-y-6">
+              {/* SECTION A: AÇÕES (AKSI KEHADIRAN) */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                  Aksi Kehadiran
+                </h3>
 
-              {isReportedAbsence ? (
-                <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-center space-y-1">
-                  <span className="font-black text-sm text-blue-900 block">
-                    Status: {todayLog?.status === 'sick' ? 'Sakit' : 'Izin'}
-                  </span>
-                  <p className="text-xs text-blue-700">
-                    Catatan: &ldquo;{todayLog?.notes}&rdquo;
-                  </p>
-                </div>
-              ) : isAlreadyClockedOut ? (
-                <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-sm">
-                    <Check className="w-6 h-6 stroke-[3]" />
-                  </div>
-                  <h4 className="font-black text-base text-emerald-950">
-                    Kehadiran Hari Ini Lengkap!
-                  </h4>
-                  <p className="text-xs text-emerald-800">
-                    Masuk: <strong>{todayLog?.clock_in}</strong> • Pulang: <strong>{todayLog?.clock_out}</strong>
-                  </p>
-                  <p className="text-[11px] text-emerald-700">
-                    Terima kasih atas dedikasi kerja keras Anda hari ini.
-                  </p>
-                </div>
-              ) : isAlreadyClockedIn ? (
-                <div className="space-y-3">
-                  <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between">
+                {isReportedAbsence ? (
+                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex items-center gap-3">
+                    <HeartPulse className="w-5 h-5 text-blue-600 shrink-0" />
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
-                        Absen Masuk Tercatat
-                      </span>
-                      <h4 className="font-black text-lg text-emerald-950">
-                        {todayLog?.clock_in} WITA
+                      <h4 className="text-xs font-bold text-blue-900">
+                        Laporan {todayLog?.status === 'sick' ? 'Sakit' : 'Izin'} Tercatat
                       </h4>
-                      <span className="text-[11px] font-semibold text-emerald-800">
-                        Status: {todayLog?.status === 'late' ? '⚠️ Terlambat' : '✓ Tepat Waktu'}
-                      </span>
-                    </div>
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-bold">
-                      <Check className="w-5 h-5 stroke-[2.5]" />
+                      <p className="text-[11px] text-blue-700 italic">&ldquo;{todayLog?.notes}&rdquo;</p>
                     </div>
                   </div>
-
-                  <button
-                    onClick={handleClockOut}
-                    disabled={isSubmittingAction}
-                    className="w-full py-4 bg-red-600 hover:bg-red-700 active:scale-98 text-white font-extrabold text-sm sm:text-base rounded-2xl shadow-lg shadow-red-600/20 transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    {isSubmittingAction ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>
-                        <LogOut className="w-5 h-5" />
-                        <span>Absen Pulang (Clock Out)</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <button
-                    onClick={handleClockIn}
-                    disabled={isSubmittingAction}
-                    className="w-full py-4 bg-[#FF6600] hover:bg-[#EA580C] active:scale-98 text-white font-black text-base rounded-2xl shadow-xl shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    {isSubmittingAction ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>
-                        <Clock className="w-5 h-5 stroke-[2.5]" />
-                        <span>ABSEN MASUK SEKARANG</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="text-center pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsAbsenceModalOpen(true)}
-                      className="text-xs font-bold text-slate-500 hover:text-[#FF6600] transition-colors cursor-pointer"
-                    >
-                      Ajukan Izin / Sakit Hari Ini →
-                    </button>
+                ) : isAlreadyClockedOut ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold shadow-xs">
+                        <Check className="w-5 h-5 stroke-[3]" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-emerald-950">Kehadiran Hari Ini Selesai</h4>
+                        <p className="text-[11px] text-emerald-700">Masuk: {todayLog?.clock_in} • Pulang: {todayLog?.clock_out}</p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="flex items-center gap-2.5">
+                    {/* Primary Pill Button (Clock In or Clock Out) */}
+                    {isAlreadyClockedIn ? (
+                      <button
+                        onClick={handleClockOut}
+                        disabled={isSubmittingAction}
+                        className="flex-1 py-3.5 px-4 bg-red-600 hover:bg-red-700 active:scale-98 text-white rounded-2xl text-xs sm:text-sm font-black shadow-md shadow-red-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        {isSubmittingAction ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <>
+                            <LogOut className="w-4 h-4" />
+                            <span>Absen Pulang (Clock Out)</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleClockIn}
+                        disabled={isSubmittingAction}
+                        className="flex-1 py-3.5 px-4 bg-[#FF6600] hover:bg-[#EA580C] active:scale-98 text-white rounded-2xl text-xs sm:text-sm font-black shadow-md shadow-orange-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        {isSubmittingAction ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <>
+                            <Clock className="w-4 h-4 stroke-[2.5]" />
+                            <span>Absen Masuk (Clock In)</span>
+                          </>
+                        )}
+                      </button>
+                    )}
 
-            {/* Card 3: Today's 4 Summary Metrics */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Jam Masuk</span>
-                <span className="text-base font-black text-slate-900 mt-1 block font-mono">
-                  {todayLog?.clock_in || '--:--'}
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  {todayLog?.status === 'late' ? 'Terlambat' : todayLog?.clock_in ? 'Tepat Waktu' : 'Belum absen'}
-                </span>
+                    {/* Secondary Action Pill Button */}
+                    {!isAlreadyClockedOut && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAbsenceModalOpen(true)}
+                        className="py-3.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                      >
+                        <HeartPulse className="w-4 h-4 text-[#FF6600]" />
+                        <span>Izin / Sakit</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Jam Pulang</span>
-                <span className="text-base font-black text-slate-900 mt-1 block font-mono">
-                  {todayLog?.clock_out || '--:--'}
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  {todayLog?.clock_out ? 'Sudah pulang' : 'Belum absen pulang'}
-                </span>
+              {/* SECTION B: ÚLTIMAS TRANSAÇÕES (RIWAYAT AKTIVITAS TERAKHIR) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                    Riwayat Terakhir
+                  </h3>
+                  <button
+                    onClick={() => setActiveTab('history')}
+                    className="text-xs font-bold text-[#FF6600] hover:text-[#EA580C] flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>Lihat Semua</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {employeeLogs.slice(0, 3).length === 0 ? (
+                  <div className="p-4 bg-white rounded-2xl border border-slate-200 text-center text-xs text-slate-400">
+                    Belum ada riwayat absensi sebelumnya.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {employeeLogs.slice(0, 3).map((log) => (
+                      <div
+                        key={log.id}
+                        className="p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between hover:border-slate-300 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#FF6600] flex items-center justify-center shrink-0">
+                            <Coffee className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900">{log.date}</h4>
+                            <p className="text-[10px] text-slate-500">
+                              {log.status === 'present'
+                                ? '✓ Tepat Waktu'
+                                : log.status === 'late'
+                                ? '⚠️ Terlambat'
+                                : log.status === 'sick'
+                                ? '🤒 Sakit'
+                                : '📝 Izin'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-mono font-bold text-slate-800 block">
+                            {log.clock_in || '-'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {log.clock_out ? `s/d ${log.clock_out}` : 'Belum pulang'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* ------------------------------------------------------------------ */}
-        {/* TAB 2: JADWAL SHIFT */}
-        {/* ------------------------------------------------------------------ */}
+        {/* ================================================================ */}
+        {/* TAB 2: JADWAL SHIFT KERJA                                       */}
+        {/* ================================================================ */}
         {activeTab === 'schedule' && (
           <div className="space-y-4">
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-              <h3 className="font-black text-sm text-slate-900">Jadwal Shift Kerja Anda</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Shift standar yang berlaku untuk lokasi penugasan: <strong className="text-slate-700">{locationTarget?.name}</strong>.
+            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg">
+              <h2 className="text-lg font-black">Jadwal Shift Kerja</h2>
+              <p className="text-xs text-white/80 mt-0.5">
+                Penugasan lokasi: <strong className="text-white">{locationTarget?.name}</strong>
               </p>
             </div>
 
-            <div className="space-y-3">
-              {shifts.map((s, idx) => (
+            <div className="p-5 space-y-3">
+              {shifts.map((s) => (
                 <div
                   key={s.id}
                   className={`p-4 rounded-2xl border bg-white shadow-xs space-y-2 ${
@@ -975,34 +999,34 @@ export default function MobileAttendancePage() {
           </div>
         )}
 
-        {/* ------------------------------------------------------------------ */}
-        {/* TAB 3: RIWAYAT KEHADIRAN */}
-        {/* ------------------------------------------------------------------ */}
+        {/* ================================================================ */}
+        {/* TAB 3: RIWAYAT KEHADIRAN LENGKAP                                */}
+        {/* ================================================================ */}
         {activeTab === 'history' && (
           <div className="space-y-4">
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg flex items-center justify-between">
               <div>
-                <h3 className="font-black text-sm text-slate-900">Riwayat Kehadiran</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Catatan absensi harian yang telah terekam di cloud.</p>
+                <h2 className="text-lg font-black">Riwayat Kehadiran</h2>
+                <p className="text-xs text-white/80 mt-0.5">Catatan kehadiran terekam di cloud</p>
               </div>
               <button
                 onClick={loadHistory}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600"
+                className="p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer"
                 title="Segarkan Riwayat"
               >
-                <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin text-[#FF6600]' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin' : ''}`} />
               </button>
             </div>
 
-            {isLoadingLogs ? (
-              <div className="py-12 text-center text-xs text-slate-400">Memuat riwayat kehadiran...</div>
-            ) : employeeLogs.length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border border-slate-200/80 text-center text-slate-400 text-xs">
-                Belum ada riwayat kehadiran yang terekam untuk akun ini.
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {employeeLogs.map((log) => (
+            <div className="p-5 space-y-2.5">
+              {isLoadingLogs ? (
+                <div className="py-12 text-center text-xs text-slate-400">Memuat riwayat kehadiran...</div>
+              ) : employeeLogs.length === 0 ? (
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 text-xs">
+                  Belum ada riwayat kehadiran yang terekam untuk akun ini.
+                </div>
+              ) : (
+                employeeLogs.map((log) => (
                   <div key={log.id} className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-xs text-slate-900">{log.date}</span>
@@ -1034,82 +1058,89 @@ export default function MobileAttendancePage() {
                       </p>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
         )}
 
-        {/* ------------------------------------------------------------------ */}
-        {/* TAB 4: AKUN KARYAWAN */}
-        {/* ------------------------------------------------------------------ */}
+        {/* ================================================================ */}
+        {/* TAB 4: AKUN KARYAWAN                                            */}
+        {/* ================================================================ */}
         {activeTab === 'account' && (
           <div className="space-y-4">
-            {/* Profile Detail Card */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-              <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
-                <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#FF6600] flex items-center justify-center font-black text-lg shadow-xs">
-                  {currentEmployee.full_name
-                    .split(' ')
-                    .map((n) => n[0])
-                    .slice(0, 2)
-                    .join('')
-                    .toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="font-black text-base text-slate-900">{currentEmployee.full_name}</h3>
-                  <span className="text-xs font-bold text-[#FF6600] block mt-0.5">{currentEmployee.role_title}</span>
-                  <span className="text-[11px] text-slate-400 font-mono">ID: {currentEmployee.employee_code}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                  <span className="text-slate-500">Lokasi Penugasan</span>
-                  <strong className="text-slate-800">{locationTarget?.name || 'Cabang'}</strong>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                  <span className="text-slate-500">Nomor Telepon</span>
-                  <strong className="text-slate-800 font-mono">{currentEmployee.phone || '-'}</strong>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-slate-500">Status Akun</span>
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Aktif Bekerja
-                  </span>
-                </div>
-              </div>
+            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg">
+              <h2 className="text-lg font-black">Profil Karyawan</h2>
+              <p className="text-xs text-white/80 mt-0.5">Pengaturan akun & kredensial mandiri</p>
             </div>
 
-            {/* Security Actions */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
-              <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-500">Keamanan & Perangkat</h4>
-
-              <button
-                onClick={() => setIsPinModalOpen(true)}
-                className="w-full py-3 px-4 rounded-xl border border-slate-200 hover:border-slate-300 flex items-center justify-between text-xs font-bold text-slate-800 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-slate-500" />
-                  <span>Ubah PIN Absensi (4 Digit)</span>
+            <div className="p-5 space-y-4">
+              {/* Profile Card */}
+              <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
+                  <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#FF6600] flex items-center justify-center font-black text-lg shadow-xs">
+                    {currentEmployee.full_name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-slate-900">{currentEmployee.full_name}</h3>
+                    <span className="text-xs font-bold text-[#FF6600] block mt-0.5">{currentEmployee.role_title}</span>
+                    <span className="text-[11px] text-slate-400 font-mono">ID: {currentEmployee.employee_code}</span>
+                  </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-              </button>
 
-              <button
-                onClick={handleLogout}
-                className="w-full py-3 px-4 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 flex items-center justify-center gap-2 text-xs font-black transition-colors cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Keluar dari Akun Karyawan</span>
-              </button>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                    <span className="text-slate-500">Lokasi Penugasan</span>
+                    <strong className="text-slate-800">{locationTarget?.name || 'Cabang'}</strong>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                    <span className="text-slate-500">Nomor Telepon</span>
+                    <strong className="text-slate-800 font-mono">{currentEmployee.phone || '-'}</strong>
+                  </div>
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-slate-500">Status Akun</span>
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                      Aktif Bekerja
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Actions */}
+              <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-500">Keamanan</h4>
+
+                <button
+                  onClick={() => setIsPinModalOpen(true)}
+                  className="w-full py-3 px-4 rounded-xl border border-slate-200 hover:border-slate-300 flex items-center justify-between text-xs font-bold text-slate-800 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-slate-500" />
+                    <span>Ubah PIN Absensi (4 Digit)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-3 px-4 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 flex items-center justify-center gap-2 text-xs font-black transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Keluar dari Akun Karyawan</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
       </main>
 
-      {/* 3. STATIC BOTTOM NAVIGATION BAR (LIGHT THEME) */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-3 py-2 flex items-center justify-around z-30 shadow-lg">
+      {/* 3. FLOATING BOTTOM DOCK NAVIGATION BAR (MATCHING MOCKUP: ACTIVE CIRCLE BUTTON) */}
+      <nav className="fixed bottom-3 left-4 right-4 max-w-md mx-auto bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-[28px] px-3 py-2 flex items-center justify-around z-30 shadow-xl">
         {[
           { id: 'home', label: 'Absen', icon: Clock },
           { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
@@ -1122,23 +1153,25 @@ export default function MobileAttendancePage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-2xl transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-orange-50 text-[#FF6600]'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
+              className="flex flex-col items-center justify-center transition-all cursor-pointer relative"
+              title={tab.label}
             >
-              <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-              <span className={`text-[11px] ${isActive ? 'font-black' : 'font-medium'}`}>
-                {tab.label}
-              </span>
+              {isActive ? (
+                <div className="w-11 h-11 rounded-full bg-[#FF6600] text-white flex items-center justify-center shadow-md shadow-orange-500/30 active:scale-95 transition-transform">
+                  <Icon className="w-5 h-5 stroke-[2.5]" />
+                </div>
+              ) : (
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 active:scale-95 transition-all">
+                  <Icon className="w-5 h-5 stroke-[1.8]" />
+                </div>
+              )}
             </button>
           );
         })}
       </nav>
 
       {/* -------------------------------------------------------------------- */}
-      {/* MODAL: SICK / LEAVE REPORTING */}
+      {/* MODAL: SICK / LEAVE REPORTING                                        */}
       {/* -------------------------------------------------------------------- */}
       {isAbsenceModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
@@ -1213,7 +1246,7 @@ export default function MobileAttendancePage() {
       )}
 
       {/* -------------------------------------------------------------------- */}
-      {/* MODAL: CHANGE PIN */}
+      {/* MODAL: CHANGE PIN                                                    */}
       {/* -------------------------------------------------------------------- */}
       {isPinModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">

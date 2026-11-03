@@ -356,11 +356,15 @@ export default function WarehouseSupplierPOPage() {
                       onChange={(e) => setSelectedSupplierId(e.target.value)}
                       className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/25 focus:border-[#FF6B00]"
                     >
-                      {suppliers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.payment_terms || 'Tempo'})
-                        </option>
-                      ))}
+                      {suppliers.length === 0 ? (
+                        <option value="">(Belum ada mitra supplier terdaftar)</option>
+                      ) : (
+                        suppliers.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.payment_terms || 'Tempo'})
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
 

@@ -1893,21 +1893,42 @@ export const dbService = {
   },
 
   // =========================================================================
-  // PHASE 2: RAW MATERIALS & CATEGORIES
+  // PHASE 2: RAW MATERIALS & CATEGORIES (CLOUD SUPABASE INTEGRATED)
   // =========================================================================
   async getRawMaterialCategories(): Promise<RawMaterialCategory[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('raw_material_categories').select('*').order('name');
+        if (!error && data) return data as RawMaterialCategory[];
+      } catch (e) {
+        console.warn('Falling back to local getRawMaterialCategories:', e);
+      }
+    }
     return getStorageItem<RawMaterialCategory[]>(STORAGE_KEYS.RAW_CATEGORIES, localRawMaterialCategories);
   },
 
   async createRawMaterialCategory(payload: Partial<RawMaterialCategory>): Promise<RawMaterialCategory> {
     const newCat: RawMaterialCategory = {
-      id: payload.id || `rcat-${Date.now()}`,
+      id: payload.id || crypto.randomUUID(),
       name: payload.name || 'Kategori Baru',
       description: payload.description || null,
       is_active: payload.is_active ?? true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('raw_material_categories').insert(newCat).select().single();
+        if (!error && data) return data as RawMaterialCategory;
+        if (error) console.warn('Supabase createRawMaterialCategory error:', error);
+      } catch (e) {
+        console.warn('Falling back to local createRawMaterialCategory:', e);
+      }
+    }
+
     const current = getStorageItem<RawMaterialCategory[]>(STORAGE_KEYS.RAW_CATEGORIES, localRawMaterialCategories);
     const updated = [...current, newCat];
     localRawMaterialCategories = updated;
@@ -1916,6 +1937,21 @@ export const dbService = {
   },
 
   async updateRawMaterialCategory(id: string, payload: Partial<RawMaterialCategory>): Promise<RawMaterialCategory> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('raw_material_categories')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) return data as RawMaterialCategory;
+      } catch (e) {
+        console.warn('Falling back to local updateRawMaterialCategory:', e);
+      }
+    }
+
     const current = getStorageItem<RawMaterialCategory[]>(STORAGE_KEYS.RAW_CATEGORIES, localRawMaterialCategories);
     const updated = current.map((c) => (c.id === id ? { ...c, ...payload, updated_at: new Date().toISOString() } : c));
     localRawMaterialCategories = updated;
@@ -1926,6 +1962,15 @@ export const dbService = {
   },
 
   async deleteRawMaterialCategory(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('raw_material_categories').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Falling back to local deleteRawMaterialCategory:', e);
+      }
+    }
+
     const current = getStorageItem<RawMaterialCategory[]>(STORAGE_KEYS.RAW_CATEGORIES, localRawMaterialCategories);
     const updated = current.filter((c) => c.id !== id);
     localRawMaterialCategories = updated;
@@ -1934,6 +1979,19 @@ export const dbService = {
   },
 
   async getRawMaterials(): Promise<RawMaterial[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+          .order('name');
+        if (!error && data) return data as RawMaterial[];
+      } catch (e) {
+        console.warn('Falling back to local getRawMaterials:', e);
+      }
+    }
+
     const rawList = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
     const categories = await this.getRawMaterialCategories();
     const units = await this.getUnits();
@@ -1947,7 +2005,7 @@ export const dbService = {
 
   async createRawMaterial(payload: Partial<RawMaterial>): Promise<RawMaterial> {
     const newRaw: RawMaterial = {
-      id: payload.id || `raw-${Date.now()}`,
+      id: payload.id || crypto.randomUUID(),
       code: payload.code || `RAW-${Math.floor(Math.random() * 900 + 100)}`,
       name: payload.name || 'Bahan Baku Baru',
       sku: payload.sku || null,
@@ -1960,6 +2018,54 @@ export const dbService = {
       updated_at: new Date().toISOString(),
     };
 
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .insert(newRaw)
+          .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+          .single();
+
+        // Otomatis daftarkan bahan baku baru ke seluruh gudang (stok awal = 0)
+        try {
+          const warehouses = await this.getWarehouses();
+          for (const wh of warehouses) {
+            await supabase.from('warehouse_stocks').upsert(
+              {
+                warehouse_id: wh.id,
+                raw_material_id: newRaw.id,
+                quantity: 0,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'warehouse_id,raw_material_id' }
+            );
+          }
+          // Otomatis daftarkan juga ke seluruh outlet cabang (stok awal = 0)
+          const outlets = await this.getOutlets();
+          for (const out of outlets) {
+            await supabase.from('outlet_stocks').upsert(
+              {
+                outlet_id: out.id,
+                raw_material_id: newRaw.id,
+                quantity: 0,
+                minimum_stock: newRaw.minimum_stock || 100,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: 'outlet_id,raw_material_id' }
+            );
+          }
+        } catch (stockInitErr) {
+          console.warn('Auto-init stock error:', stockInitErr);
+        }
+
+        if (!error && data) return data as RawMaterial;
+        if (error) console.warn('Supabase createRawMaterial error:', error);
+      } catch (e) {
+        console.warn('Falling back to local createRawMaterial:', e);
+      }
+    }
+
     const current = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
     const updated = [...current, newRaw];
     localRawMaterials = updated;
@@ -1968,6 +2074,21 @@ export const dbService = {
   },
 
   async updateRawMaterial(id: string, payload: Partial<RawMaterial>): Promise<RawMaterial> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('raw_materials')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+          .single();
+        if (!error && data) return data as RawMaterial;
+      } catch (e) {
+        console.warn('Falling back to local updateRawMaterial:', e);
+      }
+    }
+
     const current = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
     const updated = current.map((r) => (r.id === id ? { ...r, ...payload, updated_at: new Date().toISOString() } : r));
     localRawMaterials = updated;
@@ -1978,6 +2099,15 @@ export const dbService = {
   },
 
   async deleteRawMaterial(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('raw_materials').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Falling back to local deleteRawMaterial:', e);
+      }
+    }
+
     const current = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
     const updated = current.filter((r) => r.id !== id);
     localRawMaterials = updated;
@@ -1986,15 +2116,24 @@ export const dbService = {
   },
 
   // =========================================================================
-  // PHASE 2: UNITS & CONVERSIONS
+  // PHASE 2: UNITS & CONVERSIONS (CLOUD SUPABASE INTEGRATED)
   // =========================================================================
   async getUnits(): Promise<Unit[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('units').select('*').order('name');
+        if (!error && data && data.length > 0) return data as Unit[];
+      } catch (e) {
+        console.warn('Falling back to local getUnits:', e);
+      }
+    }
     return getStorageItem<Unit[]>(STORAGE_KEYS.UNITS, localUnits);
   },
 
   async createUnit(payload: Partial<Unit>): Promise<Unit> {
     const newUnit: Unit = {
-      id: payload.id || `unit-${Date.now()}`,
+      id: payload.id || crypto.randomUUID(),
       code: payload.code || `UNT-${Math.floor(Math.random() * 900 + 100)}`,
       name: payload.name || 'Satuan Baru',
       symbol: payload.symbol || payload.code || 'u',
@@ -2002,6 +2141,17 @@ export const dbService = {
       is_active: payload.is_active ?? true,
       created_at: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('units').insert(newUnit).select().single();
+        if (!error && data) return data as Unit;
+      } catch (e) {
+        console.warn('Falling back to local createUnit:', e);
+      }
+    }
+
     const current = getStorageItem<Unit[]>(STORAGE_KEYS.UNITS, localUnits);
     const updated = [...current, newUnit];
     localUnits = updated;
@@ -2010,6 +2160,21 @@ export const dbService = {
   },
 
   async updateUnit(id: string, payload: Partial<Unit>): Promise<Unit> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('units')
+          .update(payload)
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) return data as Unit;
+      } catch (e) {
+        console.warn('Falling back to local updateUnit:', e);
+      }
+    }
+
     const current = getStorageItem<Unit[]>(STORAGE_KEYS.UNITS, localUnits);
     const updated = current.map((u) => (u.id === id ? { ...u, ...payload } : u));
     localUnits = updated;
@@ -2020,6 +2185,15 @@ export const dbService = {
   },
 
   async deleteUnit(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('units').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Falling back to local deleteUnit:', e);
+      }
+    }
+
     const current = getStorageItem<Unit[]>(STORAGE_KEYS.UNITS, localUnits);
     const updated = current.filter((u) => u.id !== id);
     localUnits = updated;
@@ -2028,6 +2202,18 @@ export const dbService = {
   },
 
   async getUnitConversions(): Promise<UnitConversion[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('unit_conversions')
+          .select('*, from_unit:units!unit_conversions_from_unit_id_fkey(*), to_unit:units!unit_conversions_to_unit_id_fkey(*)');
+        if (!error && data && data.length > 0) return data as UnitConversion[];
+      } catch (e) {
+        console.warn('Falling back to local getUnitConversions:', e);
+      }
+    }
+
     const conversions = getStorageItem<UnitConversion[]>(STORAGE_KEYS.CONVERSIONS, localUnitConversions);
     const units = await this.getUnits();
     return conversions.map((c) => ({
@@ -2039,12 +2225,23 @@ export const dbService = {
 
   async createUnitConversion(payload: Partial<UnitConversion>): Promise<UnitConversion> {
     const newConv: UnitConversion = {
-      id: payload.id || `conv-${Date.now()}`,
+      id: payload.id || crypto.randomUUID(),
       from_unit_id: payload.from_unit_id || '',
       to_unit_id: payload.to_unit_id || '',
       conversion_factor: payload.conversion_factor || 1,
       created_at: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('unit_conversions').insert(newConv).select().single();
+        if (!error && data) return data as UnitConversion;
+      } catch (e) {
+        console.warn('Falling back to local createUnitConversion:', e);
+      }
+    }
+
     const current = getStorageItem<UnitConversion[]>(STORAGE_KEYS.CONVERSIONS, localUnitConversions);
     const updated = [...current, newConv];
     localUnitConversions = updated;
@@ -2053,6 +2250,15 @@ export const dbService = {
   },
 
   async deleteUnitConversion(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('unit_conversions').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Falling back to local deleteUnitConversion:', e);
+      }
+    }
+
     const current = getStorageItem<UnitConversion[]>(STORAGE_KEYS.CONVERSIONS, localUnitConversions);
     const updated = current.filter((c) => c.id !== id);
     localUnitConversions = updated;
@@ -2061,20 +2267,39 @@ export const dbService = {
   },
 
   // =========================================================================
-  // PHASE 2: SUPPLIERS REPOSITORY
+  // PHASE 2: SUPPLIERS REPOSITORY (CLOUD SUPABASE INTEGRATED)
   // =========================================================================
   async getSuppliers(): Promise<Supplier[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('suppliers').select('*').order('name');
+        if (!error && data) return data as Supplier[];
+        if (error) console.warn('Supabase getSuppliers error:', error);
+      } catch (e) {
+        console.warn('Falling back to local getSuppliers:', e);
+      }
+    }
     return getStorageItem<Supplier[]>(STORAGE_KEYS.SUPPLIERS, localSuppliers);
   },
 
   async getSupplierById(id: string): Promise<Supplier | null> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('suppliers').select('*').eq('id', id).single();
+        if (!error && data) return data as Supplier;
+      } catch (e) {
+        console.warn('Falling back to local getSupplierById:', e);
+      }
+    }
     const list = await this.getSuppliers();
     return list.find((s) => s.id === id) || null;
   },
 
   async createSupplier(payload: Partial<Supplier>): Promise<Supplier> {
     const newSup: Supplier = {
-      id: payload.id || `sup-${Date.now()}`,
+      id: payload.id || crypto.randomUUID(),
       code: payload.code || `SUP-${Math.floor(Math.random() * 900 + 100)}`,
       name: payload.name || 'Supplier Baru',
       contact_person: payload.contact_person || null,
@@ -2086,6 +2311,18 @@ export const dbService = {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('suppliers').insert(newSup).select().single();
+        if (!error && data) return data as Supplier;
+        if (error) console.warn('Supabase createSupplier error:', error);
+      } catch (e) {
+        console.warn('Falling back to local createSupplier:', e);
+      }
+    }
+
     const current = getStorageItem<Supplier[]>(STORAGE_KEYS.SUPPLIERS, localSuppliers);
     const updated = [...current, newSup];
     localSuppliers = updated;
@@ -2094,6 +2331,21 @@ export const dbService = {
   },
 
   async updateSupplier(id: string, payload: Partial<Supplier>): Promise<Supplier> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('suppliers')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) return data as Supplier;
+      } catch (e) {
+        console.warn('Falling back to local updateSupplier:', e);
+      }
+    }
+
     const current = getStorageItem<Supplier[]>(STORAGE_KEYS.SUPPLIERS, localSuppliers);
     const updated = current.map((s) => (s.id === id ? { ...s, ...payload, updated_at: new Date().toISOString() } : s));
     localSuppliers = updated;
@@ -2104,6 +2356,15 @@ export const dbService = {
   },
 
   async deleteSupplier(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase.from('suppliers').delete().eq('id', id);
+      } catch (e) {
+        console.warn('Falling back to local deleteSupplier:', e);
+      }
+    }
+
     const current = getStorageItem<Supplier[]>(STORAGE_KEYS.SUPPLIERS, localSuppliers);
     const updated = current.filter((s) => s.id !== id);
     localSuppliers = updated;
@@ -2256,40 +2517,41 @@ export const dbService = {
   // PHASE 3: WAREHOUSE PERSISTENCE & STOCKS
   // =========================================================================
   async getWarehouseStocks(warehouseId?: string): Promise<WarehouseStock[]> {
+    const materials = await this.getRawMaterials();
+    const warehouses = await this.getWarehouses();
+    const targetWhId = warehouseId || warehouses[0]?.id || 'e0000000-0000-0000-0000-000000000001';
+
+    let dbStocks: any[] = [];
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const targetWhId = warehouseId || 'e0000000-0000-0000-0000-000000000001';
         const { data, error } = await supabase
           .from('warehouse_stocks')
-          .select('*, raw_material:raw_materials(*), warehouse:warehouses(*)')
+          .select('*, raw_material:raw_materials(*, standard_unit:units(*)), warehouse:warehouses(*)')
           .eq('warehouse_id', targetWhId);
-        if (!error && data && data.length > 0) {
-          localWarehouseStocks = data as WarehouseStock[];
-          setStorageItem(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
-          return data as WarehouseStock[];
+        if (!error && data) {
+          dbStocks = data;
         }
       } catch (e) {
         console.warn('Falling back to local getWarehouseStocks:', e);
       }
     }
 
-    const stocks = getStorageItem<WarehouseStock[]>(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
-    const materials = await this.getRawMaterials();
-    const warehouses = await this.getWarehouses();
+    const localStored = getStorageItem<WarehouseStock[]>(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
+    const filteredLocal = localStored.filter((s) => s.warehouse_id === targetWhId);
 
-    const targetWhId = warehouseId || warehouses[0]?.id || 'e0000000-0000-0000-0000-000000000001';
-    const filtered = stocks.filter((s) => s.warehouse_id === targetWhId);
-
-    // Ensure all registered materials have a stock entry
+    // Guarantee that EVERY registered raw material is visible in Warehouse Stock (default quantity = 0)
     const result: WarehouseStock[] = materials.map((m) => {
-      const existing = filtered.find((s) => s.raw_material_id === m.id);
+      const dbMatch = dbStocks.find((s) => s.raw_material_id === m.id);
+      const localMatch = filteredLocal.find((s) => s.raw_material_id === m.id);
+      const match = dbMatch || localMatch;
+
       return {
-        id: existing?.id || `ws-${m.id}`,
+        id: match?.id || `ws-${m.id}`,
         warehouse_id: targetWhId,
         raw_material_id: m.id,
-        quantity: existing ? existing.quantity : 0,
-        updated_at: existing ? existing.updated_at : new Date().toISOString(),
+        quantity: match ? Number(match.quantity) : 0,
+        updated_at: match ? match.updated_at : new Date().toISOString(),
         raw_material: m,
         warehouse: warehouses.find((w) => w.id === targetWhId),
       };
@@ -3111,25 +3373,87 @@ export const dbService = {
     return true;
   },
 
-  // OUTLET STOCKS
+  // OUTLET STOCKS (CLOUD SUPABASE INTEGRATED)
   async getOutletStocks(outletId?: string): Promise<OutletStock[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase.from('outlet_stocks').select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units(*))');
+        if (outletId) query = query.eq('outlet_id', outletId);
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          localOutletStocks = data as OutletStock[];
+          setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+          return data as OutletStock[];
+        }
+      } catch (e) {
+        console.warn('Falling back to local getOutletStocks:', e);
+      }
+    }
+
     const list = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
     const outlets = await this.getOutlets();
     const materials = await this.getRawMaterials();
 
-    let filtered = list;
-    if (outletId) {
-      filtered = list.filter((s) => s.outlet_id === outletId);
-    }
+    const targetOutletId = outletId || outlets[0]?.id;
+    const filtered = targetOutletId ? list.filter((s) => s.outlet_id === targetOutletId) : list;
 
-    return filtered.map((s) => ({
-      ...s,
-      outlet: outlets.find((o) => o.id === s.outlet_id),
-      raw_material: materials.find((m) => m.id === s.raw_material_id),
-    }));
+    // Ensure all materials are listed
+    return materials.map((m) => {
+      const existing = filtered.find((s) => s.raw_material_id === m.id);
+      return {
+        id: existing?.id || `ostk-${m.id}`,
+        outlet_id: targetOutletId || 'd0000000-0000-0000-0000-000000000001',
+        raw_material_id: m.id,
+        quantity: existing ? existing.quantity : 0,
+        minimum_stock: existing?.minimum_stock ?? (m.minimum_stock || 100),
+        updated_at: existing ? existing.updated_at : new Date().toISOString(),
+        outlet: outlets.find((o) => o.id === (targetOutletId || 'd0000000-0000-0000-0000-000000000001')),
+        raw_material: m,
+      };
+    });
   },
 
   async updateOutletStock(outletId: string, rawMaterialId: string, deltaQuantity: number): Promise<OutletStock> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: existing } = await supabase
+          .from('outlet_stocks')
+          .select('*')
+          .eq('outlet_id', outletId)
+          .eq('raw_material_id', rawMaterialId)
+          .single();
+
+        const currentQty = existing ? Number(existing.quantity) : 0;
+        const newQty = Math.max(0, currentQty + deltaQuantity);
+
+        if (existing) {
+          const { data } = await supabase
+            .from('outlet_stocks')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .eq('id', existing.id)
+            .select('*, outlet:outlets(*), raw_material:raw_materials(*)')
+            .single();
+          if (data) return data as OutletStock;
+        } else {
+          const { data } = await supabase
+            .from('outlet_stocks')
+            .insert({
+              outlet_id: outletId,
+              raw_material_id: rawMaterialId,
+              quantity: newQty,
+              updated_at: new Date().toISOString(),
+            })
+            .select('*, outlet:outlets(*), raw_material:raw_materials(*)')
+            .single();
+          if (data) return data as OutletStock;
+        }
+      } catch (e) {
+        console.warn('Falling back to local updateOutletStock:', e);
+      }
+    }
+
     const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
     const target = current.find((s) => s.outlet_id === outletId && s.raw_material_id === rawMaterialId);
     const now = new Date().toISOString();

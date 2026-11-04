@@ -3937,14 +3937,46 @@ export const dbService = {
     receiverId: string,
     notes?: string
   ): Promise<Dispatch> {
-    const dispatches = getStorageItem<Dispatch[]>(STORAGE_KEYS.DISPATCHES, localDispatches);
+    const dispatches = await this.getDispatches();
     const target = dispatches.find((d) => d.id === dispatchId);
     if (!target) throw new Error('Surat Jalan pengiriman tidak ditemukan');
-    if (target.status === 'delivered') throw new Error('Pengiriman ini sudah diterima sebelumnya.');
+    if (target.status === 'delivered') {
+      return target; // Already delivered, do not increment stock again
+    }
 
     const now = new Date().toISOString();
+    const validReceiverId = (receiverId && receiverId.length === 36 && !receiverId.startsWith('c0000000'))
+      ? receiverId
+      : '5171c509-cad6-4b8c-83d0-46c04e9e4c82';
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const updatedNotes = notes ? (target.notes ? `${target.notes} | Diterima: ${notes}` : `Diterima: ${notes}`) : target.notes;
+        const { error: dspErr } = await supabase.from('dispatches').update({
+          status: 'delivered',
+          received_by: validReceiverId,
+          notes: updatedNotes,
+        }).eq('id', dispatchId);
+
+        if (dspErr) {
+          console.error('Supabase confirmDispatchReceipt update error:', dspErr);
+        }
+
+        if (target.items && target.items.length > 0) {
+          for (const item of target.items) {
+            await supabase.from('dispatch_items').update({
+              quantity_received: item.quantity_dispatched,
+            }).eq('id', item.id);
+          }
+        }
+      } catch (e) {
+        console.warn('Falling back to local confirmDispatchReceipt:', e);
+      }
+    }
+
     target.status = 'delivered';
-    target.received_by = receiverId;
+    target.received_by = validReceiverId;
     target.received_at = now;
     if (notes) {
       target.notes = target.notes ? `${target.notes} | Diterima: ${notes}` : `Diterima: ${notes}`;
@@ -3983,12 +4015,12 @@ export const dbService = {
           reference_document_type: 'dispatch',
           reference_document_number: target.dispatch_number,
           notes: `Penerimaan fisik kiriman logistik dari Gudang Pusat`,
-          created_by: receiverId,
+          created_by: validReceiverId,
         });
       }
     }
 
-    localDispatches = [...dispatches];
+    localDispatches = localDispatches.map((d) => (d.id === dispatchId ? target : d));
     setStorageItem(STORAGE_KEYS.DISPATCHES, localDispatches);
 
     // Otomatis kirim notifikasi ke Operator Gudang saat kiriman telah diterima outlet

@@ -19,12 +19,14 @@ import {
   Trash2,
   Sparkles,
 } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { INITIAL_DISPATCHES } from '@/lib/mock-data';
 
 function WarehouseDispatchContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const prefillOrderId = searchParams.get('order_id');
+  const hasAutoOpenedRef = React.useRef(false);
 
   const [dispatches, setDispatches] = useState<Dispatch[]>(INITIAL_DISPATCHES);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -66,9 +68,10 @@ function WarehouseDispatchContent() {
       setMaterials(matList);
       setOrders(ordList);
 
-      if (prefillOrderId) {
+      if (prefillOrderId && !hasAutoOpenedRef.current) {
         const ord = ordList.find((o) => o.id === prefillOrderId);
-        if (ord) {
+        if (ord && ord.status !== 'dispatched') {
+          hasAutoOpenedRef.current = true;
           openAddModalWithOrder(ord);
         }
       }
@@ -155,6 +158,7 @@ function WarehouseDispatchContent() {
       return;
     }
 
+    if (isSaving) return;
     setIsSaving(true);
     try {
       await dbService.createDispatch({
@@ -175,7 +179,11 @@ function WarehouseDispatchContent() {
         }),
       });
 
+      hasAutoOpenedRef.current = true;
       setIsModalOpen(false);
+      if (prefillOrderId) {
+        router.replace('/warehouse/dispatch');
+      }
       await loadData();
       setFeedback('Surat Jalan resmi berhasil diterbitkan! Stok gudang telah dipotong dan berstatus In-Transit.');
       setTimeout(() => setFeedback(null), 4000);

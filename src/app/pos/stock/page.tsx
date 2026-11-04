@@ -73,8 +73,11 @@ export default function PosStockPage() {
   }, [outletId]);
 
   const handleConfirmDelivery = async (dispatchId: string) => {
+    if (receivingId) return;
     try {
       setReceivingId(dispatchId);
+      // Optimistically hide from pending immediately
+      setDispatches((prev) => prev.map((d) => (d.id === dispatchId ? { ...d, status: 'delivered' } : d)));
       await dbService.confirmDispatchReceipt(
         dispatchId,
         user?.id || '5171c509-cad6-4b8c-83d0-46c04e9e4c82',
@@ -84,6 +87,7 @@ export default function PosStockPage() {
       await loadData();
     } catch (err: any) {
       alert(`Gagal mengonfirmasi penerimaan: ${err.message || err}`);
+      await loadData();
     } finally {
       setReceivingId(null);
     }

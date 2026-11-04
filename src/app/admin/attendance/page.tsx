@@ -862,58 +862,66 @@ export default function AdminAttendancePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-borderline text-xs font-medium text-heading">
-                    {employees.map((emp) => {
-                      let locLabel = '-';
-                      if (emp.assigned_location_type === 'warehouse') {
-                        locLabel = warehouses.find((w) => w.id === emp.assigned_location_id)?.name || 'Gudang Pusat';
-                      } else {
-                        locLabel = outlets.find((o) => o.id === emp.assigned_location_id)?.name || 'Cabang Outlet';
-                      }
+                    {employees.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-mutedtext text-xs">
+                          Belum ada data karyawan terdaftar. Klik tombol <strong>+ Tambah Karyawan Baru</strong> di atas untuk menambahkan karyawan.
+                        </td>
+                      </tr>
+                    ) : (
+                      employees.map((emp) => {
+                        let locLabel = '-';
+                        if (emp.assigned_location_type === 'warehouse') {
+                          locLabel = warehouses.find((w) => w.id === emp.assigned_location_id)?.name || 'Gudang Pusat';
+                        } else {
+                          locLabel = outlets.find((o) => o.id === emp.assigned_location_id)?.name || 'Cabang Outlet';
+                        }
 
-                      return (
-                        <tr key={emp.id} className="hover:bg-slate-50/50">
-                          <td className="py-3.5 px-4 font-mono font-bold text-[#FF6B00]">{emp.employee_code}</td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-bold text-heading">{emp.full_name}</div>
-                            <div className="text-[11px] text-mutedtext font-mono">{emp.phone || '-'}</div>
-                          </td>
-                          <td className="py-3.5 px-4 font-semibold text-slate-700">{emp.role_title}</td>
-                          <td className="py-3.5 px-4">
-                            <span className="text-xs truncate max-w-xs block font-bold text-heading">
-                              {locLabel}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-500">
-                            •••• <span className="text-[10px]">({emp.pin})</span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${emp.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                              {emp.is_active ? 'Aktif' : 'Nonaktif'}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => openEditEmpModal(emp)}
-                                className="p-1.5 rounded-lg text-mutedtext hover:text-heading hover:bg-slate-100 transition-colors cursor-pointer"
-                                title="Edit Karyawan"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteEmp(emp.id)}
-                                className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
-                                title="Hapus Karyawan"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                        return (
+                          <tr key={emp.id} className="hover:bg-slate-50/50">
+                            <td className="py-3.5 px-4 font-mono font-bold text-[#FF6B00]">{emp.employee_code}</td>
+                            <td className="py-3.5 px-4">
+                              <div className="font-bold text-heading">{emp.full_name}</div>
+                              <div className="text-[11px] text-mutedtext font-mono">{emp.phone || '-'}</div>
+                            </td>
+                            <td className="py-3.5 px-4 font-semibold text-slate-700">{emp.role_title}</td>
+                            <td className="py-3.5 px-4">
+                              <span className="text-xs truncate max-w-xs block font-bold text-heading">
+                                {locLabel}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-slate-500">
+                              •••• <span className="text-[10px]">({emp.pin})</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${emp.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                                {emp.is_active ? 'Aktif' : 'Nonaktif'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditEmpModal(emp)}
+                                  className="p-1.5 rounded-lg text-mutedtext hover:text-heading hover:bg-slate-100 transition-colors cursor-pointer"
+                                  title="Edit Karyawan"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteEmp(emp.id)}
+                                  className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                                  title="Hapus Karyawan"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>

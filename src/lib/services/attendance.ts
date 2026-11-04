@@ -132,20 +132,9 @@ class AttendanceService {
           .from('attendance_shifts')
           .select('*')
           .order('start_time', { ascending: true });
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           localStorage.setItem(SHIFTS_KEY, JSON.stringify(data));
           return data as AttendanceShift[];
-        }
-        // Auto-seed default shifts if table is empty in Supabase
-        if (!error && (!data || data.length === 0)) {
-          const { data: seeded, error: seedErr } = await supabase
-            .from('attendance_shifts')
-            .upsert(INITIAL_ATTENDANCE_SHIFTS, { onConflict: 'id' })
-            .select();
-          if (!seedErr && seeded && seeded.length > 0) {
-            localStorage.setItem(SHIFTS_KEY, JSON.stringify(seeded));
-            return seeded as AttendanceShift[];
-          }
         }
       } catch (err) {
         console.warn('Fallback to local shifts cache:', err);
@@ -153,12 +142,11 @@ class AttendanceService {
     }
 
     const saved = localStorage.getItem(SHIFTS_KEY);
-    if (saved) {
+    if (saved !== null) {
       try {
         return JSON.parse(saved);
       } catch {}
     }
-    localStorage.setItem(SHIFTS_KEY, JSON.stringify(INITIAL_ATTENDANCE_SHIFTS));
     return INITIAL_ATTENDANCE_SHIFTS;
   }
 
@@ -211,8 +199,9 @@ class AttendanceService {
         console.warn('Supabase deleteShift error:', err);
       }
     }
-    const current = await this.getShifts();
-    const updated = current.filter((s) => s.id !== id);
+    const saved = localStorage.getItem(SHIFTS_KEY);
+    const list: AttendanceShift[] = saved ? JSON.parse(saved) : [];
+    const updated = list.filter((s) => s.id !== id);
     localStorage.setItem(SHIFTS_KEY, JSON.stringify(updated));
   }
 
@@ -228,34 +217,23 @@ class AttendanceService {
           .from('employee_profiles')
           .select('*')
           .order('employee_code', { ascending: true });
-        if (!error && data && data.length > 0) {
+
+        if (!error && data) {
           localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(data));
           return data as EmployeeProfile[];
         }
-
-        // If Supabase table is empty, auto-upsert INITIAL_EMPLOYEE_PROFILES with valid UUIDs!
-        if (!error && (!data || data.length === 0)) {
-          const { data: seeded, error: seedErr } = await supabase
-            .from('employee_profiles')
-            .upsert(INITIAL_EMPLOYEE_PROFILES, { onConflict: 'id' })
-            .select();
-          if (!seedErr && seeded && seeded.length > 0) {
-            localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(seeded));
-            return seeded as EmployeeProfile[];
-          }
-        }
+        if (error) console.error('Supabase getEmployees error:', error);
       } catch (err) {
         console.warn('Fallback to local employees cache:', err);
       }
     }
 
     const saved = localStorage.getItem(EMPLOYEES_KEY);
-    if (saved) {
+    if (saved !== null) {
       try {
         return JSON.parse(saved);
       } catch {}
     }
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(INITIAL_EMPLOYEE_PROFILES));
     return INITIAL_EMPLOYEE_PROFILES;
   }
 
@@ -303,18 +281,38 @@ class AttendanceService {
     return empData;
   }
 
-  async deleteEmployee(id: string): Promise<void> {
+  async deleteEmployee(id: string): Promise<{ success: boolean; error?: string }> {
     const supabase = this.getSupabase();
     if (supabase) {
       try {
-        await supabase.from('employee_profiles').delete().eq('id', id);
-      } catch (err) {
-        console.warn('Supabase deleteEmployee error:', err);
+        // 1. Delete associated logs first to prevent foreign key constraint violations
+        await supabase.from('attendance_logs').delete().eq('employee_id', id);
+
+        // 2. Delete employee from Supabase
+        const { error } = await supabase.from('employee_profiles').delete().eq('id', id);
+        if (error) {
+          console.error('Supabase deleteEmployee error:', error);
+          // Try deleting by employee_code if id was a code (EMP-01, etc.)
+          await supabase.from('employee_profiles').delete().eq('employee_code', id);
+        }
+      } catch (err: any) {
+        console.warn('Supabase deleteEmployee exception:', err);
       }
     }
-    const current = await this.getEmployees();
-    const updated = current.filter((e) => e.id !== id);
+
+    // 3. Update local cache immediately
+    const saved = localStorage.getItem(EMPLOYEES_KEY);
+    const list: EmployeeProfile[] = saved ? JSON.parse(saved) : [];
+    const updated = list.filter((e) => e.id !== id && e.employee_code !== id);
     localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(updated));
+
+    // 4. Clear active session if this employee was currently selected
+    const savedActiveEmpId = localStorage.getItem('obathaus_active_employee_id');
+    if (savedActiveEmpId === id) {
+      localStorage.removeItem('obathaus_active_employee_id');
+    }
+
+    return { success: true };
   }
 
   /**

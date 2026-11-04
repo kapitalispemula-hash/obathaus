@@ -105,6 +105,8 @@ DELETE FROM public.stock_opnames;
 DELETE FROM public.stock_ledger;
 DELETE FROM public.app_notifications;
 DELETE FROM public.audit_logs;
+DELETE FROM public.attendance_logs;
+DELETE FROM public.employee_profiles;
 
 -- Hapus seluruh produk, menu, resep, dan bahan baku dummy
 DELETE FROM public.recipe_items;
@@ -194,7 +196,10 @@ ON CONFLICT (id) DO UPDATE SET
   description = EXCLUDED.description,
   is_active = true;
 
--- 6.3. DATA MASTER KARYAWAN DEFAULT OBAT HAUS (DENGAN UUID RESMI)
+-- 6.3. DATA MASTER KARYAWAN (BERSIH UNTUK PRODUKSI - DAFTARKAN MELALUI MENU /admin/attendance)
+-- Data karyawan sengaja dikosongkan agar Owner/Admin dapat mendaftarkan karyawan riil secara mandiri.
+-- (Jika ingin memasukkan contoh staff default, un-comment blok query di bawah ini):
+/*
 INSERT INTO public.employee_profiles (id, employee_code, pin, full_name, role_title, assigned_location_type, assigned_location_id, phone, is_active)
 VALUES 
   ('f0000000-0000-0000-0000-000000000001'::uuid, 'EMP-01', '1234', 'Budi Santoso', 'Head Barista', 'outlet', 'd0000000-0000-0000-0000-000000000001'::uuid, '0812-3456-7891', true),
@@ -209,6 +214,7 @@ ON CONFLICT (id) DO UPDATE SET
   assigned_location_id = EXCLUDED.assigned_location_id,
   phone = EXCLUDED.phone,
   is_active = true;
+*/
 
 -- 7. BUKA HAK AKSES OPERASIONAL (ADMIN DAPAT MENAMBAH & MENGHAPUS SEMUA DATA LANGSUNG DI SUPABASE)
 DO $$

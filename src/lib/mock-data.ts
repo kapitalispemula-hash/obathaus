@@ -324,46 +324,6 @@ export const INITIAL_ATTENDANCE_SHIFTS: AttendanceShift[] = [
   },
 ];
 
-export const INITIAL_EMPLOYEE_PROFILES: EmployeeProfile[] = [
-  {
-    id: 'f0000000-0000-0000-0000-000000000001',
-    employee_code: 'EMP-01',
-    pin: '1234',
-    full_name: 'Budi Santoso',
-    role_title: 'Head Barista',
-    assigned_location_type: 'outlet',
-    assigned_location_id: 'd0000000-0000-0000-0000-000000000001',
-    phone: '0812-3456-7891',
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000002',
-    employee_code: 'EMP-02',
-    pin: '1234',
-    full_name: 'Siti Rahma',
-    role_title: 'Kasir Outlet',
-    assigned_location_type: 'outlet',
-    assigned_location_id: 'd0000000-0000-0000-0000-000000000001',
-    phone: '0812-3456-7892',
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'f0000000-0000-0000-0000-000000000003',
-    employee_code: 'EMP-03',
-    pin: '1234',
-    full_name: 'Andi Pratama',
-    role_title: 'Staf Logistik Gudang',
-    assigned_location_type: 'warehouse',
-    assigned_location_id: 'e0000000-0000-0000-0000-000000000001',
-    phone: '0812-3456-7893',
-    is_active: true,
-    created_at: '2026-10-01T08:00:00Z',
-    updated_at: '2026-10-01T08:00:00Z',
-  },
-];
+export const INITIAL_EMPLOYEE_PROFILES: EmployeeProfile[] = [];
 
 export const INITIAL_ATTENDANCE_LOGS: AttendanceLog[] = [];

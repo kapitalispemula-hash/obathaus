@@ -2229,8 +2229,8 @@ export const dbService = {
       code: payload.code || `RAW-${Math.floor(Math.random() * 900 + 100)}`,
       name: payload.name || 'Bahan Baku Baru',
       sku: payload.sku || null,
-      category_id: payload.category_id || localRawMaterialCategories[0]?.id || 'rcat-01',
-      standard_unit_id: payload.standard_unit_id || 'unit-gram',
+      category_id: payload.category_id || localRawMaterialCategories[0]?.id || '1f932e3f-4a49-47a8-81ad-42d9e4ec2195',
+      standard_unit_id: payload.standard_unit_id || '11111111-0000-0000-0000-000000000001',
       minimum_stock: payload.minimum_stock ?? 100,
       estimated_unit_cost: payload.estimated_unit_cost ?? 0,
       is_active: payload.is_active ?? true,
@@ -2246,6 +2246,11 @@ export const dbService = {
           .insert(newRaw)
           .select('*, category:raw_material_categories(*), standard_unit:units(*)')
           .single();
+
+        if (error) {
+          console.error('Supabase createRawMaterial error:', error);
+          throw new Error(`Gagal menyimpan ke Supabase: ${error.message}`);
+        }
 
         // Otomatis daftarkan bahan baku baru ke seluruh gudang (stok awal = 0)
         try {
@@ -2279,10 +2284,10 @@ export const dbService = {
           console.warn('Auto-init stock error:', stockInitErr);
         }
 
-        if (!error && data) return data as RawMaterial;
-        if (error) console.warn('Supabase createRawMaterial error:', error);
-      } catch (e) {
-        console.warn('Falling back to local createRawMaterial:', e);
+        if (data) return data as RawMaterial;
+      } catch (e: any) {
+        console.error('createRawMaterial exception:', e);
+        throw e;
       }
     }
 
@@ -2303,9 +2308,14 @@ export const dbService = {
           .eq('id', id)
           .select('*, category:raw_material_categories(*), standard_unit:units(*)')
           .single();
-        if (!error && data) return data as RawMaterial;
-      } catch (e) {
-        console.warn('Falling back to local updateRawMaterial:', e);
+        if (error) {
+          console.error('Supabase updateRawMaterial error:', error);
+          throw new Error(`Gagal memperbarui di Supabase: ${error.message}`);
+        }
+        if (data) return data as RawMaterial;
+      } catch (e: any) {
+        console.error('updateRawMaterial exception:', e);
+        throw e;
       }
     }
 

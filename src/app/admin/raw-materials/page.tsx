@@ -86,7 +86,7 @@ export default function AdminRawMaterialsPage() {
     setMatName('');
     setMatSku('');
     setMatCategoryId(categories[0]?.id || '');
-    setMatUnitId(units[0]?.id || 'unit-gram');
+    setMatUnitId(units[0]?.id || '11111111-0000-0000-0000-000000000001');
     setMatMinStock(500);
     setMatEstimatedCost(150);
     setMatIsActive(true);
@@ -117,6 +117,16 @@ export default function AdminRawMaterialsPage() {
       return;
     }
 
+    if (!matCategoryId) {
+      setMatFormError('Pilih kategori bahan baku terlebih dahulu. Jika belum ada kategori, buat kategori terlebih dahulu pada tab "Kategori Bahan".');
+      return;
+    }
+
+    if (!matUnitId) {
+      setMatFormError('Pilih satuan resep standar (unit).');
+      return;
+    }
+
     setIsSavingMat(true);
     try {
       if (editingMat) {
@@ -143,7 +153,7 @@ export default function AdminRawMaterialsPage() {
         });
       }
       setIsMatModalOpen(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       setMatFormError(err.message || 'Gagal menyimpan bahan baku.');
     } finally {
@@ -512,13 +522,20 @@ export default function AdminRawMaterialsPage() {
                     <select
                       value={matCategoryId}
                       onChange={(e) => setMatCategoryId(e.target.value)}
+                      required
                       className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
                     >
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
+                      {categories.length === 0 ? (
+                        <option value="" disabled>
+                          -- Belum ada kategori, buat di tab Kategori --
                         </option>
-                      ))}
+                      ) : (
+                        categories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
 
@@ -529,13 +546,20 @@ export default function AdminRawMaterialsPage() {
                     <select
                       value={matUnitId}
                       onChange={(e) => setMatUnitId(e.target.value)}
+                      required
                       className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-bold text-[#FF6B00] focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
                     >
-                      {units.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} ({u.symbol})
+                      {units.length === 0 ? (
+                        <option value="" disabled>
+                          -- Belum ada satuan --
                         </option>
-                      ))}
+                      ) : (
+                        units.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.symbol})
+                          </option>
+                        ))
+                      )}
                     </select>
                   </div>
                 </div>

@@ -238,20 +238,23 @@ export const INITIAL_WAREHOUSES: Warehouse[] = [
 ];
 
 export const INITIAL_UNITS: Unit[] = [
-  { id: 'unit-gram', code: 'GRM', name: 'Gram', symbol: 'g', unit_type: 'weight', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'unit-kg', code: 'KG', name: 'Kilogram', symbol: 'kg', unit_type: 'weight', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'unit-ml', code: 'ML', name: 'Mililiter', symbol: 'ml', unit_type: 'volume', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'unit-liter', code: 'LTR', name: 'Liter', symbol: 'L', unit_type: 'volume', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'unit-pcs', code: 'PCS', name: 'Pieces', symbol: 'pcs', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'unit-pack', code: 'PCK', name: 'Pack', symbol: 'pack', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'unit-karton', code: 'KTN', name: 'Karton (Dus)', symbol: 'ktn', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000001', code: 'GRM', name: 'Gram', symbol: 'g', unit_type: 'weight', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000002', code: 'KG', name: 'Kilogram', symbol: 'kg', unit_type: 'weight', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000003', code: 'ML', name: 'Mililiter', symbol: 'ml', unit_type: 'volume', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000004', code: 'LTR', name: 'Liter', symbol: 'L', unit_type: 'volume', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000005', code: 'PCS', name: 'Pieces', symbol: 'pcs', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000006', code: 'PCK', name: 'Pack', symbol: 'pack', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000007', code: 'KTN', name: 'Karton (Dus)', symbol: 'ktn', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000008', code: 'BTL', name: 'Botol', symbol: 'btl', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000009', code: 'KLG', name: 'Kaleng', symbol: 'klg', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000010', code: 'SCH', name: 'Sachet', symbol: 'sch', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
 ];
 
 export const INITIAL_UNIT_CONVERSIONS: UnitConversion[] = [
-  { id: 'conv-kg-g', from_unit_id: 'unit-kg', to_unit_id: 'unit-gram', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'conv-ltr-ml', from_unit_id: 'unit-liter', to_unit_id: 'unit-ml', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'conv-pck-pcs', from_unit_id: 'unit-pack', to_unit_id: 'unit-pcs', conversion_factor: 50, created_at: '2026-10-01T08:00:00Z' },
-  { id: 'conv-ktn-pcs', from_unit_id: 'unit-karton', to_unit_id: 'unit-pcs', conversion_factor: 24, created_at: '2026-10-01T08:00:00Z' },
+  { id: '22222222-0000-0000-0000-000000000001', from_unit_id: '11111111-0000-0000-0000-000000000002', to_unit_id: '11111111-0000-0000-0000-000000000001', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
+  { id: '22222222-0000-0000-0000-000000000002', from_unit_id: '11111111-0000-0000-0000-000000000004', to_unit_id: '11111111-0000-0000-0000-000000000003', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
+  { id: '22222222-0000-0000-0000-000000000003', from_unit_id: '11111111-0000-0000-0000-000000000006', to_unit_id: '11111111-0000-0000-0000-000000000005', conversion_factor: 50, created_at: '2026-10-01T08:00:00Z' },
+  { id: '22222222-0000-0000-0000-000000000004', from_unit_id: '11111111-0000-0000-0000-000000000007', to_unit_id: '11111111-0000-0000-0000-000000000005', conversion_factor: 24, created_at: '2026-10-01T08:00:00Z' },
 ];
 
 export const INITIAL_RAW_MATERIAL_CATEGORIES: RawMaterialCategory[] = [];

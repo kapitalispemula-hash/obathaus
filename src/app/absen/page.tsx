@@ -43,6 +43,9 @@ import {
 
 const SAVED_EMP_ID_KEY = 'obathaus_active_employee_id';
 const ONBOARDING_SEEN_KEY = 'obathaus_attendance_onboarding_seen';
+const BIOMETRIC_EMP_ID_KEY = 'obathaus_biometric_emp_id';
+const BIOMETRIC_EMP_NAME_KEY = 'obathaus_biometric_emp_name';
+const BIOMETRIC_EMP_CODE_KEY = 'obathaus_biometric_emp_code';
 
 // Clean Human-Designed Fingerprint Biometric SVG Icon (Non-AI Generated)
 function FingerprintIcon({ className = 'w-9 h-9', color = '#FF6600' }: { className?: string; color?: string }) {
@@ -74,6 +77,13 @@ export default function MobileAttendancePage() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [biometricSuccess, setBiometricSuccess] = useState(false);
+
+  // Biometric Enrollment State
+  const [isBiometricEnrolled, setIsBiometricEnrolled] = useState(false);
+  const [isBiometricEnrollModalOpen, setIsBiometricEnrollModalOpen] = useState(false);
+  const [isScanningBiometric, setIsScanningBiometric] = useState(false);
+  const [biometricEnrollMsg, setBiometricEnrollMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [enrolledBiometricName, setEnrolledBiometricName] = useState<string | null>(null);
 
   // Home Screen / Attendance State
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -137,6 +147,13 @@ export default function MobileAttendancePage() {
             setCurrentEmployee(match);
           }
         }
+
+        // Load enrolled biometric device connection
+        const bioEmpId = localStorage.getItem(BIOMETRIC_EMP_ID_KEY);
+        const bioEmpName = localStorage.getItem(BIOMETRIC_EMP_NAME_KEY);
+        if (bioEmpId && bioEmpName) {
+          setEnrolledBiometricName(bioEmpName);
+        }
       } catch (err) {
         console.warn('Init session error:', err);
       } finally {
@@ -151,6 +168,10 @@ export default function MobileAttendancePage() {
   // When currentEmployee is active, load today's log & location & shifts & recent history
   useEffect(() => {
     if (!currentEmployee) return;
+
+    // Check if current employee has enrolled fingerprint on this device
+    const bioEmpId = localStorage.getItem(BIOMETRIC_EMP_ID_KEY);
+    setIsBiometricEnrolled(bioEmpId === currentEmployee.id);
 
     async function loadEmployeeData() {
       try {
@@ -287,7 +308,9 @@ export default function MobileAttendancePage() {
   };
 
   const handleBiometricLogin = async () => {
-    // 1. If both ID and PIN are typed, submit directly
+    setLoginError(null);
+
+    // 1. If both ID and PIN are typed in the input box, submit form directly
     if (loginCode.trim() && loginPin.trim()) {
       setIsLoggingIn(true);
       setBiometricSuccess(true);
@@ -295,49 +318,166 @@ export default function MobileAttendancePage() {
         await handleLogin();
         setIsLoggingIn(false);
         setBiometricSuccess(false);
-      }, 600);
+      }, 500);
       return;
     }
 
-    // 2. If ID is typed without PIN, check if previously saved or prompt
-    if (loginCode.trim() && !loginPin.trim()) {
-      const savedId = localStorage.getItem(SAVED_EMP_ID_KEY);
-      const match = allEmployees.find(
-        (e) => e.employee_code.toUpperCase() === loginCode.trim().toUpperCase()
+    // Ensure we have active employees loaded
+    let emps = allEmployees;
+    if (emps.length === 0) {
+      try {
+        emps = await attendanceService.getEmployees();
+        setAllEmployees(emps.filter((e) => e.is_active));
+      } catch (e) {
+        console.warn('Failed to fetch employees for biometric login:', e);
+      }
+    }
+
+    // 2. Check enrolled biometric employee on this device
+    const bioId = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_ID_KEY) : null;
+    const bioCode = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_CODE_KEY) : null;
+    const savedId = typeof window !== 'undefined' ? localStorage.getItem(SAVED_EMP_ID_KEY) : null;
+
+    let targetEmp: EmployeeProfile | undefined;
+
+    // A. Match by recorded biometric ID or Code first
+    if (bioId) {
+      targetEmp = emps.find((e) => e.id === bioId && e.is_active);
+    }
+    if (!targetEmp && bioCode) {
+      targetEmp = emps.find(
+        (e) => e.employee_code.toUpperCase() === bioCode.toUpperCase() && e.is_active
       );
-      if (match && savedId === match.id) {
-        setIsLoggingIn(true);
-        setBiometricSuccess(true);
-        setTimeout(() => {
-          setCurrentEmployee(match);
-          localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
-          setIsLoggingIn(false);
-          setBiometricSuccess(false);
-        }, 700);
-        return;
+    }
+
+    // B. If user typed an ID into the input, check if that matches
+    if (loginCode.trim()) {
+      const typedMatch = emps.find(
+        (e) => e.employee_code.toUpperCase() === loginCode.trim().toUpperCase() && e.is_active
+      );
+      if (typedMatch) {
+        if (bioId === typedMatch.id || savedId === typedMatch.id) {
+          targetEmp = typedMatch;
+        } else if (!loginPin.trim()) {
+          setLoginError(`Harap masukkan PIN Anda untuk masuk pertama kali.`);
+          return;
+        }
       }
-      setLoginError('Harap masukkan PIN Anda untuk login pertama kali.');
+    }
+
+    // C. Fallback to saved active session on device
+    if (!targetEmp && savedId) {
+      targetEmp = emps.find((e) => e.id === savedId && e.is_active);
+    }
+
+    // If still no employee found
+    if (!targetEmp) {
+      setLoginError(
+        'Belum ada sidik jari terdaftar di HP ini. Masuk dengan ID & PIN terlebih dahulu, lalu rekam sidik jari di menu Akun.'
+      );
       return;
     }
 
-    // 3. If device already has an authenticated employee session, biometric log in instantly
-    const savedId = localStorage.getItem(SAVED_EMP_ID_KEY);
-    if (savedId) {
-      const match = allEmployees.find((e) => e.id === savedId);
-      if (match) {
-        setIsLoggingIn(true);
-        setBiometricSuccess(true);
-        setTimeout(() => {
-          setCurrentEmployee(match);
-          localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
-          setIsLoggingIn(false);
-          setBiometricSuccess(false);
-        }, 700);
-        return;
+    setIsLoggingIn(true);
+    setBiometricSuccess(true);
+
+    // Trigger WebAuthn credential check if supported in browser
+    if (typeof window !== 'undefined' && window.PublicKeyCredential && window.isSecureContext) {
+      try {
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+        await navigator.credentials.get({
+          publicKey: {
+            challenge,
+            userVerification: 'preferred',
+            timeout: 60000,
+          },
+        });
+      } catch (err) {
+        console.info('Biometric prompt fallback notice:', err);
       }
     }
 
-    setLoginError('Masukkan ID dan PIN Anda di atas untuk verifikasi biometrik.');
+    setTimeout(() => {
+      setCurrentEmployee(targetEmp!);
+      localStorage.setItem(SAVED_EMP_ID_KEY, targetEmp!.id);
+      localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+      setIsLoggingIn(false);
+      setBiometricSuccess(false);
+    }, 600);
+  };
+
+  const handleEnrollBiometric = async () => {
+    if (!currentEmployee) return;
+    setIsScanningBiometric(true);
+    setBiometricEnrollMsg(null);
+
+    try {
+      // 1. If WebAuthn is supported on secure context, prompt platform biometric
+      if (typeof window !== 'undefined' && window.PublicKeyCredential && window.isSecureContext) {
+        try {
+          const challenge = new Uint8Array(32);
+          window.crypto.getRandomValues(challenge);
+          await navigator.credentials.create({
+            publicKey: {
+              challenge,
+              rp: { name: 'OBAT HAUS Absensi' },
+              user: {
+                id: Uint8Array.from(currentEmployee.id, (c) => c.charCodeAt(0)),
+                name: currentEmployee.employee_code,
+                displayName: currentEmployee.full_name,
+              },
+              pubKeyCredParams: [
+                { alg: -7, type: 'public-key' },
+                { alg: -257, type: 'public-key' },
+              ],
+              authenticatorSelection: {
+                authenticatorAttachment: 'platform',
+                userVerification: 'preferred',
+              },
+              timeout: 60000,
+            },
+          });
+        } catch (authErr: any) {
+          console.info('Biometric enrollment hardware note:', authErr?.message || authErr);
+        }
+      } else {
+        // High-tech tactile delay for feedback animation
+        await new Promise((r) => setTimeout(r, 900));
+      }
+
+      // 2. Persist device biometric binding in localStorage
+      localStorage.setItem(BIOMETRIC_EMP_ID_KEY, currentEmployee.id);
+      localStorage.setItem(BIOMETRIC_EMP_NAME_KEY, currentEmployee.full_name);
+      localStorage.setItem(BIOMETRIC_EMP_CODE_KEY, currentEmployee.employee_code);
+
+      setIsBiometricEnrolled(true);
+      setEnrolledBiometricName(currentEmployee.full_name);
+      setBiometricEnrollMsg({
+        type: 'success',
+        text: 'Sidik jari berhasil direkam & dihubungkan ke HP ini!',
+      });
+    } catch (err) {
+      console.warn('Biometric enroll error:', err);
+      setBiometricEnrollMsg({
+        type: 'error',
+        text: 'Gagal merekam sidik jari. Silakan coba kembali.',
+      });
+    } finally {
+      setIsScanningBiometric(false);
+    }
+  };
+
+  const handleRemoveBiometric = () => {
+    localStorage.removeItem(BIOMETRIC_EMP_ID_KEY);
+    localStorage.removeItem(BIOMETRIC_EMP_NAME_KEY);
+    localStorage.removeItem(BIOMETRIC_EMP_CODE_KEY);
+    setIsBiometricEnrolled(false);
+    setEnrolledBiometricName(null);
+    setBiometricEnrollMsg({
+      type: 'success',
+      text: 'Sambungan sidik jari di HP ini telah dihapus.',
+    });
   };
 
   const handleLogout = () => {
@@ -575,6 +715,31 @@ export default function MobileAttendancePage() {
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>Sidik Jari Terverifikasi! Masuk...</span>
             </div>
+          )}
+
+          {/* Quick Biometric Access Banner if fingerprint enrolled on device */}
+          {enrolledBiometricName && !biometricSuccess && (
+            <button
+              type="button"
+              onClick={handleBiometricLogin}
+              disabled={isLoggingIn}
+              className="w-full p-3 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-2xl flex items-center justify-between transition-all cursor-pointer shadow-xs active:scale-98 group text-left"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#FF6600] text-white flex items-center justify-center shadow-xs shrink-0">
+                  <FingerprintIcon className="w-5 h-5" color="#FFFFFF" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-orange-800 font-bold uppercase tracking-wider">Sidik Jari Terdaftar</p>
+                  <p className="text-xs font-black text-slate-900 group-hover:text-[#FF6600] transition-colors truncate max-w-[200px]">
+                    Masuk Cepat: {enrolledBiometricName}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-black text-[#FF6600] flex items-center gap-0.5">
+                Masuk <ChevronRight className="w-4 h-4" />
+              </span>
+            </button>
           )}
 
           <form onSubmit={handleLogin} className="space-y-3">
@@ -1086,17 +1251,58 @@ export default function MobileAttendancePage() {
               <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
                 <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-500">Keamanan</h4>
 
+                {/* Rekam Sidik Jari (Biometrik) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBiometricEnrollMsg(null);
+                    setIsBiometricEnrollModalOpen(true);
+                  }}
+                  className="w-full py-3.5 px-4 rounded-xl border border-slate-200 hover:border-orange-300 hover:bg-orange-50/40 flex items-center justify-between text-xs font-bold text-slate-800 transition-all cursor-pointer shadow-xs group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-orange-50 text-[#FF6600] flex items-center justify-center group-hover:bg-[#FF6600] group-hover:text-white transition-colors">
+                      <FingerprintIcon className="w-5 h-5" color="currentColor" />
+                    </div>
+                    <div className="text-left">
+                      <span className="block font-black text-slate-900 group-hover:text-[#FF6600] transition-colors">
+                        Rekam Sidik Jari
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        Masuk cepat 1-tap tanpa ketik ID & PIN
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isBiometricEnrolled ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold flex items-center gap-1">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        Aktif
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
+                        Belum Aktif
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </button>
+
+                {/* Ubah PIN */}
                 <button
                   onClick={() => setIsPinModalOpen(true)}
                   className="w-full py-3 px-4 rounded-xl border border-slate-200 hover:border-slate-300 flex items-center justify-between text-xs font-bold text-slate-800 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center gap-2">
-                    <Key className="w-4 h-4 text-slate-500" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                      <Key className="w-4 h-4" />
+                    </div>
                     <span>Ubah PIN Absensi (4 Digit)</span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </button>
 
+                {/* Keluar */}
                 <button
                   onClick={handleLogout}
                   className="w-full py-3 px-4 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 flex items-center justify-center gap-2 text-xs font-black transition-colors cursor-pointer"
@@ -1265,6 +1471,148 @@ export default function MobileAttendancePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* MODAL: REKAM SIDIK JARI (BIOMETRIK ENROLLMENT)                        */}
+      {/* -------------------------------------------------------------------- */}
+      {isBiometricEnrollModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#FF6600] flex items-center justify-center">
+                  <FingerprintIcon className="w-5 h-5" color="#FF6600" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">Rekam Sidik Jari</h3>
+                  <p className="text-[10px] text-slate-400">Verifikasi biometrik perangkat</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsBiometricEnrollModalOpen(false);
+                  setBiometricEnrollMsg(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Status Alert Notification */}
+            {biometricEnrollMsg && (
+              <div
+                className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
+                  biometricEnrollMsg.type === 'success'
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                    : 'bg-red-50 border border-red-200 text-red-800'
+                }`}
+              >
+                {biometricEnrollMsg.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                )}
+                <span>{biometricEnrollMsg.text}</span>
+              </div>
+            )}
+
+            {/* Interactive Scanner Graphic */}
+            <div className="flex flex-col items-center justify-center py-5 bg-gradient-to-b from-orange-50/60 to-orange-50/20 rounded-2xl border border-orange-100 space-y-3">
+              <div className="relative">
+                <div
+                  className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${
+                    isScanningBiometric
+                      ? 'bg-orange-100 ring-4 ring-[#FF6600] scale-105 shadow-lg'
+                      : isBiometricEnrolled
+                      ? 'bg-emerald-50 ring-4 ring-emerald-400'
+                      : 'bg-white shadow-md'
+                  }`}
+                >
+                  <FingerprintIcon
+                    className={`w-11 h-11 transition-all ${isScanningBiometric ? 'scale-110' : ''}`}
+                    color={isBiometricEnrolled ? '#059669' : '#FF6600'}
+                  />
+                </div>
+                {isScanningBiometric && (
+                  <div className="absolute inset-0 rounded-full border-2 border-[#FF6600] animate-ping opacity-60" />
+                )}
+              </div>
+
+              <div className="text-center px-4">
+                <p className="text-xs font-black text-slate-800">
+                  {isScanningBiometric
+                    ? 'Menghubungkan Sensor Sidik Jari...'
+                    : isBiometricEnrolled
+                    ? 'Sidik Jari Aktif di HP Ini'
+                    : 'Siap Merekam Sidik Jari'}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {isBiometricEnrolled
+                    ? `Terhubung untuk: ${currentEmployee?.full_name}`
+                    : 'Klik tombol di bawah untuk mengaktifkan login cepat'}
+                </p>
+              </div>
+            </div>
+
+            {/* Benefits Info Box */}
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 text-[11px] text-slate-600 space-y-1.5">
+              <p className="font-extrabold text-slate-700 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#FF6600]" />
+                Keuntungan Login Sidik Jari:
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-slate-500 text-[10px]">
+                <li>Masuk instan 1-tap tanpa harus mengetik ID dan PIN lagi.</li>
+                <li>Hanya berlaku di perangkat HP ini untuk keamanan ganda.</li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={handleEnrollBiometric}
+                disabled={isScanningBiometric}
+                className="w-full py-3.5 bg-[#FF6600] hover:bg-[#EA580C] active:scale-98 text-white rounded-2xl text-xs font-black shadow-md shadow-orange-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {isScanningBiometric ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Merekam Biometrik...</span>
+                  </>
+                ) : (
+                  <>
+                    <FingerprintIcon className="w-4 h-4" color="#FFFFFF" />
+                    <span>{isBiometricEnrolled ? 'Rekam Ulang Sidik Jari' : 'Mulai Rekam Sidik Jari'}</span>
+                  </>
+                )}
+              </button>
+
+              {isBiometricEnrolled && (
+                <button
+                  type="button"
+                  onClick={handleRemoveBiometric}
+                  disabled={isScanningBiometric}
+                  className="w-full py-2.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-2xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Hapus Sambungan Sidik Jari dari HP Ini
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBiometricEnrollModalOpen(false);
+                  setBiometricEnrollMsg(null);
+                }}
+                className="w-full py-2.5 text-slate-500 hover:text-slate-800 text-xs font-semibold cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

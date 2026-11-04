@@ -51,6 +51,26 @@ const ONBOARDING_SEEN_KEY = 'obathaus_attendance_onboarding_seen';
 const BIOMETRIC_EMP_ID_KEY = 'obathaus_biometric_emp_id';
 const BIOMETRIC_EMP_NAME_KEY = 'obathaus_biometric_emp_name';
 const BIOMETRIC_EMP_CODE_KEY = 'obathaus_biometric_emp_code';
+const BIOMETRIC_CRED_ID_KEY = 'obathaus_biometric_cred_id';
+
+// Base64 WebAuthn buffer conversion helpers
+function bufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
+function base64ToBuffer(base64: string): ArrayBuffer {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
 // Clean Human-Designed Fingerprint Biometric SVG Icon (Non-AI Generated)
 function FingerprintIcon({ className = 'w-9 h-9', color = '#FF6600' }: { className?: string; color?: string }) {
@@ -365,12 +385,20 @@ export default function MobileAttendancePage() {
     // 1. If both ID and PIN are typed in the input box, submit form directly
     if (loginCode.trim() && loginPin.trim()) {
       setIsLoggingIn(true);
-      setBiometricSuccess(true);
-      setTimeout(async () => {
-        await handleLogin();
-        setIsLoggingIn(false);
-        setBiometricSuccess(false);
-      }, 500);
+      await handleLogin();
+      setIsLoggingIn(false);
+      return;
+    }
+
+    // 2. Check enrolled biometric employee on this device
+    const bioId = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_ID_KEY) : null;
+    const bioCode = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_CODE_KEY) : null;
+    const credIdBase64 = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_CRED_ID_KEY) : null;
+
+    if (!bioId) {
+      setLoginError(
+        'Belum ada sidik jari yang direkam di HP ini. Silakan masuk dengan ID & PIN terlebih dahulu, lalu rekam sidik jari di menu Akun.'
+      );
       return;
     }
 
@@ -385,78 +413,70 @@ export default function MobileAttendancePage() {
       }
     }
 
-    // 2. Check enrolled biometric employee on this device
-    const bioId = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_ID_KEY) : null;
-    const bioCode = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_CODE_KEY) : null;
-    const savedId = typeof window !== 'undefined' ? localStorage.getItem(SAVED_EMP_ID_KEY) : null;
+    const targetEmp =
+      emps.find((e) => e.id === bioId && e.is_active) ||
+      (bioCode ? emps.find((e) => e.employee_code.toUpperCase() === bioCode.toUpperCase() && e.is_active) : undefined);
 
-    let targetEmp: EmployeeProfile | undefined;
-
-    // A. Match by recorded biometric ID or Code first
-    if (bioId) {
-      targetEmp = emps.find((e) => e.id === bioId && e.is_active);
-    }
-    if (!targetEmp && bioCode) {
-      targetEmp = emps.find(
-        (e) => e.employee_code.toUpperCase() === bioCode.toUpperCase() && e.is_active
-      );
-    }
-
-    // B. If user typed an ID into the input, check if that matches
-    if (loginCode.trim()) {
-      const typedMatch = emps.find(
-        (e) => e.employee_code.toUpperCase() === loginCode.trim().toUpperCase() && e.is_active
-      );
-      if (typedMatch) {
-        if (bioId === typedMatch.id || savedId === typedMatch.id) {
-          targetEmp = typedMatch;
-        } else if (!loginPin.trim()) {
-          setLoginError(`Harap masukkan PIN Anda untuk masuk pertama kali.`);
-          return;
-        }
-      }
-    }
-
-    // C. Fallback to saved active session on device
-    if (!targetEmp && savedId) {
-      targetEmp = emps.find((e) => e.id === savedId && e.is_active);
-    }
-
-    // If still no employee found
     if (!targetEmp) {
-      setLoginError(
-        'Belum ada sidik jari terdaftar di HP ini. Masuk dengan ID & PIN terlebih dahulu, lalu rekam sidik jari di menu Akun.'
-      );
+      setLoginError('Data karyawan sidik jari tidak ditemukan atau akun sedang tidak aktif.');
+      return;
+    }
+
+    if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+      setLoginError('Browser di perangkat ini belum mendukung pemindai biometrik WebAuthn.');
       return;
     }
 
     setIsLoggingIn(true);
-    setBiometricSuccess(true);
 
-    // Trigger WebAuthn credential check if supported in browser
-    if (typeof window !== 'undefined' && window.PublicKeyCredential && window.isSecureContext) {
-      try {
-        const challenge = new Uint8Array(32);
-        window.crypto.getRandomValues(challenge);
-        await navigator.credentials.get({
-          publicKey: {
-            challenge,
-            userVerification: 'preferred',
-            timeout: 60000,
-          },
-        });
-      } catch (err) {
-        console.info('Biometric prompt fallback notice:', err);
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const allowCredentials = credIdBase64
+        ? [
+            {
+              id: base64ToBuffer(credIdBase64),
+              type: 'public-key' as const,
+              transports: ['internal' as const],
+            },
+          ]
+        : undefined;
+
+      // Panggil sensor biometrik fisik bawaan perangkat HP (Android / iOS)
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          rpId: window.location.hostname,
+          allowCredentials,
+          userVerification: 'required', // Memicu prompt sidik jari fisik HP!
+          timeout: 60000,
+        },
+      });
+
+      if (!assertion) {
+        throw new Error('Verifikasi sidik jari dibatalkan.');
       }
-    }
 
-    setTimeout(() => {
-      setCurrentEmployee(targetEmp!);
-      localStorage.setItem(SAVED_EMP_ID_KEY, targetEmp!.id);
-      localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+      // Verifikasi sidik jari fisik berhasil!
+      setBiometricSuccess(true);
+      setTimeout(() => {
+        setCurrentEmployee(targetEmp);
+        localStorage.setItem(SAVED_EMP_ID_KEY, targetEmp.id);
+        localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+        setIsLoggingIn(false);
+        setBiometricSuccess(false);
+      }, 500);
+    } catch (err: any) {
       setIsLoggingIn(false);
       setBiometricSuccess(false);
-    }, 600);
+      console.warn('Biometric verification error:', err);
+      if (err.name === 'NotAllowedError') {
+        setLoginError('Verifikasi sidik jari dibatalkan atau sidik jari tidak cocok.');
+      } else {
+        setLoginError(err.message || 'Gagal memverifikasi sidik jari pada perangkat ini.');
+      }
+    }
   };
 
   const handleEnrollBiometric = async () => {
@@ -465,40 +485,53 @@ export default function MobileAttendancePage() {
     setBiometricEnrollMsg(null);
 
     try {
-      // 1. If WebAuthn is supported on secure context, prompt platform biometric
-      if (typeof window !== 'undefined' && window.PublicKeyCredential && window.isSecureContext) {
-        try {
-          const challenge = new Uint8Array(32);
-          window.crypto.getRandomValues(challenge);
-          await navigator.credentials.create({
-            publicKey: {
-              challenge,
-              rp: { name: 'OBAT HAUS Absensi' },
-              user: {
-                id: Uint8Array.from(currentEmployee.id, (c) => c.charCodeAt(0)),
-                name: currentEmployee.employee_code,
-                displayName: currentEmployee.full_name,
-              },
-              pubKeyCredParams: [
-                { alg: -7, type: 'public-key' },
-                { alg: -257, type: 'public-key' },
-              ],
-              authenticatorSelection: {
-                authenticatorAttachment: 'platform',
-                userVerification: 'preferred',
-              },
-              timeout: 60000,
-            },
-          });
-        } catch (authErr: any) {
-          console.info('Biometric enrollment hardware note:', authErr?.message || authErr);
-        }
-      } else {
-        // High-tech tactile delay for feedback animation
-        await new Promise((r) => setTimeout(r, 900));
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        throw new Error('Browser di perangkat ini belum mendukung sensor biometrik WebAuthn.');
       }
 
-      // 2. Persist device biometric binding in localStorage
+      // Periksa apakah sensor biometrik fisik (sidik jari / Face ID) tersedia di HP
+      const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!isAvailable) {
+        throw new Error('Sensor sidik jari perangkat tidak terdeteksi atau belum diaktifkan di pengaturan HP.');
+      }
+
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      const userId = new TextEncoder().encode(currentEmployee.id);
+
+      // Panggil pendaftaran sensor biometrik perangkat bawaan (Android Biometric Prompt)
+      const cred = (await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: {
+            name: 'OBAT HAUS Absensi',
+            id: window.location.hostname,
+          },
+          user: {
+            id: userId,
+            name: currentEmployee.employee_code,
+            displayName: currentEmployee.full_name,
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: 'public-key' },  // ES256
+            { alg: -257, type: 'public-key' }, // RS256
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform', // Sensor sidik jari bawaan HP
+            userVerification: 'required',
+            residentKey: 'preferred',
+          },
+          timeout: 60000,
+        },
+      })) as PublicKeyCredential | null;
+
+      if (!cred) {
+        throw new Error('Perekaman sidik jari dibatalkan.');
+      }
+
+      // Simpan Credential ID hardware dan data karyawan di HP
+      const credIdBase64 = bufferToBase64(cred.rawId);
+      localStorage.setItem(BIOMETRIC_CRED_ID_KEY, credIdBase64);
       localStorage.setItem(BIOMETRIC_EMP_ID_KEY, currentEmployee.id);
       localStorage.setItem(BIOMETRIC_EMP_NAME_KEY, currentEmployee.full_name);
       localStorage.setItem(BIOMETRIC_EMP_CODE_KEY, currentEmployee.employee_code);
@@ -507,13 +540,19 @@ export default function MobileAttendancePage() {
       setEnrolledBiometricName(currentEmployee.full_name);
       setBiometricEnrollMsg({
         type: 'success',
-        text: 'Sidik jari berhasil direkam & dihubungkan ke HP ini!',
+        text: 'Sensor sidik jari HP berhasil dihubungkan!',
       });
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Biometric enroll error:', err);
+      let errorText = 'Gagal merekam sidik jari. Silakan coba kembali.';
+      if (err.name === 'NotAllowedError') {
+        errorText = 'Perekaman sidik jari dibatalkan oleh pengguna.';
+      } else if (err.message) {
+        errorText = err.message;
+      }
       setBiometricEnrollMsg({
         type: 'error',
-        text: 'Gagal merekam sidik jari. Silakan coba kembali.',
+        text: errorText,
       });
     } finally {
       setIsScanningBiometric(false);
@@ -524,6 +563,7 @@ export default function MobileAttendancePage() {
     localStorage.removeItem(BIOMETRIC_EMP_ID_KEY);
     localStorage.removeItem(BIOMETRIC_EMP_NAME_KEY);
     localStorage.removeItem(BIOMETRIC_EMP_CODE_KEY);
+    localStorage.removeItem(BIOMETRIC_CRED_ID_KEY);
     setIsBiometricEnrolled(false);
     setEnrolledBiometricName(null);
     setBiometricEnrollMsg({
@@ -796,31 +836,6 @@ export default function MobileAttendancePage() {
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>Sidik Jari Terverifikasi! Masuk...</span>
             </div>
-          )}
-
-          {/* Quick Biometric Access Banner if fingerprint enrolled on device */}
-          {enrolledBiometricName && !biometricSuccess && (
-            <button
-              type="button"
-              onClick={handleBiometricLogin}
-              disabled={isLoggingIn}
-              className="w-full p-3 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-2xl flex items-center justify-between transition-all cursor-pointer shadow-xs active:scale-98 group text-left"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#FF6600] text-white flex items-center justify-center shadow-xs shrink-0">
-                  <FingerprintIcon className="w-5 h-5" color="#FFFFFF" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-orange-800 font-bold uppercase tracking-wider">Sidik Jari Terdaftar</p>
-                  <p className="text-xs font-black text-slate-900 group-hover:text-[#FF6600] transition-colors truncate max-w-[200px]">
-                    Masuk Cepat: {enrolledBiometricName}
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-black text-[#FF6600] flex items-center gap-0.5">
-                Masuk <ChevronRight className="w-4 h-4" />
-              </span>
-            </button>
           )}
 
           <form onSubmit={handleLogin} className="space-y-3">

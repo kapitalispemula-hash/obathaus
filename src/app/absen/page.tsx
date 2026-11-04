@@ -28,6 +28,11 @@ import {
   Building2,
   Warehouse as WarehouseIcon,
   Sparkles,
+  Download,
+  Smartphone,
+  Share,
+  PlusSquare,
+  Copy,
 } from 'lucide-react';
 import {
   attendanceService,
@@ -84,6 +89,13 @@ export default function MobileAttendancePage() {
   const [isScanningBiometric, setIsScanningBiometric] = useState(false);
   const [biometricEnrollMsg, setBiometricEnrollMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [enrolledBiometricName, setEnrolledBiometricName] = useState<string | null>(null);
+
+  // PWA App Installation State specifically for /absen
+  const [isStandaloneApp, setIsStandaloneApp] = useState(false);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
+  const [isInstallGuideModalOpen, setIsInstallGuideModalOpen] = useState(false);
+  const [installGuideTab, setInstallGuideTab] = useState<'android' | 'ios'>('android');
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Home Screen / Attendance State
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
@@ -162,7 +174,47 @@ export default function MobileAttendancePage() {
     }
 
     initSession();
-    return () => clearInterval(timer);
+
+    // 4. Check standalone PWA mode & listen to install prompt
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+      if (typeof window !== 'undefined') {
+        (window as any).__pwaDeferredPrompt = e;
+      }
+    };
+
+    const handleAppInstalled = () => {
+      setIsStandaloneApp(true);
+      setDeferredInstallPrompt(null);
+    };
+
+    if (typeof window !== 'undefined') {
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true;
+      setIsStandaloneApp(isStandalone);
+
+      const userAgent = navigator.userAgent || '';
+      if (/iPhone|iPad|iPod/i.test(userAgent)) {
+        setInstallGuideTab('ios');
+      }
+
+      window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.addEventListener('appinstalled', handleAppInstalled);
+
+      if ((window as any).__pwaDeferredPrompt) {
+        setDeferredInstallPrompt((window as any).__pwaDeferredPrompt);
+      }
+    }
+
+    return () => {
+      clearInterval(timer);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+        window.removeEventListener('appinstalled', handleAppInstalled);
+      }
+    };
   }, []);
 
   // When currentEmployee is active, load today's log & location & shifts & recent history
@@ -478,6 +530,35 @@ export default function MobileAttendancePage() {
       type: 'success',
       text: 'Sambungan sidik jari di HP ini telah dihapus.',
     });
+  };
+
+  const handleInstallAbsenApp = async () => {
+    const prompt =
+      deferredInstallPrompt ||
+      (typeof window !== 'undefined' ? (window as any).__pwaDeferredPrompt : null);
+    if (prompt) {
+      try {
+        prompt.prompt();
+        const { outcome } = await prompt.userChoice;
+        if (outcome === 'accepted') {
+          setIsStandaloneApp(true);
+          setDeferredInstallPrompt(null);
+        }
+      } catch (err) {
+        console.warn('Install prompt error:', err);
+        setIsInstallGuideModalOpen(true);
+      }
+    } else {
+      setIsInstallGuideModalOpen(true);
+    }
+  };
+
+  const handleCopyAbsenLink = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText('https://obathaus.vercel.app/absen');
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
   };
 
   const handleLogout = () => {
@@ -812,7 +893,44 @@ export default function MobileAttendancePage() {
   const isAlreadyClockedIn = Boolean(todayLog && todayLog.clock_in && !todayLog.clock_out);
   const isAlreadyClockedOut = Boolean(todayLog && todayLog.clock_out);
   const isReportedAbsence = Boolean(todayLog && (todayLog.status === 'sick' || todayLog.status === 'leave'));
-  const activeShift = shifts.find((s) => s.is_active) || shifts[0];
+
+  // Filter shifts specifically matching employee's assigned location (Outlet vs Central Warehouse)
+  const employeeLocationShifts = shifts.filter((s) => {
+    if (!s.is_active) return false;
+    const isWarehouseEmp = currentEmployee?.assigned_location_type === 'warehouse';
+    const sName = (s.name || '').toLowerCase();
+
+    // 1. Explicit location_id
+    if ((s as any).location_id) {
+      return (s as any).location_id === currentEmployee?.assigned_location_id;
+    }
+
+    // 2. Explicit location_type
+    if ((s as any).location_type) {
+      if ((s as any).location_type === 'warehouse') return isWarehouseEmp;
+      if ((s as any).location_type === 'outlet') return !isWarehouseEmp;
+      if ((s as any).location_type === 'all') return true;
+    }
+
+    // 3. Heuristic matching based on shift name
+    const isShiftGudang =
+      sName.includes('gudang') || sName.includes('warehouse') || sName.includes('logistik');
+    const isShiftOutlet =
+      sName.includes('outlet') ||
+      sName.includes('barista') ||
+      sName.includes('kasir') ||
+      sName.includes('toko') ||
+      sName.includes('cabang');
+
+    if (isWarehouseEmp) {
+      return isShiftGudang || !isShiftOutlet;
+    } else {
+      return !isShiftGudang;
+    }
+  });
+
+  const displayShifts = employeeLocationShifts.length > 0 ? employeeLocationShifts : shifts;
+  const activeShift = displayShifts.find((s) => s.is_active) || displayShifts[0];
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-between max-w-md mx-auto shadow-2xl relative select-none border-x border-slate-200/80">
@@ -1102,35 +1220,61 @@ export default function MobileAttendancePage() {
         {activeTab === 'schedule' && (
           <div className="space-y-4">
             <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg">
-              <h2 className="text-lg font-black">Jadwal Shift Kerja</h2>
-              <p className="text-xs text-white/80 mt-0.5">
-                Penugasan lokasi: <strong className="text-white">{locationTarget?.name}</strong>
+              <div className="flex items-center gap-2 mb-1">
+                {currentEmployee?.assigned_location_type === 'warehouse' ? (
+                  <WarehouseIcon className="w-5 h-5 text-white/90" />
+                ) : (
+                  <Building2 className="w-5 h-5 text-white/90" />
+                )}
+                <h2 className="text-lg font-black">Jadwal Shift Kerja</h2>
+              </div>
+              <p className="text-xs text-white/90 mt-0.5">
+                Unit Penugasan: <strong className="text-white underline underline-offset-2">{locationTarget?.name || (currentEmployee?.assigned_location_type === 'warehouse' ? 'Gudang Logistik' : 'Outlet')}</strong>
+              </p>
+              <p className="text-[11px] text-white/75 mt-0.5">
+                Jadwal shift kerja yang berlaku khusus untuk unit tempat Anda bertugas.
               </p>
             </div>
 
             <div className="p-5 space-y-3">
-              {shifts.map((s) => (
-                <div
-                  key={s.id}
-                  className={`p-4 rounded-2xl border bg-white shadow-xs space-y-2 ${
-                    s.is_active ? 'border-orange-200 ring-1 ring-orange-100' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                      <Coffee className="w-4 h-4 text-[#FF6600]" />
-                      <span>{s.name}</span>
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-orange-50 text-[#FF6600] text-[10px] font-bold">
-                      Toleransi: {s.late_tolerance_minutes} Menit
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-slate-600 font-mono font-bold">
-                    <span>Mulai: {s.start_time} WITA</span>
-                    <span>Selesai: {s.end_time} WITA</span>
-                  </div>
+              {displayShifts.length === 0 ? (
+                <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center text-xs text-slate-500">
+                  Belum ada jadwal shift khusus yang diatur untuk {locationTarget?.name}.
                 </div>
-              ))}
+              ) : (
+                displayShifts.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`p-4 rounded-2xl border bg-white shadow-xs space-y-2.5 ${
+                      s.id === activeShift?.id ? 'border-orange-300 ring-2 ring-orange-100 shadow-sm' : 'border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                        <Coffee className="w-4 h-4 text-[#FF6600]" />
+                        <span>{s.name}</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {s.id === activeShift?.id && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                            Shift Aktif
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded-md bg-orange-50 text-[#FF6600] text-[10px] font-bold">
+                          Toleransi: {s.late_tolerance_minutes} Menit
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-700 font-mono font-bold pt-1 border-t border-slate-100">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        Mulai: {s.start_time} WITA
+                      </span>
+                      <span>Selesai: {s.end_time} WITA</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -1244,6 +1388,49 @@ export default function MobileAttendancePage() {
                       Aktif Bekerja
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* CTA KARTU PASANG APLIKASI ABSENSI HP */}
+              <div className="bg-gradient-to-br from-orange-500 via-[#FF6600] to-amber-600 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden space-y-3.5">
+                <div className="flex items-start gap-3.5 relative z-10">
+                  <div className="w-14 h-14 rounded-2xl bg-white p-1 shadow-md shrink-0 border border-white/20">
+                    <img
+                      src="/iconappabsen.png"
+                      alt="Ikon App Absen"
+                      className="w-full h-full object-cover rounded-xl"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-wider text-white mb-1">
+                      <Sparkles className="w-3 h-3 text-amber-200" />
+                      <span>App Absensi Mandiri</span>
+                    </div>
+                    <h3 className="text-sm font-black text-white leading-tight">
+                      Install Aplikasi Absen HP
+                    </h3>
+                    <p className="text-[11px] text-white/90 leading-tight mt-0.5">
+                      Pasang di layar utama HP Anda agar bisa dibuka langsung seperti aplikasi tanpa buka browser.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-1 relative z-10">
+                  {isStandaloneApp ? (
+                    <div className="w-full py-3 px-4 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 text-white text-xs font-black flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                      <span>Aplikasi Absen Sudah Terpasang di Layar HP</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleInstallAbsenApp}
+                      className="w-full py-3 px-4 bg-white hover:bg-orange-50 active:scale-98 text-[#FF6600] rounded-2xl text-xs font-black shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4 stroke-[2.5]" />
+                      <span>Install Aplikasi Absen di HP</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1613,6 +1800,185 @@ export default function MobileAttendancePage() {
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* MODAL: PANDUAN INSTALL APP ABSENSI (PWA KHUSUS /absen)               */}
+      {/* -------------------------------------------------------------------- */}
+      {isInstallGuideModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <img
+                  src="/iconappabsen.png"
+                  alt="App Icon"
+                  className="w-8 h-8 rounded-xl object-cover shadow-xs border border-orange-200"
+                />
+                <div>
+                  <h3 className="font-black text-sm text-slate-900">Install App Absensi</h3>
+                  <p className="text-[10px] text-slate-400">obathaus.vercel.app/absen</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsInstallGuideModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Operating System Selector Tabs */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setInstallGuideTab('android')}
+                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  installGuideTab === 'android'
+                    ? 'bg-white text-[#FF6600] shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Android (Chrome)
+              </button>
+              <button
+                type="button"
+                onClick={() => setInstallGuideTab('ios')}
+                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  installGuideTab === 'ios'
+                    ? 'bg-white text-[#FF6600] shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                iPhone / iPad (Safari)
+              </button>
+            </div>
+
+            {/* Android Instructions */}
+            {installGuideTab === 'android' ? (
+              <div className="bg-orange-50/60 rounded-2xl p-4 border border-orange-100 space-y-3">
+                <p className="text-xs font-extrabold text-orange-950 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-[#FF6600]" />
+                  Cara Pasang di HP Android:
+                </p>
+                <ol className="text-[11px] text-slate-700 space-y-2 pl-1">
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#FF6600] text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>
+                      Buka browser <strong>Google Chrome</strong> di HP Anda.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#FF6600] text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>
+                      Ketuk tombol menu <strong>titik tiga (⋮)</strong> di sudut kanan atas layar Chrome.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#FF6600] text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>
+                      Pilih menu <strong>&quot;Install Aplikasi&quot;</strong> atau <strong>&quot;Tambahkan ke Layar Utama&quot;</strong>.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      ✓
+                    </span>
+                    <span>
+                      Selesai! Ikon <strong>Absen Haus</strong> dengan logo oranye akan langsung tersedia di beranda HP Anda.
+                    </span>
+                  </li>
+                </ol>
+              </div>
+            ) : (
+              /* iOS Safari Instructions */
+              <div className="bg-orange-50/60 rounded-2xl p-4 border border-orange-100 space-y-3">
+                <p className="text-xs font-extrabold text-orange-950 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4 text-[#FF6600]" />
+                  Cara Pasang di iPhone / iPad:
+                </p>
+                <ol className="text-[11px] text-slate-700 space-y-2 pl-1">
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#FF6600] text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>
+                      Pastikan tautan ini dibuka menggunakan browser <strong>Safari</strong> bawaan Apple.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#FF6600] text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>
+                      Ketuk tombol <strong>Bagikan</strong> (ikon kotak dengan panah atas <Share className="w-3.5 h-3.5 inline mx-0.5 text-blue-600" />) di bilah bawah Safari.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-[#FF6600] text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>
+                      Gulir ke bawah dan pilih <PlusSquare className="w-3.5 h-3.5 inline mx-0.5 text-slate-700" /> <strong>Tambah ke Layar Utama</strong> (*Add to Home Screen*).
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black flex items-center justify-center text-[10px] shrink-0 mt-0.5">
+                      ✓
+                    </span>
+                    <span>
+                      Ketuk <strong>Tambah</strong> di pojok kanan atas. Aplikasi akan terpasang di Homescreen!
+                    </span>
+                  </li>
+                </ol>
+              </div>
+            )}
+
+            {/* Direct Copy Link Tool */}
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                Tautan Khusus Aplikasi Absensi:
+              </span>
+              <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200">
+                <span className="text-xs font-mono font-bold text-slate-800 truncate flex-1">
+                  https://obathaus.vercel.app/absen
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyAbsenLink}
+                  className="px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-[#FF6600] rounded-lg text-xs font-black transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3 h-3 stroke-[3]" />
+                      <span>Tersalin</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>Salin</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Close Button */}
+            <button
+              type="button"
+              onClick={() => setIsInstallGuideModalOpen(false)}
+              className="w-full py-3 bg-[#FF6600] hover:bg-[#EA580C] text-white rounded-2xl text-xs font-black shadow-md shadow-orange-500/25 transition-all cursor-pointer"
+            >
+              Mengerti &amp; Tutup
+            </button>
           </div>
         </div>
       )}

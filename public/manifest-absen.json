@@ -1,0 +1,26 @@
+{
+  "name": "Absensi Karyawan - OBAT HAUS",
+  "short_name": "Absen Haus",
+  "description": "Aplikasi Absensi Digital Mandiri Staf & Barista OBAT HAUS Sulawesi Barat berbasis GPS Geofencing",
+  "start_url": "/absen",
+  "scope": "/absen",
+  "id": "/absen",
+  "display": "standalone",
+  "background_color": "#FF6600",
+  "theme_color": "#FF6600",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/iconappabsen.png",
+      "sizes": "192x192 512x512 600x600",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/iconappabsen.png",
+      "sizes": "192x192 512x512 600x600",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

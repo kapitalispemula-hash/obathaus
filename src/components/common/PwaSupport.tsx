@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { WifiOff, Download, X, Share, PlusSquare, Smartphone, CheckCircle2 } from 'lucide-react';
 import { TargetLogo } from './TargetLogo';
 
 const PWA_DISMISSED_KEY = 'obathaus_pwa_prompt_dismissed_at';
 
 export function PwaSupport() {
+  const pathname = usePathname();
   const [isOnline, setIsOnline] = useState(true);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -94,6 +96,7 @@ export function PwaSupport() {
   }, []);
 
   const checkAndShowBanner = () => {
+    if (pathname?.startsWith('/absen')) return;
     try {
       const dismissedAt = localStorage.getItem(PWA_DISMISSED_KEY);
       if (dismissedAt) {
@@ -148,7 +151,7 @@ export function PwaSupport() {
       )}
 
       {/* Mobile Download/Install Popup Banner (Android & iOS) */}
-      {showMobileBanner && !isStandalone && (
+      {showMobileBanner && !isStandalone && !pathname?.startsWith('/absen') && (
         <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4 animate-in slide-in-from-bottom duration-300">
           <div className="max-w-md mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-5 relative overflow-hidden backdrop-blur-md">
             {/* Top Close Button */}

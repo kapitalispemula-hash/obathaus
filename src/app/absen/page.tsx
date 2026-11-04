@@ -70,7 +70,7 @@ export default function MobileAttendancePage() {
 
   // Login Form State
   const [loginCode, setLoginCode] = useState('');
-  const [loginPin, setLoginPin] = useState('1234');
+  const [loginPin, setLoginPin] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [biometricSuccess, setBiometricSuccess] = useState(false);
@@ -253,12 +253,16 @@ export default function MobileAttendancePage() {
       setLoginError('Harap masukkan ID Karyawan Anda.');
       return;
     }
+    if (!loginPin.trim()) {
+      setLoginError('Harap masukkan PIN Absen Anda.');
+      return;
+    }
 
     setIsLoggingIn(true);
     setLoginError(null);
 
     try {
-      const pinToUse = loginPin.trim() || '1234';
+      const pinToUse = loginPin.trim();
       const res = await attendanceService.loginEmployee(loginCode, pinToUse);
 
       if (res.success && res.employee) {
@@ -266,12 +270,13 @@ export default function MobileAttendancePage() {
         localStorage.setItem(SAVED_EMP_ID_KEY, res.employee.id);
         localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
         setLoginCode('');
+        setLoginPin('');
       } else {
         const match = allEmployees.find(
           (emp) => emp.employee_code.toUpperCase() === loginCode.trim().toUpperCase()
         );
         if (match) {
-          setLoginError('PIN Karyawan tidak cocok. Hubungi admin atau masukkan PIN Anda.');
+          setLoginError('PIN Karyawan tidak cocok. Periksa kembali PIN Anda.');
         } else {
           setLoginError(res.error || 'ID Karyawan tidak terdaftar dalam sistem.');
         }
@@ -282,7 +287,8 @@ export default function MobileAttendancePage() {
   };
 
   const handleBiometricLogin = async () => {
-    if (loginCode.trim()) {
+    // 1. If both ID and PIN are typed, submit directly
+    if (loginCode.trim() && loginPin.trim()) {
       setIsLoggingIn(true);
       setBiometricSuccess(true);
       setTimeout(async () => {
@@ -293,6 +299,28 @@ export default function MobileAttendancePage() {
       return;
     }
 
+    // 2. If ID is typed without PIN, check if previously saved or prompt
+    if (loginCode.trim() && !loginPin.trim()) {
+      const savedId = localStorage.getItem(SAVED_EMP_ID_KEY);
+      const match = allEmployees.find(
+        (e) => e.employee_code.toUpperCase() === loginCode.trim().toUpperCase()
+      );
+      if (match && savedId === match.id) {
+        setIsLoggingIn(true);
+        setBiometricSuccess(true);
+        setTimeout(() => {
+          setCurrentEmployee(match);
+          localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
+          setIsLoggingIn(false);
+          setBiometricSuccess(false);
+        }, 700);
+        return;
+      }
+      setLoginError('Harap masukkan PIN Anda untuk login pertama kali.');
+      return;
+    }
+
+    // 3. If device already has an authenticated employee session, biometric log in instantly
     const savedId = localStorage.getItem(SAVED_EMP_ID_KEY);
     if (savedId) {
       const match = allEmployees.find((e) => e.id === savedId);
@@ -309,7 +337,7 @@ export default function MobileAttendancePage() {
       }
     }
 
-    setLoginError('Masukkan ID Karyawan Anda di atas untuk verifikasi sidik jari.');
+    setLoginError('Masukkan ID dan PIN Anda di atas untuk verifikasi biometrik.');
   };
 
   const handleLogout = () => {
@@ -549,19 +577,31 @@ export default function MobileAttendancePage() {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-3.5">
+          <form onSubmit={handleLogin} className="space-y-3">
             <div className="relative">
               <input
                 type="text"
                 value={loginCode}
                 onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
-                placeholder="Masukkan ID"
+                placeholder="Masukkan ID Karyawan"
                 required
-                className="w-full py-4 px-5 bg-[#E5E7EB] hover:bg-[#DDE1E6] focus:bg-white border-2 border-transparent focus:border-[#FF6600] rounded-2xl text-center text-sm font-bold text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all shadow-inner"
+                className="w-full py-3.5 px-5 bg-[#E5E7EB] hover:bg-[#DDE1E6] focus:bg-white border-2 border-transparent focus:border-[#FF6600] rounded-2xl text-center text-sm font-bold text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all shadow-inner"
               />
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="relative">
+              <input
+                type="password"
+                maxLength={6}
+                value={loginPin}
+                onChange={(e) => setLoginPin(e.target.value)}
+                placeholder="Masukkan PIN (4 Digit)"
+                required
+                className="w-full py-3.5 px-5 bg-[#E5E7EB] hover:bg-[#DDE1E6] focus:bg-white border-2 border-transparent focus:border-[#FF6600] rounded-2xl text-center text-sm font-bold tracking-widest text-slate-800 placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none transition-all shadow-inner font-mono"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
               <button
                 type="submit"
                 disabled={isLoggingIn}

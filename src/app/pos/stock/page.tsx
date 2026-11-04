@@ -5,6 +5,7 @@ import { CashierLayout } from '@/components/layout/CashierLayout';
 import { dbService } from '@/lib/services/database';
 import { OutletStock, Dispatch, RawMaterial, Outlet } from '@/types/database';
 import { useAuth } from '@/lib/auth-context';
+import { useOutlet } from '@/lib/outlet-context';
 import {
   Package,
   Truck,
@@ -23,7 +24,10 @@ import {
 
 export default function PosStockPage() {
   const { user } = useAuth();
-  const outletId = user?.primary_outlet_id || 'out-01';
+  const { activeOutlet } = useOutlet();
+  const outletId = (user?.primary_outlet_id && user.primary_outlet_id.length === 36)
+    ? user.primary_outlet_id
+    : (activeOutlet?.id || 'd0000000-0000-0000-0000-000000000001');
 
   const [stocks, setStocks] = useState<OutletStock[]>([]);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
@@ -73,7 +77,7 @@ export default function PosStockPage() {
       setReceivingId(dispatchId);
       await dbService.confirmDispatchReceipt(
         dispatchId,
-        user?.id || 'c0000000-0000-0000-0000-000000000001',
+        user?.id || '5171c509-cad6-4b8c-83d0-46c04e9e4c82',
         'Diterima dalam kondisi baik & lengkap oleh kasir'
       );
       setFeedback('Kiriman barang logistik berhasil diterima! Saldo stok bahan cabang otomatis bertambah.');
@@ -106,15 +110,18 @@ export default function PosStockPage() {
       await dbService.createOutletOrder({
         outlet_id: outletId,
         warehouse_id: 'e0000000-0000-0000-0000-000000000001',
-        notes: orderNotes,
-        created_by: user?.id || 'c0000000-0000-0000-0000-000000000001',
-        items: orderItems.map((itm, idx) => ({
-          id: `ordi-${Date.now()}-${idx}`,
-          outlet_order_id: '',
-          raw_material_id: itm.raw_material_id,
-          quantity_requested: itm.quantity,
-          unit_id: 'unit-gram',
-        })),
+        notes: orderNotes.trim() || null,
+        created_by: user?.id,
+        items: orderItems.map((itm) => {
+          const mat = materials.find((m) => m.id === itm.raw_material_id);
+          return {
+            id: crypto.randomUUID(),
+            outlet_order_id: '',
+            raw_material_id: itm.raw_material_id,
+            quantity_requested: Number(itm.quantity),
+            unit_id: mat?.standard_unit_id || '11111111-0000-0000-0000-000000000001',
+          };
+        }),
       });
 
       setFeedback('Permintaan restock berhasil dikirim ke Operator Gudang Pusat!');

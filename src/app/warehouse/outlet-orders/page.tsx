@@ -41,6 +41,15 @@ export default function WarehouseOutletOrdersPage() {
 
   useEffect(() => {
     loadOrders();
+    const handleUpdate = () => loadOrders();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_notifications_updated', handleUpdate);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_notifications_updated', handleUpdate);
+      }
+    };
   }, []);
 
   const handleUpdateStatus = async (orderId: string, status: OutletOrderStatus) => {

@@ -163,13 +163,16 @@ function WarehouseDispatchContent() {
         driver_name: driverName.trim() || null,
         vehicle_number: vehicleNumber.trim() || null,
         notes: notes.trim() || null,
-        items: dispatchItems.map((it, idx) => ({
-          id: `dspi-${Date.now()}-${idx}`,
-          dispatch_id: '',
-          raw_material_id: it.raw_material_id,
-          quantity_dispatched: Number(it.quantity),
-          unit_id: 'unit-gram',
-        })),
+        items: dispatchItems.map((it) => {
+          const mat = materials.find((m) => m.id === it.raw_material_id);
+          return {
+            id: crypto.randomUUID(),
+            dispatch_id: '',
+            raw_material_id: it.raw_material_id,
+            quantity_dispatched: Number(it.quantity),
+            unit_id: mat?.standard_unit_id || '11111111-0000-0000-0000-000000000001',
+          };
+        }),
       });
 
       setIsModalOpen(false);

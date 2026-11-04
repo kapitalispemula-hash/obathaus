@@ -3181,14 +3181,31 @@ export const dbService = {
         const supabase = createClient();
         let query = supabase
           .from('outlet_orders')
-          .select('*, outlet:outlets(*), items:outlet_order_items(*, raw_material:raw_materials(*))')
+          .select('*, outlet:outlets(*), items:outlet_order_items(*, raw_material:raw_materials(*), unit:units(*))')
           .order('created_at', { ascending: false });
         if (warehouseId) query = query.eq('warehouse_id', warehouseId);
         const { data, error } = await query;
-        if (!error && data && data.length > 0) {
-          localOutletOrders = data as OutletOrder[];
+        if (!error && data) {
+          const mappedOrders: OutletOrder[] = data.map((ord: any) => ({
+            ...ord,
+            items: (ord.items || []).map((it: any) => ({
+              id: it.id,
+              outlet_order_id: it.order_id || it.outlet_order_id || ord.id,
+              raw_material_id: it.raw_material_id,
+              quantity_requested: Number(it.quantity_requested || 0),
+              quantity_approved: Number(it.quantity_approved || it.quantity_requested || 0),
+              quantity_dispatched: Number(it.quantity_dispatched || 0),
+              unit_id: it.unit_id,
+              raw_material: it.raw_material,
+              unit: it.unit,
+            })),
+          }));
+          localOutletOrders = mappedOrders;
           setStorageItem(STORAGE_KEYS.OUTLET_ORDERS, localOutletOrders);
-          return data as OutletOrder[];
+          return mappedOrders;
+        }
+        if (error) {
+          console.warn('Supabase getOutletOrders error:', error);
         }
       } catch (e) {
         console.warn('Falling back to local getOutletOrders:', e);
@@ -3234,18 +3251,46 @@ export const dbService = {
   },
 
   async createOutletOrder(payload: Partial<OutletOrder>): Promise<OutletOrder> {
+    const validOrderId = (payload.id && payload.id.length === 36 && !payload.id.startsWith('ord-'))
+      ? payload.id
+      : crypto.randomUUID();
+
+    let outId = payload.outlet_id;
+    if (!outId || outId.length !== 36) {
+      outId = 'd0000000-0000-0000-0000-000000000001'; // Default OBATHAUS Cityfood pusat
+    }
+
+    let whId = payload.warehouse_id;
+    if (!whId || whId.length !== 36) {
+      whId = 'e0000000-0000-0000-0000-000000000001'; // Central Warehouse
+    }
+
+    let creatorId = payload.created_by;
+    if (!creatorId || creatorId.length !== 36 || creatorId.startsWith('c0000000')) {
+      creatorId = '5171c509-cad6-4b8c-83d0-46c04e9e4c82'; // Kasir Riska or fallback to 'a0000000-0000-0000-0000-000000000001'
+    }
+
     const newOrder: OutletOrder = {
-      id: payload.id || `ord-${Date.now()}`,
+      id: validOrderId,
       order_number: payload.order_number || `ORD-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
-      outlet_id: payload.outlet_id || '',
-      warehouse_id: payload.warehouse_id || 'e0000000-0000-0000-0000-000000000001',
+      outlet_id: outId,
+      warehouse_id: whId,
       status: payload.status || 'submitted',
       order_date: new Date().toISOString(),
       notes: payload.notes || null,
-      created_by: payload.created_by || 'c0000000-0000-0000-0000-000000000001',
+      created_by: creatorId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      items: payload.items || [],
+      items: (payload.items || []).map((it) => ({
+        ...it,
+        id: (it.id && it.id.length === 36 && !it.id.startsWith('ordi-')) ? it.id : crypto.randomUUID(),
+        outlet_order_id: validOrderId,
+        raw_material_id: it.raw_material_id,
+        quantity_requested: Number(it.quantity_requested || 0),
+        unit_id: (it.unit_id && it.unit_id.length === 36 && !it.unit_id.startsWith('unit-'))
+          ? it.unit_id
+          : '11111111-0000-0000-0000-000000000001',
+      })),
     };
 
     if (isSupabaseConfigured()) {
@@ -3261,19 +3306,31 @@ export const dbService = {
           notes: newOrder.notes,
           created_by: newOrder.created_by,
           created_at: newOrder.created_at,
+          updated_at: newOrder.updated_at,
         }).select().single();
 
-        if (!ordErr && insertedOrder && newOrder.items && newOrder.items.length > 0) {
+        if (ordErr) {
+          console.error('Supabase createOutletOrder error:', ordErr);
+          throw new Error(`Gagal menyimpan pesanan cabang: ${ordErr.message}`);
+        }
+
+        if (insertedOrder && newOrder.items && newOrder.items.length > 0) {
           const itemsToInsert = newOrder.items.map((it) => ({
-            id: it.id || crypto.randomUUID(),
-            outlet_order_id: insertedOrder.id,
+            id: it.id,
+            order_id: insertedOrder.id,
             raw_material_id: it.raw_material_id,
             quantity_requested: it.quantity_requested,
+            unit_id: it.unit_id,
           }));
-          await supabase.from('outlet_order_items').insert(itemsToInsert);
+          const { error: itemsErr } = await supabase.from('outlet_order_items').insert(itemsToInsert);
+          if (itemsErr) {
+            console.error('Supabase createOutletOrder items error:', itemsErr);
+            throw new Error(`Gagal menyimpan rincian pesanan cabang: ${itemsErr.message}`);
+          }
         }
-      } catch (e) {
-        console.warn('Falling back to local createOutletOrder:', e);
+      } catch (e: any) {
+        console.error('Error in createOutletOrder:', e);
+        throw e;
       }
     }
 
@@ -3306,14 +3363,30 @@ export const dbService = {
         const supabase = createClient();
         let query = supabase
           .from('dispatches')
-          .select('*, to_outlet:outlets(*), items:dispatch_items(*, raw_material:raw_materials(*))')
+          .select('*, to_outlet:outlets(*), items:dispatch_items(*, raw_material:raw_materials(*), unit:units(*))')
           .order('created_at', { ascending: false });
         if (warehouseId) query = query.eq('from_warehouse_id', warehouseId);
         const { data, error } = await query;
-        if (!error && data && data.length > 0) {
-          localDispatches = data as Dispatch[];
+        if (!error && data) {
+          const mapped: Dispatch[] = data.map((d: any) => ({
+            ...d,
+            items: (d.items || []).map((it: any) => ({
+              id: it.id,
+              dispatch_id: it.dispatch_id || d.id,
+              raw_material_id: it.raw_material_id,
+              quantity_dispatched: Number(it.quantity_dispatched || 0),
+              quantity_received: Number(it.quantity_received || 0),
+              unit_id: it.unit_id,
+              raw_material: it.raw_material,
+              unit: it.unit,
+            })),
+          }));
+          localDispatches = mapped;
           setStorageItem(STORAGE_KEYS.DISPATCHES, localDispatches);
-          return data as Dispatch[];
+          return mapped;
+        }
+        if (error) {
+          console.warn('Supabase getDispatches error:', error);
         }
       } catch (e) {
         console.warn('Falling back to local getDispatches:', e);
@@ -3335,20 +3408,47 @@ export const dbService = {
   },
 
   async createDispatch(payload: Partial<Dispatch>): Promise<Dispatch> {
+    const validDspId = (payload.id && payload.id.length === 36 && !payload.id.startsWith('dsp-'))
+      ? payload.id
+      : crypto.randomUUID();
+
+    let whId = payload.from_warehouse_id;
+    if (!whId || whId.length !== 36) {
+      whId = 'e0000000-0000-0000-0000-000000000001';
+    }
+
+    let outId = payload.to_outlet_id;
+    if (!outId || outId.length !== 36) {
+      outId = 'd0000000-0000-0000-0000-000000000001';
+    }
+
+    let creatorId = payload.created_by;
+    if (!creatorId || creatorId.length !== 36 || creatorId.startsWith('b0000000')) {
+      creatorId = '931ed5f8-65ca-4aa6-934e-640ee458ac41'; // Warehouse Operator Marwan or Admin
+    }
+
     const newDispatch: Dispatch = {
-      id: payload.id || `dsp-${Date.now()}`,
+      id: validDspId,
       dispatch_number: payload.dispatch_number || `SJ-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
-      outlet_order_id: payload.outlet_order_id || '',
-      from_warehouse_id: payload.from_warehouse_id || 'e0000000-0000-0000-0000-000000000001',
-      to_outlet_id: payload.to_outlet_id || '',
+      outlet_order_id: (payload.outlet_order_id && payload.outlet_order_id.length === 36) ? payload.outlet_order_id : '',
+      from_warehouse_id: whId,
+      to_outlet_id: outId,
       status: 'in_transit',
       dispatch_date: new Date().toISOString(),
       driver_name: payload.driver_name || null,
       vehicle_number: payload.vehicle_number || null,
       notes: payload.notes || null,
-      created_by: payload.created_by || 'b0000000-0000-0000-0000-000000000001',
+      created_by: creatorId,
       created_at: new Date().toISOString(),
-      items: payload.items || [],
+      items: (payload.items || []).map((it) => ({
+        ...it,
+        id: (it.id && it.id.length === 36 && !it.id.startsWith('dspi-')) ? it.id : crypto.randomUUID(),
+        dispatch_id: validDspId,
+        quantity_dispatched: Number(it.quantity_dispatched || 0),
+        unit_id: (it.unit_id && it.unit_id.length === 36 && !it.unit_id.startsWith('unit-'))
+          ? it.unit_id
+          : '11111111-0000-0000-0000-000000000001',
+      })),
     };
 
     if (isSupabaseConfigured()) {
@@ -3357,7 +3457,7 @@ export const dbService = {
         const { data: insertedDsp, error: dspErr } = await supabase.from('dispatches').insert({
           id: newDispatch.id,
           dispatch_number: newDispatch.dispatch_number,
-          outlet_order_id: newDispatch.outlet_order_id || null,
+          outlet_order_id: (newDispatch.outlet_order_id && newDispatch.outlet_order_id.length === 36) ? newDispatch.outlet_order_id : null,
           from_warehouse_id: newDispatch.from_warehouse_id,
           to_outlet_id: newDispatch.to_outlet_id,
           status: newDispatch.status,
@@ -3369,17 +3469,28 @@ export const dbService = {
           created_at: newDispatch.created_at,
         }).select().single();
 
-        if (!dspErr && insertedDsp && newDispatch.items && newDispatch.items.length > 0) {
+        if (dspErr) {
+          console.error('Supabase createDispatch error:', dspErr);
+          throw new Error(`Gagal menyimpan Surat Jalan ke database: ${dspErr.message}`);
+        }
+
+        if (insertedDsp && newDispatch.items && newDispatch.items.length > 0) {
           const itemsToInsert = newDispatch.items.map((it) => ({
-            id: it.id || crypto.randomUUID(),
+            id: it.id,
             dispatch_id: insertedDsp.id,
             raw_material_id: it.raw_material_id,
             quantity_dispatched: it.quantity_dispatched,
+            unit_id: it.unit_id,
           }));
-          await supabase.from('dispatch_items').insert(itemsToInsert);
+          const { error: itemsErr } = await supabase.from('dispatch_items').insert(itemsToInsert);
+          if (itemsErr) {
+            console.error('Supabase createDispatch items error:', itemsErr);
+            throw new Error(`Gagal menyimpan rincian barang Surat Jalan: ${itemsErr.message}`);
+          }
         }
-      } catch (e) {
-        console.warn('Falling back to local createDispatch:', e);
+      } catch (e: any) {
+        console.error('Error in createDispatch:', e);
+        throw e;
       }
     }
 

@@ -261,7 +261,47 @@ export const INITIAL_RAW_MATERIAL_CATEGORIES: RawMaterialCategory[] = [];
 
 export const INITIAL_RAW_MATERIALS: RawMaterial[] = [];
 
-export const INITIAL_SUPPLIERS: Supplier[] = [];
+export const INITIAL_SUPPLIERS: Supplier[] = [
+  {
+    id: '44444444-0000-0000-0000-000000000001',
+    code: 'SUP-001',
+    name: 'PT Toffin Indonesia (Sirup & Bahan Minuman)',
+    contact_person: 'Budi Santoso',
+    phone: '0812-9876-5432',
+    email: 'order@toffin.co.id',
+    address: 'Kawasan Industri Pulogadung, Jakarta',
+    payment_terms: 'Tempo 14 Hari',
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: '44444444-0000-0000-0000-000000000002',
+    code: 'SUP-002',
+    name: 'CV Barista Prima (Biji Kopi & Bubuk Minuman)',
+    contact_person: 'Hendra Gunawan',
+    phone: '0813-8888-9999',
+    email: 'sales@baristaprima.id',
+    address: 'Jl. Kopi Harum No. 12, Makassar',
+    payment_terms: 'Tempo 30 Hari',
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: '44444444-0000-0000-0000-000000000003',
+    code: 'SUP-003',
+    name: 'PT Kemasan Nusantara (Cup, Sedotan & Seal)',
+    contact_person: 'Maya Sari',
+    phone: '0811-2233-4455',
+    email: 'info@kemasannusantara.com',
+    address: 'Kompleks Pergudangan Mariso, Makassar',
+    payment_terms: 'Tunai Saat Kirim (COD)',
+    is_active: true,
+    created_at: '2026-10-01T08:00:00Z',
+    updated_at: '2026-10-01T08:00:00Z',
+  },
+];
 
 export const INITIAL_OUTLET_MENUS: OutletMenu[] = [];
 

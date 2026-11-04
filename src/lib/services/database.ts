@@ -2857,10 +2857,28 @@ export const dbService = {
           .order('created_at', { ascending: false });
         if (warehouseId) query = query.eq('warehouse_id', warehouseId);
         const { data, error } = await query;
-        if (!error && data && data.length > 0) {
-          localSupplierPOs = data as SupplierPO[];
+        if (!error && data) {
+          const mappedPOs: SupplierPO[] = data.map((po: any) => ({
+            ...po,
+            items: (po.items || []).map((it: any) => ({
+              id: it.id,
+              supplier_po_id: it.po_id || it.supplier_po_id || po.id,
+              raw_material_id: it.raw_material_id,
+              quantity_ordered: Number(it.quantity_ordered || 0),
+              unit_id: it.unit_id,
+              unit_cost: Number(it.unit_price ?? it.unit_cost ?? 0),
+              quantity_received: Number(it.quantity_received || 0),
+              subtotal: Number(it.subtotal || 0),
+              raw_material: it.raw_material,
+              unit: it.unit,
+            })),
+          }));
+          localSupplierPOs = mappedPOs;
           setStorageItem(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
-          return data as SupplierPO[];
+          return mappedPOs;
+        }
+        if (error) {
+          console.warn('Supabase getSupplierPOs error:', error);
         }
       } catch (e) {
         console.warn('Falling back to local getSupplierPOs:', e);
@@ -2886,19 +2904,45 @@ export const dbService = {
   },
 
   async createSupplierPO(payload: Partial<SupplierPO>): Promise<SupplierPO> {
+    const validPOId = (payload.id && payload.id.length === 36 && !payload.id.startsWith('po-'))
+      ? payload.id
+      : crypto.randomUUID();
+
+    let creatorId = payload.created_by;
+    if (!creatorId || creatorId.length !== 36 || creatorId.startsWith('b0000000')) {
+      creatorId = 'a0000000-0000-0000-0000-000000000001';
+    }
+
+    let whId = payload.warehouse_id;
+    if (!whId || whId.length !== 36) {
+      whId = 'e0000000-0000-0000-0000-000000000001';
+    }
+
+    const calculatedTotal = (payload.items || []).reduce(
+      (acc, it) => acc + (it.subtotal || (Number(it.quantity_ordered) * Number(it.unit_cost))),
+      0
+    );
+
     const newPO: SupplierPO = {
-      id: payload.id || `po-${Date.now()}`,
+      id: validPOId,
       po_number: payload.po_number || `PO-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
       supplier_id: payload.supplier_id || '',
-      warehouse_id: payload.warehouse_id || 'e0000000-0000-0000-0000-000000000001',
+      warehouse_id: whId,
       status: 'pending_approval',
       order_date: new Date().toISOString(),
       expected_delivery_date: payload.expected_delivery_date || null,
       notes: payload.notes || null,
-      created_by: payload.created_by || 'b0000000-0000-0000-0000-000000000001',
+      created_by: creatorId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      items: payload.items || [],
+      items: (payload.items || []).map((it) => ({
+        ...it,
+        id: (it.id && it.id.length === 36 && !it.id.startsWith('poi-')) ? it.id : crypto.randomUUID(),
+        supplier_po_id: validPOId,
+        quantity_ordered: Number(it.quantity_ordered),
+        unit_cost: Number(it.unit_cost),
+        subtotal: Number(it.subtotal || (Number(it.quantity_ordered) * Number(it.unit_cost))),
+      })),
     };
 
     if (isSupabaseConfigured()) {
@@ -2912,25 +2956,37 @@ export const dbService = {
           status: newPO.status,
           order_date: newPO.order_date,
           expected_delivery_date: newPO.expected_delivery_date,
+          total_amount: calculatedTotal,
           notes: newPO.notes,
           created_by: newPO.created_by,
           created_at: newPO.created_at,
+          updated_at: newPO.updated_at,
         }).select().single();
 
-        if (!poErr && insertedPO && newPO.items && newPO.items.length > 0) {
+        if (poErr) {
+          console.error('Supabase createSupplierPO error:', poErr);
+          throw new Error(`Gagal menyimpan PO ke database: ${poErr.message}`);
+        }
+
+        if (insertedPO && newPO.items && newPO.items.length > 0) {
           const itemsToInsert = newPO.items.map((it) => ({
-            id: it.id || crypto.randomUUID(),
-            supplier_po_id: insertedPO.id,
+            id: it.id,
+            po_id: insertedPO.id,
             raw_material_id: it.raw_material_id,
             quantity_ordered: it.quantity_ordered,
+            unit_price: it.unit_cost,
             unit_id: it.unit_id,
-            unit_cost: it.unit_cost,
-            subtotal: it.subtotal || it.quantity_ordered * it.unit_cost,
+            subtotal: it.subtotal,
           }));
-          await supabase.from('supplier_po_items').insert(itemsToInsert);
+          const { error: itemsErr } = await supabase.from('supplier_po_items').insert(itemsToInsert);
+          if (itemsErr) {
+            console.error('Supabase createSupplierPO items error:', itemsErr);
+            throw new Error(`Gagal menyimpan item PO ke database: ${itemsErr.message}`);
+          }
         }
-      } catch (e) {
-        console.warn('Falling back to local createSupplierPO:', e);
+      } catch (e: any) {
+        console.error('Error during createSupplierPO:', e);
+        throw e;
       }
     }
 
@@ -2942,12 +2998,11 @@ export const dbService = {
     try {
       const suppliers = await this.getSuppliers();
       const sup = suppliers.find((s) => s.id === newPO.supplier_id);
-      const totalEstimated = (newPO.items || []).reduce((acc, it) => acc + (it.subtotal || (it.quantity_ordered * it.unit_cost)), 0);
 
       await this.createNotification({
         recipient_role: 'admin',
         title: 'Permohonan PO Supplier Baru',
-        message: `Gudang Pusat mengajukan ${newPO.po_number} ke ${sup?.name || 'Mitra Supplier'} (${newPO.items?.length || 0} varian bahan, total estimasi Rp ${totalEstimated.toLocaleString('id-ID')}). Menunggu persetujuan Admin/Owner.`,
+        message: `Gudang Pusat mengajukan ${newPO.po_number} ke ${sup?.name || 'Mitra Supplier'} (${newPO.items?.length || 0} varian bahan, total estimasi Rp ${calculatedTotal.toLocaleString('id-ID')}). Menunggu persetujuan Admin/Owner.`,
         type: 'warning',
         category: 'inventory',
         action_url: '/admin/supplier-pos',
@@ -2960,17 +3015,22 @@ export const dbService = {
   },
 
   async approveSupplierPO(poId: string, adminId: string): Promise<SupplierPO> {
+    const validAdminId = (adminId && adminId.length === 36) ? adminId : 'a0000000-0000-0000-0000-000000000001';
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('supplier_pos').update({
+        const { error } = await supabase.from('supplier_pos').update({
           status: 'approved',
-          approved_by: adminId,
+          approved_by: validAdminId,
           approved_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }).eq('id', poId);
-      } catch (e) {
-        console.warn('Falling back to local approveSupplierPO:', e);
+        if (error) {
+          console.error('Supabase approveSupplierPO error:', error);
+          throw new Error(error.message);
+        }
+      } catch (e: any) {
+        console.warn('Supabase approveSupplierPO failed, fallback to local:', e);
       }
     }
 
@@ -2979,7 +3039,7 @@ export const dbService = {
     if (!target) throw new Error('Purchase Order tidak ditemukan');
 
     target.status = 'approved';
-    target.approved_by = adminId;
+    target.approved_by = validAdminId;
     target.approved_at = new Date().toISOString();
     target.updated_at = new Date().toISOString();
 
@@ -3004,17 +3064,22 @@ export const dbService = {
   },
 
   async rejectSupplierPO(poId: string, adminId: string, reason: string): Promise<SupplierPO> {
+    const validAdminId = (adminId && adminId.length === 36) ? adminId : 'a0000000-0000-0000-0000-000000000001';
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('supplier_pos').update({
+        const { error } = await supabase.from('supplier_pos').update({
           status: 'rejected',
-          approved_by: adminId,
-          rejection_reason: reason,
+          approved_by: validAdminId,
+          notes: reason ? `[Ditolak Admin: ${reason}]` : null,
           updated_at: new Date().toISOString(),
         }).eq('id', poId);
-      } catch (e) {
-        console.warn('Falling back to local rejectSupplierPO:', e);
+        if (error) {
+          console.error('Supabase rejectSupplierPO error:', error);
+          throw new Error(error.message);
+        }
+      } catch (e: any) {
+        console.warn('Supabase rejectSupplierPO failed, fallback to local:', e);
       }
     }
 
@@ -3023,7 +3088,7 @@ export const dbService = {
     if (!target) throw new Error('Purchase Order tidak ditemukan');
 
     target.status = 'rejected';
-    target.approved_by = adminId;
+    target.approved_by = validAdminId;
     target.approved_at = new Date().toISOString();
     target.rejection_reason = reason;
     target.updated_at = new Date().toISOString();
@@ -3068,14 +3133,14 @@ export const dbService = {
 
   async createSupplierReceipt(payload: Partial<SupplierReceipt>): Promise<SupplierReceipt> {
     const newReceipt: SupplierReceipt = {
-      id: payload.id || `rec-${Date.now()}`,
+      id: payload.id || crypto.randomUUID(),
       receipt_number: payload.receipt_number || `RCV-${new Date().toISOString().slice(0, 7).replace('-', '')}-${Math.floor(Math.random() * 900 + 100)}`,
       supplier_po_id: payload.supplier_po_id || '',
       warehouse_id: payload.warehouse_id || 'e0000000-0000-0000-0000-000000000001',
       delivery_order_number: payload.delivery_order_number || null,
       received_date: new Date().toISOString(),
       notes: payload.notes || null,
-      received_by: payload.received_by || 'b0000000-0000-0000-0000-000000000001',
+      received_by: (payload.received_by && payload.received_by.length === 36 && !payload.received_by.startsWith('b0000000')) ? payload.received_by : 'a0000000-0000-0000-0000-000000000001',
       created_at: new Date().toISOString(),
       items: payload.items || [],
     };

@@ -75,7 +75,7 @@ export default function AdminSupplierPOsPage() {
   const handleApprove = async (po: SupplierPO) => {
     try {
       setIsProcessing(true);
-      const adminId = user?.id || 'admin-root';
+      const adminId = user?.id || 'a0000000-0000-0000-0000-000000000001';
       await dbService.approveSupplierPO(po.id, adminId);
       setFeedback(`Permohonan ${po.po_number} berhasil disetujui! Notifikasi otomatis dikirimkan ke Gudang Pusat.`);
       if (selectedPO?.id === po.id) {
@@ -99,7 +99,7 @@ export default function AdminSupplierPOsPage() {
     if (!poToReject) return;
     try {
       setIsProcessing(true);
-      const adminId = user?.id || 'admin-root';
+      const adminId = user?.id || 'a0000000-0000-0000-0000-000000000001';
       const reason = rejectionReason.trim() || 'Ditolak oleh Admin/Owner';
       await dbService.rejectSupplierPO(poToReject.id, adminId, reason);
       setFeedback(`Permohonan ${poToReject.po_number} telah ditolak. Alasan diteruskan ke Gudang.`);

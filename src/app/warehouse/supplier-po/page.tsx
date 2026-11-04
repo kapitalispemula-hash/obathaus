@@ -20,9 +20,11 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 import { INITIAL_SUPPLIER_POS } from '@/lib/mock-data';
 
 export default function WarehouseSupplierPOPage() {
+  const { user } = useAuth();
   const [pos, setPos] = useState<SupplierPO[]>(INITIAL_SUPPLIER_POS);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
@@ -70,9 +72,26 @@ export default function WarehouseSupplierPOPage() {
 
   useEffect(() => {
     loadData();
+    const handleUpdate = () => loadData();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_notifications_updated', handleUpdate);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_notifications_updated', handleUpdate);
+      }
+    };
   }, []);
 
   const openAddModal = () => {
+    if (suppliers.length === 0) {
+      alert('Belum ada mitra supplier terdaftar. Silakan daftarkan supplier di panel admin.');
+      return;
+    }
+    if (materials.length === 0) {
+      alert('Belum ada data bahan baku terdaftar di sistem. Silakan tambahkan bahan baku terlebih dahulu.');
+      return;
+    }
     setSelectedSupplierId(suppliers[0]?.id || '');
     setExpectedDate('');
     setNotes('');
@@ -80,7 +99,7 @@ export default function WarehouseSupplierPOPage() {
       {
         raw_material_id: materials[0]?.id || '',
         quantity: 1000,
-        unit_id: materials[0]?.standard_unit_id || 'unit-gram',
+        unit_id: materials[0]?.standard_unit_id || units[0]?.id || '11111111-0000-0000-0000-000000000001',
         unit_cost: materials[0]?.estimated_unit_cost || 100,
       },
     ]);
@@ -94,7 +113,7 @@ export default function WarehouseSupplierPOPage() {
       {
         raw_material_id: materials[0]?.id || '',
         quantity: 1000,
-        unit_id: materials[0]?.standard_unit_id || 'unit-gram',
+        unit_id: materials[0]?.standard_unit_id || units[0]?.id || '11111111-0000-0000-0000-000000000001',
         unit_cost: materials[0]?.estimated_unit_cost || 100,
       },
     ]);
@@ -147,8 +166,9 @@ export default function WarehouseSupplierPOPage() {
         supplier_id: selectedSupplierId,
         expected_delivery_date: expectedDate || null,
         notes: notes.trim() || null,
-        items: poItems.map((item, idx) => ({
-          id: `poi-${Date.now()}-${idx}`,
+        created_by: user?.id,
+        items: poItems.map((item) => ({
+          id: crypto.randomUUID(),
           supplier_po_id: '',
           raw_material_id: item.raw_material_id,
           quantity_ordered: Number(item.quantity),
@@ -161,7 +181,7 @@ export default function WarehouseSupplierPOPage() {
 
       setIsModalOpen(false);
       setFeedback('Permohonan PO berhasil diajukan! Notifikasi real-time telah diteruskan ke Admin untuk persetujuan.');
-      loadData();
+      await loadData();
     } catch (err: any) {
       setFormError(err.message || 'Gagal mengajukan Purchase Order.');
     } finally {

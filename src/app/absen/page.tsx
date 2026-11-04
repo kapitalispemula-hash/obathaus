@@ -32,6 +32,8 @@ import {
 import {
   attendanceService,
   calculateDistanceMeters,
+  formatTimeDisplay,
+  purgeLegacyDemoData,
 } from '@/lib/services/attendance';
 import {
   EmployeeProfile,
@@ -71,7 +73,6 @@ export default function MobileAttendancePage() {
   const [loginPin, setLoginPin] = useState('1234');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isBiometricPromptOpen, setIsBiometricPromptOpen] = useState(false);
   const [biometricSuccess, setBiometricSuccess] = useState(false);
 
   // Home Screen / Attendance State
@@ -122,9 +123,10 @@ export default function MobileAttendancePage() {
     const seen = localStorage.getItem(ONBOARDING_SEEN_KEY);
     if (!seen) setHasSeenOnboarding(false);
 
-    // 3. Check existing logged-in employee session & preload employee list
+    // 3. Purge legacy demo entries & check existing logged-in employee session
     async function initSession() {
       try {
+        purgeLegacyDemoData();
         const emps = await attendanceService.getEmployees();
         setAllEmployees(emps.filter((e) => e.is_active));
 
@@ -161,7 +163,18 @@ export default function MobileAttendancePage() {
           ),
           attendanceService.getAllAttendanceLogs({ employeeId: currentEmployee!.id }),
         ]);
-        setTodayLog(today);
+
+        const todayDate = attendanceService.getTodayDateStr();
+        const effectiveToday =
+          today ||
+          logs.find(
+            (l) =>
+              l.employee_id === currentEmployee!.id &&
+              (l.date === todayDate || (l.clock_in && !l.clock_out))
+          ) ||
+          null;
+
+        setTodayLog(effectiveToday);
         setShifts(shiftList);
         setLocationTarget(loc);
         setEmployeeLogs(logs);
@@ -296,20 +309,7 @@ export default function MobileAttendancePage() {
       }
     }
 
-    setIsBiometricPromptOpen(true);
-  };
-
-  const selectEmployeeDirectly = (emp: EmployeeProfile) => {
-    setIsBiometricPromptOpen(false);
-    setIsLoggingIn(true);
-    setBiometricSuccess(true);
-    setTimeout(() => {
-      setCurrentEmployee(emp);
-      localStorage.setItem(SAVED_EMP_ID_KEY, emp.id);
-      localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
-      setIsLoggingIn(false);
-      setBiometricSuccess(false);
-    }, 500);
+    setLoginError('Masukkan ID Karyawan Anda di atas untuk verifikasi sidik jari.');
   };
 
   const handleLogout = () => {
@@ -585,86 +585,15 @@ export default function MobileAttendancePage() {
             </div>
           </form>
 
-          <div className="pt-2 border-t border-slate-100">
-            <span className="text-[10px] text-slate-400 font-semibold block text-center mb-1.5 uppercase tracking-wider">
-              Pilih Akun Demo Cepat:
-            </span>
-            <div className="flex items-center justify-center gap-2 flex-wrap">
-              {[
-                { code: 'EMP-01', name: 'Budi (Barista)' },
-                { code: 'EMP-02', name: 'Siti (Kasir)' },
-                { code: 'EMP-03', name: 'Andi (Gudang)' },
-              ].map((acc) => (
-                <button
-                  key={acc.code}
-                  type="button"
-                  onClick={() => {
-                    const match = allEmployees.find((e) => e.employee_code === acc.code);
-                    if (match) {
-                      selectEmployeeDirectly(match);
-                    } else {
-                      setLoginCode(acc.code);
-                    }
-                  }}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-orange-50 hover:text-[#FF6600] text-[11px] font-bold text-slate-700 rounded-lg transition-colors cursor-pointer"
-                >
-                  <span className="text-[#FF6600]">{acc.code}</span> • {acc.name.split(' ')[0]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-center pt-1">
+          <div className="text-center pt-2">
             <Link
               href="/pos"
-              className="text-[11px] font-bold text-slate-400 hover:text-slate-700 transition-colors"
+              className="text-xs font-bold text-slate-400 hover:text-slate-700 transition-colors"
             >
               ← Buka Kasir POS Utama
             </Link>
           </div>
         </div>
-
-        {/* Biometric Prompt Bottom Sheet / Modal */}
-        {isBiometricPromptOpen && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-            <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <FingerprintIcon className="w-5 h-5" color="#FF6600" />
-                  <h3 className="font-bold text-sm text-slate-900">Login Sidik Jari (Biometrik)</h3>
-                </div>
-                <button
-                  onClick={() => setIsBiometricPromptOpen(false)}
-                  className="text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <p className="text-xs text-slate-500">
-                Pilih profil Anda untuk masuk instan dengan sidik jari pada perangkat ini:
-              </p>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {allEmployees.map((emp) => (
-                  <button
-                    key={emp.id}
-                    onClick={() => selectEmployeeDirectly(emp)}
-                    className="w-full p-3 rounded-xl border border-slate-200 hover:border-[#FF6600] hover:bg-orange-50/50 flex items-center justify-between transition-colors cursor-pointer text-left"
-                  >
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900">{emp.full_name}</h4>
-                      <p className="text-[11px] text-slate-500">{emp.role_title} • {emp.employee_code}</p>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF6600] flex items-center justify-center">
-                      <FingerprintIcon className="w-4 h-4" color="#FF6600" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -675,7 +604,7 @@ export default function MobileAttendancePage() {
 
   const maxAllowedRadius = locationTarget?.radius_meters || 100;
   const isWithinGps = gpsDistance !== null ? gpsDistance <= maxAllowedRadius : false;
-  const isAlreadyClockedIn = Boolean(todayLog && todayLog.clock_in);
+  const isAlreadyClockedIn = Boolean(todayLog && todayLog.clock_in && !todayLog.clock_out);
   const isAlreadyClockedOut = Boolean(todayLog && todayLog.clock_out);
   const isReportedAbsence = Boolean(todayLog && (todayLog.status === 'sick' || todayLog.status === 'leave'));
   const activeShift = shifts.find((s) => s.is_active) || shifts[0];
@@ -794,7 +723,7 @@ export default function MobileAttendancePage() {
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Masuk</span>
                     <span className="text-xs font-black text-slate-900 truncate block mt-0.5 font-mono">
-                      {todayLog?.clock_in || '--:--'}
+                      {todayLog?.clock_in ? formatTimeDisplay(todayLog.clock_in) : '--:--'}
                     </span>
                     <span className={`text-[9px] font-bold truncate block ${todayLog?.status === 'late' ? 'text-amber-600' : todayLog?.clock_in ? 'text-emerald-600' : 'text-slate-400'}`}>
                       {todayLog?.status === 'late' ? 'Terlambat' : todayLog?.clock_in ? 'Tepat Waktu' : 'Belum Absen'}
@@ -846,7 +775,9 @@ export default function MobileAttendancePage() {
                       </div>
                       <div>
                         <h4 className="text-xs font-black text-emerald-950">Kehadiran Hari Ini Selesai</h4>
-                        <p className="text-[11px] text-emerald-700">Masuk: {todayLog?.clock_in} • Pulang: {todayLog?.clock_out}</p>
+                        <p className="text-[11px] text-emerald-700">
+                          Masuk: {formatTimeDisplay(todayLog?.clock_in)} WITA • Pulang: {formatTimeDisplay(todayLog?.clock_out)} WITA
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -945,10 +876,10 @@ export default function MobileAttendancePage() {
                         </div>
                         <div className="text-right">
                           <span className="text-xs font-mono font-bold text-slate-800 block">
-                            {log.clock_in || '-'}
+                            {log.clock_in ? `${formatTimeDisplay(log.clock_in)} WITA` : '-'}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
-                            {log.clock_out ? `s/d ${log.clock_out}` : 'Belum pulang'}
+                            {log.clock_out ? `s/d ${formatTimeDisplay(log.clock_out)} WITA` : 'Belum pulang'}
                           </span>
                         </div>
                       </div>
@@ -1049,8 +980,8 @@ export default function MobileAttendancePage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-600 font-mono">
-                      <span>Masuk: {log.clock_in || '-'}</span>
-                      <span>Pulang: {log.clock_out || '-'}</span>
+                      <span>Masuk: {log.clock_in ? `${formatTimeDisplay(log.clock_in)} WITA` : '-'}</span>
+                      <span>Pulang: {log.clock_out ? `${formatTimeDisplay(log.clock_out)} WITA` : '-'}</span>
                     </div>
                     {log.notes && (
                       <p className="text-[11px] text-slate-500 italic pt-1">

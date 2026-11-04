@@ -19,7 +19,7 @@ import {
 } from '@/lib/mock-data';
 
 // ============================================================================
-// GEOLOCATION UTILITIES
+// GEOLOCATION & TIME UTILITIES
 // ============================================================================
 
 /**
@@ -47,6 +47,67 @@ export function calculateDistanceMeters(
   return Math.round(R * c);
 }
 
+/**
+ * Foolproof RFC 4122 v4 UUID generator compatible with Postgres UUID type
+ */
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
+ * Formats ISO date-time string into clean HH:mm WITA (Indonesian time format)
+ */
+export function formatTimeDisplay(dateOrIso?: string | null): string {
+  if (!dateOrIso) return '--:--';
+  const trimmed = dateOrIso.trim();
+  if (/^\d{2}:\d{2}$/.test(trimmed)) return trimmed;
+  try {
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) return trimmed;
+    return d.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Makassar',
+      hour12: false,
+    }).replace('.', ':');
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
+ * Clears old legacy dummy storage keys and string-based demo IDs
+ */
+export function purgeLegacyDemoData(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const savedEmpId = localStorage.getItem('obathaus_active_employee_id');
+    if (savedEmpId && (savedEmpId.startsWith('emp-') || !savedEmpId.includes('-'))) {
+      localStorage.removeItem('obathaus_active_employee_id');
+    }
+
+    const savedLogs = localStorage.getItem('obathaus_attendance_logs_v1');
+    if (savedLogs) {
+      const logs = JSON.parse(savedLogs);
+      if (Array.isArray(logs)) {
+        const cleanLogs = logs.filter(
+          (l) => l.employee_id && !l.employee_id.startsWith('emp-')
+        );
+        localStorage.setItem('obathaus_attendance_logs_v1', JSON.stringify(cleanLogs));
+      }
+    }
+  } catch (err) {
+    console.warn('Error purging legacy demo data:', err);
+  }
+}
+
 // LocalStorage Keys for Offline Resilience
 const SHIFTS_KEY = 'obathaus_attendance_shifts_v1';
 const EMPLOYEES_KEY = 'obathaus_employee_profiles_v1';
@@ -55,22 +116,36 @@ const OUTLETS_LOCATION_KEY = 'obathaus_outlets_gps_v1';
 const WAREHOUSES_LOCATION_KEY = 'obathaus_warehouses_gps_v1';
 
 class AttendanceService {
-  private supabase = isSupabaseConfigured() ? createClient() : null;
+  private getSupabase() {
+    return isSupabaseConfigured() ? createClient() : null;
+  }
 
   // --------------------------------------------------------------------------
   // 1. MASTER SHIFT MANAGEMENT
   // --------------------------------------------------------------------------
 
   async getShifts(): Promise<AttendanceShift[]> {
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
-        const { data, error } = await this.supabase
+        const { data, error } = await supabase
           .from('attendance_shifts')
           .select('*')
           .order('start_time', { ascending: true });
         if (!error && data && data.length > 0) {
           localStorage.setItem(SHIFTS_KEY, JSON.stringify(data));
           return data as AttendanceShift[];
+        }
+        // Auto-seed default shifts if table is empty in Supabase
+        if (!error && (!data || data.length === 0)) {
+          const { data: seeded, error: seedErr } = await supabase
+            .from('attendance_shifts')
+            .upsert(INITIAL_ATTENDANCE_SHIFTS, { onConflict: 'id' })
+            .select();
+          if (!seedErr && seeded && seeded.length > 0) {
+            localStorage.setItem(SHIFTS_KEY, JSON.stringify(seeded));
+            return seeded as AttendanceShift[];
+          }
         }
       } catch (err) {
         console.warn('Fallback to local shifts cache:', err);
@@ -90,7 +165,7 @@ class AttendanceService {
   async saveShift(shift: Partial<AttendanceShift> & { name: string; start_time: string; end_time: string }): Promise<AttendanceShift> {
     const isNew = !shift.id;
     const shiftData: AttendanceShift = {
-      id: shift.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `shift-${Date.now()}`),
+      id: shift.id || generateUUID(),
       name: shift.name,
       start_time: shift.start_time,
       end_time: shift.end_time,
@@ -99,13 +174,14 @@ class AttendanceService {
       created_at: shift.created_at || new Date().toISOString(),
     };
 
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
         if (isNew) {
-          const { data, error } = await this.supabase.from('attendance_shifts').insert(shiftData).select().single();
+          const { data, error } = await supabase.from('attendance_shifts').insert(shiftData).select().single();
           if (!error && data) return data as AttendanceShift;
         } else {
-          const { data, error } = await this.supabase
+          const { data, error } = await supabase
             .from('attendance_shifts')
             .update(shiftData)
             .eq('id', shiftData.id)
@@ -127,9 +203,10 @@ class AttendanceService {
   }
 
   async deleteShift(id: string): Promise<void> {
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
-        await this.supabase.from('attendance_shifts').delete().eq('id', id);
+        await supabase.from('attendance_shifts').delete().eq('id', id);
       } catch (err) {
         console.warn('Supabase deleteShift error:', err);
       }
@@ -144,15 +221,28 @@ class AttendanceService {
   // --------------------------------------------------------------------------
 
   async getEmployees(): Promise<EmployeeProfile[]> {
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
-        const { data, error } = await this.supabase
+        const { data, error } = await supabase
           .from('employee_profiles')
           .select('*')
           .order('employee_code', { ascending: true });
         if (!error && data && data.length > 0) {
           localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(data));
           return data as EmployeeProfile[];
+        }
+
+        // If Supabase table is empty, auto-upsert INITIAL_EMPLOYEE_PROFILES with valid UUIDs!
+        if (!error && (!data || data.length === 0)) {
+          const { data: seeded, error: seedErr } = await supabase
+            .from('employee_profiles')
+            .upsert(INITIAL_EMPLOYEE_PROFILES, { onConflict: 'id' })
+            .select();
+          if (!seedErr && seeded && seeded.length > 0) {
+            localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(seeded));
+            return seeded as EmployeeProfile[];
+          }
         }
       } catch (err) {
         console.warn('Fallback to local employees cache:', err);
@@ -172,7 +262,7 @@ class AttendanceService {
   async saveEmployee(emp: Partial<EmployeeProfile> & { employee_code: string; full_name: string; assigned_location_id: string }): Promise<EmployeeProfile> {
     const isNew = !emp.id;
     const empData: EmployeeProfile = {
-      id: emp.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `emp-${Date.now()}`),
+      id: emp.id || generateUUID(),
       employee_code: emp.employee_code.trim().toUpperCase(),
       pin: emp.pin || '1234',
       full_name: emp.full_name.trim(),
@@ -185,13 +275,14 @@ class AttendanceService {
       updated_at: new Date().toISOString(),
     };
 
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
         if (isNew) {
-          const { data, error } = await this.supabase.from('employee_profiles').insert(empData).select().single();
+          const { data, error } = await supabase.from('employee_profiles').insert(empData).select().single();
           if (!error && data) return data as EmployeeProfile;
         } else {
-          const { data, error } = await this.supabase
+          const { data, error } = await supabase
             .from('employee_profiles')
             .update(empData)
             .eq('id', empData.id)
@@ -213,9 +304,10 @@ class AttendanceService {
   }
 
   async deleteEmployee(id: string): Promise<void> {
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
-        await this.supabase.from('employee_profiles').delete().eq('id', id);
+        await supabase.from('employee_profiles').delete().eq('id', id);
       } catch (err) {
         console.warn('Supabase deleteEmployee error:', err);
       }
@@ -226,7 +318,7 @@ class AttendanceService {
   }
 
   /**
-   * Fast authentication by Employee ID and 4-digit PIN
+   * Fast authentication by Employee ID and 4-digit PIN directly against Supabase
    */
   async loginEmployee(employeeCode: string, pin: string): Promise<{ success: boolean; employee?: EmployeeProfile; error?: string }> {
     const cleanCode = employeeCode.trim().toUpperCase();
@@ -255,12 +347,13 @@ class AttendanceService {
   // --------------------------------------------------------------------------
 
   async getLocationTarget(type: LocationType, id: string): Promise<{ name: string; latitude: number | null; longitude: number | null; radius_meters: number } | null> {
+    const supabase = this.getSupabase();
     if (type === 'warehouse') {
       const savedWh = localStorage.getItem(WAREHOUSES_LOCATION_KEY);
       let list: Warehouse[] = savedWh ? JSON.parse(savedWh) : INITIAL_WAREHOUSES;
-      if (this.supabase) {
+      if (supabase) {
         try {
-          const { data } = await this.supabase.from('warehouses').select('*').eq('id', id).maybeSingle();
+          const { data } = await supabase.from('warehouses').select('*').eq('id', id).maybeSingle();
           if (data) return { name: data.name, latitude: data.latitude, longitude: data.longitude, radius_meters: data.radius_meters || 100 };
         } catch {}
       }
@@ -271,9 +364,9 @@ class AttendanceService {
     } else {
       const savedOut = localStorage.getItem(OUTLETS_LOCATION_KEY);
       let list: Outlet[] = savedOut ? JSON.parse(savedOut) : INITIAL_OUTLETS;
-      if (this.supabase) {
+      if (supabase) {
         try {
-          const { data } = await this.supabase.from('outlets').select('*').eq('id', id).maybeSingle();
+          const { data } = await supabase.from('outlets').select('*').eq('id', id).maybeSingle();
           if (data) return { name: data.name, latitude: data.latitude, longitude: data.longitude, radius_meters: data.radius_meters || 100 };
         } catch {}
       }
@@ -284,11 +377,18 @@ class AttendanceService {
     }
   }
 
-  async updateLocationCoordinates(type: LocationType, id: string, lat: number, lng: number, radius = 100): Promise<void> {
-    if (this.supabase) {
+  async updateLocationCoordinates(
+    type: LocationType,
+    id: string,
+    lat: number,
+    lng: number,
+    radius: number
+  ): Promise<void> {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
         const table = type === 'warehouse' ? 'warehouses' : 'outlets';
-        await this.supabase.from(table).update({ latitude: lat, longitude: lng, radius_meters: radius }).eq('id', id);
+        await supabase.from(table).update({ latitude: lat, longitude: lng, radius_meters: radius }).eq('id', id);
       } catch (err) {
         console.warn('Supabase updateLocationCoordinates error:', err);
       }
@@ -311,37 +411,64 @@ class AttendanceService {
   // 4. ATTENDANCE LOGS (CLOCK IN, CLOCK OUT, REPORT ABSENCE)
   // --------------------------------------------------------------------------
 
-  private getTodayDateStr(): string {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+  getTodayDateStr(): string {
+    // Current date in Indonesian timezone (WITA / Asia/Makassar)
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
   }
 
   async getTodayAttendance(employeeId: string): Promise<AttendanceLog | null> {
     const today = this.getTodayDateStr();
+    const supabase = this.getSupabase();
 
-    if (this.supabase) {
+    if (supabase) {
       try {
-        const { data, error } = await this.supabase
+        const { data, error } = await supabase
           .from('attendance_logs')
           .select('*')
           .eq('employee_id', employeeId)
           .eq('date', today)
-          .maybeSingle();
-        if (!error && data) return data as AttendanceLog;
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const log = data[0] as AttendanceLog;
+          await this.saveLocalLog(log);
+          return log;
+        }
+
+        // Secondary fallback: check by today's date range in case of timezone offset
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const { data: rangeData } = await supabase
+          .from('attendance_logs')
+          .select('*')
+          .eq('employee_id', employeeId)
+          .gte('created_at', startOfDay.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (rangeData && rangeData.length > 0) {
+          const log = rangeData[0] as AttendanceLog;
+          await this.saveLocalLog(log);
+          return log;
+        }
       } catch (err) {
         console.warn('Fallback to local today attendance:', err);
       }
     }
 
-    const logs = await this.getAllAttendanceLogs();
-    return logs.find((l) => l.employee_id === employeeId && l.date === today) || null;
+    // Fallback: check local storage cache safely without wiping
+    const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
+    const logs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
+    return (
+      logs.find((l) => l.employee_id === employeeId && l.date === today) ||
+      logs.find((l) => l.employee_id === employeeId && l.clock_in && !l.clock_out) ||
+      null
+    );
   }
 
   /**
-   * Clock in with GPS validation (max 100m radius)
+   * Clock in with GPS validation directly to Supabase cloud
    */
   async clockIn(
     employeeId: string,
@@ -406,29 +533,35 @@ class AttendanceService {
       }
     }
 
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const newLogId = generateUUID();
+    const nowIso = now.toISOString();
+
     const newLog: AttendanceLog = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `att-${Date.now()}`,
+      id: newLogId,
       employee_id: employeeId,
       date: this.getTodayDateStr(),
-      shift_id: matchedShift?.id || null,
-      clock_in: now.toISOString(),
+      shift_id: matchedShift?.id && uuidRegex.test(matchedShift.id) ? matchedShift.id : null,
+      clock_in: nowIso,
       clock_out: null,
       clock_in_lat: lat,
       clock_in_lng: lng,
       clock_in_distance_meters: distance,
       status,
       notes: autoNote || null,
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
+      created_at: nowIso,
+      updated_at: nowIso,
     };
 
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
-        const { data, error } = await this.supabase.from('attendance_logs').insert(newLog).select().single();
+        const { data, error } = await supabase.from('attendance_logs').insert(newLog).select().single();
         if (!error && data) {
           await this.saveLocalLog(data as AttendanceLog);
           return { success: true, log: data as AttendanceLog, distance };
         }
+        if (error) console.error('Supabase clockIn insert error:', error);
       } catch (err) {
         console.warn('Supabase clockIn error, saving locally:', err);
       }
@@ -439,30 +572,45 @@ class AttendanceService {
   }
 
   /**
-   * Clock out
+   * Clock out directly to Supabase cloud
    */
   async clockOut(logId: string, notes?: string): Promise<{ success: boolean; log?: AttendanceLog; error?: string }> {
     const nowIso = new Date().toISOString();
+    const supabase = this.getSupabase();
 
-    if (this.supabase) {
+    if (supabase) {
       try {
-        const { data, error } = await this.supabase
+        const updatePayload: any = {
+          clock_out: nowIso,
+          updated_at: nowIso,
+        };
+        if (notes) updatePayload.notes = notes;
+
+        const { data, error } = await supabase
           .from('attendance_logs')
-          .update({ clock_out: nowIso, updated_at: nowIso, ...(notes ? { notes } : {}) })
+          .update(updatePayload)
           .eq('id', logId)
           .select()
-          .single();
+          .maybeSingle();
+
         if (!error && data) {
           await this.saveLocalLog(data as AttendanceLog);
           return { success: true, log: data as AttendanceLog };
         }
+        if (error) console.warn('Supabase clockOut error:', error);
       } catch (err) {
-        console.warn('Supabase clockOut error:', err);
+        console.warn('Supabase clockOut error, updating locally:', err);
       }
     }
 
-    const logs = await this.getAllAttendanceLogs();
-    const target = logs.find((l) => l.id === logId);
+    // Local fallback check
+    const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
+    const logs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
+    let target = logs.find((l) => l.id === logId);
+    if (!target) {
+      const today = this.getTodayDateStr();
+      target = logs.find((l) => l.date === today && l.clock_in && !l.clock_out);
+    }
     if (!target) return { success: false, error: 'Data absensi tidak ditemukan.' };
 
     const updated: AttendanceLog = {
@@ -472,11 +620,20 @@ class AttendanceService {
       notes: notes ? (target.notes ? `${target.notes} • ${notes}` : notes) : target.notes,
     };
     await this.saveLocalLog(updated);
+
+    if (supabase) {
+      try {
+        await supabase.from('attendance_logs').upsert(updated);
+      } catch (e) {
+        console.warn('Supabase sync after clockout error:', e);
+      }
+    }
+
     return { success: true, log: updated };
   }
 
   /**
-   * Report Sick / Leave / Permission (No GPS check needed)
+   * Report Sick / Leave / Permission (Direct to Supabase cloud)
    */
   async reportAbsence(
     employeeId: string,
@@ -489,9 +646,10 @@ class AttendanceService {
       return { success: false, error: 'Anda sudah tercatat hadir masuk hari ini.' };
     }
 
+    const newLogId = generateUUID();
     const nowIso = new Date().toISOString();
     const newLog: AttendanceLog = {
-      id: existing?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `att-${Date.now()}`),
+      id: existing?.id || newLogId,
       employee_id: employeeId,
       date: today,
       shift_id: null,
@@ -506,9 +664,10 @@ class AttendanceService {
       updated_at: nowIso,
     };
 
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
-        const { data, error } = await this.supabase.from('attendance_logs').upsert(newLog).select().single();
+        const { data, error } = await supabase.from('attendance_logs').upsert(newLog).select().single();
         if (!error && data) {
           await this.saveLocalLog(data as AttendanceLog);
           return { success: true, log: data as AttendanceLog };
@@ -523,7 +682,8 @@ class AttendanceService {
   }
 
   private async saveLocalLog(log: AttendanceLog): Promise<void> {
-    const logs = await this.getAllAttendanceLogs();
+    const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
+    const logs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
     const idx = logs.findIndex((l) => l.id === log.id);
     const updated = idx >= 0 ? logs.map((l, i) => (i === idx ? log : l)) : [log, ...logs];
     localStorage.setItem(ATTENDANCE_LOGS_KEY, JSON.stringify(updated));
@@ -535,17 +695,32 @@ class AttendanceService {
     endDate?: string;
     employeeId?: string;
   }): Promise<AttendanceLog[]> {
-    if (this.supabase) {
+    const supabase = this.getSupabase();
+    if (supabase) {
       try {
-        let q = this.supabase.from('attendance_logs').select('*').order('date', { ascending: false });
+        let q = supabase.from('attendance_logs').select('*').order('date', { ascending: false });
         if (filter?.date) q = q.eq('date', filter.date);
         if (filter?.startDate) q = q.gte('date', filter.startDate);
         if (filter?.endDate) q = q.lte('date', filter.endDate);
         if (filter?.employeeId) q = q.eq('employee_id', filter.employeeId);
         const { data, error } = await q;
+
         if (!error && data) {
-          localStorage.setItem(ATTENDANCE_LOGS_KEY, JSON.stringify(data));
-          return data as AttendanceLog[];
+          // Merge safely with any unsynced local logs
+          const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
+          const localLogs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
+          const map = new Map<string, AttendanceLog>();
+          localLogs.forEach((l) => map.set(l.id, l));
+          data.forEach((l) => map.set(l.id, l as AttendanceLog));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime()
+          );
+          localStorage.setItem(ATTENDANCE_LOGS_KEY, JSON.stringify(merged));
+
+          let result = merged;
+          if (filter?.employeeId) result = result.filter((l) => l.employee_id === filter.employeeId);
+          if (filter?.date) result = result.filter((l) => l.date === filter.date);
+          return result;
         }
       } catch (err) {
         console.warn('Fallback to local logs:', err);
@@ -553,7 +728,7 @@ class AttendanceService {
     }
 
     const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
-    let list: AttendanceLog[] = saved ? JSON.parse(saved) : INITIAL_ATTENDANCE_LOGS;
+    let list: AttendanceLog[] = saved ? JSON.parse(saved) : [];
 
     if (filter?.date) list = list.filter((l) => l.date === filter.date);
     if (filter?.startDate) list = list.filter((l) => l.date >= filter.startDate!);

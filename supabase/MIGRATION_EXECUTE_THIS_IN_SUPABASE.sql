@@ -194,6 +194,22 @@ ON CONFLICT (id) DO UPDATE SET
   description = EXCLUDED.description,
   is_active = true;
 
+-- 6.3. DATA MASTER KARYAWAN DEFAULT OBAT HAUS (DENGAN UUID RESMI)
+INSERT INTO public.employee_profiles (id, employee_code, pin, full_name, role_title, assigned_location_type, assigned_location_id, phone, is_active)
+VALUES 
+  ('f0000000-0000-0000-0000-000000000001'::uuid, 'EMP-01', '1234', 'Budi Santoso', 'Head Barista', 'outlet', 'd0000000-0000-0000-0000-000000000001'::uuid, '0812-3456-7891', true),
+  ('f0000000-0000-0000-0000-000000000002'::uuid, 'EMP-02', '1234', 'Siti Rahma', 'Kasir Outlet', 'outlet', 'd0000000-0000-0000-0000-000000000001'::uuid, '0812-3456-7892', true),
+  ('f0000000-0000-0000-0000-000000000003'::uuid, 'EMP-03', '1234', 'Andi Pratama', 'Staf Logistik Gudang', 'warehouse', 'e0000000-0000-0000-0000-000000000001'::uuid, '0812-3456-7893', true)
+ON CONFLICT (id) DO UPDATE SET
+  employee_code = EXCLUDED.employee_code,
+  pin = EXCLUDED.pin,
+  full_name = EXCLUDED.full_name,
+  role_title = EXCLUDED.role_title,
+  assigned_location_type = EXCLUDED.assigned_location_type,
+  assigned_location_id = EXCLUDED.assigned_location_id,
+  phone = EXCLUDED.phone,
+  is_active = true;
+
 -- 7. BUKA HAK AKSES OPERASIONAL (ADMIN DAPAT MENAMBAH & MENGHAPUS SEMUA DATA LANGSUNG DI SUPABASE)
 DO $$
 DECLARE

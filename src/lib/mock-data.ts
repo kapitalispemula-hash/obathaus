@@ -326,7 +326,7 @@ export const INITIAL_ATTENDANCE_SHIFTS: AttendanceShift[] = [
 
 export const INITIAL_EMPLOYEE_PROFILES: EmployeeProfile[] = [
   {
-    id: 'emp-001',
+    id: 'f0000000-0000-0000-0000-000000000001',
     employee_code: 'EMP-01',
     pin: '1234',
     full_name: 'Budi Santoso',
@@ -339,7 +339,7 @@ export const INITIAL_EMPLOYEE_PROFILES: EmployeeProfile[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'emp-002',
+    id: 'f0000000-0000-0000-0000-000000000002',
     employee_code: 'EMP-02',
     pin: '1234',
     full_name: 'Siti Rahma',
@@ -352,7 +352,7 @@ export const INITIAL_EMPLOYEE_PROFILES: EmployeeProfile[] = [
     updated_at: '2026-10-01T08:00:00Z',
   },
   {
-    id: 'emp-003',
+    id: 'f0000000-0000-0000-0000-000000000003',
     employee_code: 'EMP-03',
     pin: '1234',
     full_name: 'Andi Pratama',

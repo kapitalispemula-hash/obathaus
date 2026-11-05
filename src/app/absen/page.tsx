@@ -1183,14 +1183,14 @@ export default function MobileAttendancePage() {
                     {isSubmittingAction ? (
                       <div className="w-3.5 h-3.5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      <span>Confirm</span>
+                      <span>Absen Masuk Sekarang</span>
                     )}
                   </button>
                 )}
               </div>
             </div>
 
-            {/* 4. BIG VIBRANT ORANGE CTA CARD (BOOK A RIDE IN MOCKUP) */}
+            {/* 4. BIG VIBRANT ORANGE CTA CARD */}
             <div
               onClick={
                 isReportedAbsence || isAlreadyClockedOut
@@ -1246,10 +1246,10 @@ export default function MobileAttendancePage() {
                 </span>
                 <div>
                   <span className="text-[11px] font-semibold text-zinc-400 block leading-tight">
-                    Rides taken
+                    Hari Hadir
                   </span>
                   <span className="text-[10px] text-zinc-400 font-medium leading-tight">
-                    Kehadiran Bulan Ini
+                    Bulan Ini
                   </span>
                 </div>
               </div>
@@ -1262,10 +1262,10 @@ export default function MobileAttendancePage() {
                 </div>
                 <div>
                   <span className="text-[11px] font-semibold text-zinc-400 block leading-tight">
-                    Rewards
+                    Skor Disiplin
                   </span>
                   <span className="text-[10px] text-zinc-500 font-medium leading-tight">
-                    Skor Disiplin Presensi
+                    Tepat Waktu
                   </span>
                 </div>
               </div>
@@ -1348,27 +1348,27 @@ export default function MobileAttendancePage() {
         )}
 
         {/* ================================================================ */}
-        {/* TAB 3: RIWAYAT PRESENSI — EXACT REPLICA OF RIGHT SCREEN (MY TRIPS) */}
+        {/* TAB 3: RIWAYAT PRESENSI — EXACT REPLICA OF RIGHT SCREEN          */}
         {/* ================================================================ */}
         {activeTab === 'history' && (
           <div className="space-y-4 px-5 pt-3 pb-6">
             {/* Big Bold Header */}
             <div>
               <h2 className="text-3xl font-black text-[#09090B] tracking-tight">
-                My Trips
+                Riwayat Presensi
               </h2>
               <p className="text-xs text-zinc-400 font-medium mt-1">
-                {filteredHistoryLogs.length} rides total
+                {filteredHistoryLogs.length} kehadiran tercatat
               </p>
             </div>
 
             {/* Horizontal Filter Pills */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
               {[
-                { id: 'all', label: 'All' },
-                { id: 'month', label: 'This month' },
-                { id: 'on_time', label: 'Done' },
-                { id: 'late', label: 'Canceled' },
+                { id: 'all', label: 'Semua' },
+                { id: 'month', label: 'Bulan Ini' },
+                { id: 'on_time', label: 'Tepat Waktu' },
+                { id: 'late', label: 'Terlambat' },
               ].map((f) => {
                 const isActive = historyFilter === f.id;
                 return (
@@ -1401,21 +1401,25 @@ export default function MobileAttendancePage() {
                 filteredHistoryLogs.map((log) => {
                   const statusTag =
                     log.status === 'present'
-                      ? 'Premium'
+                      ? 'Tepat Waktu'
                       : log.status === 'late'
-                      ? 'Standard'
-                      : 'Business';
+                      ? 'Terlambat'
+                      : log.status === 'sick'
+                      ? 'Sakit'
+                      : 'Izin';
 
-                  let durationPrice = '$12.00';
+                  let durationText = '8.0 Jam';
                   if (log.clock_in && log.clock_out) {
                     try {
                       const inT = new Date(log.clock_in);
                       const outT = new Date(log.clock_out);
                       const diffH = (outT.getTime() - inT.getTime()) / (1000 * 60 * 60);
-                      durationPrice = `$${(diffH * 1.5).toFixed(2)}`;
+                      durationText = `${diffH.toFixed(1)} Jam`;
                     } catch {
-                      durationPrice = '$12.00';
+                      durationText = '8.0 Jam';
                     }
+                  } else if (log.clock_in) {
+                    durationText = 'Sedang Kerja';
                   }
 
                   return (
@@ -1431,27 +1435,23 @@ export default function MobileAttendancePage() {
                       {/* Main Row: Location Path & Amount */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs sm:text-sm font-black text-[#09090B]">
-                          {log.clock_in ? formatTimeDisplay(log.clock_in) : '08:00'}
+                          {log.clock_in ? formatTimeDisplay(log.clock_in) : '--:--'}
                           {' → '}
-                          {log.clock_out ? formatTimeDisplay(log.clock_out) : '17:00'}
+                          {log.clock_out ? formatTimeDisplay(log.clock_out) : 'Aktif'}
                         </span>
                         <span className="text-xs font-black text-[#09090B] font-mono">
-                          {durationPrice}
+                          {durationText}
                         </span>
                       </div>
 
                       {/* Subtitle: Date & Timestamp */}
                       <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium pt-0.5">
                         <span>{log.date} • WITA</span>
-                        <span className="capitalize">
-                          {log.status === 'present'
-                            ? 'Tepat Waktu'
-                            : log.status === 'late'
-                            ? 'Terlambat'
-                            : log.status === 'sick'
-                            ? 'Sakit'
-                            : 'Izin'}
-                        </span>
+                        {log.notes && (
+                          <span className="italic text-zinc-500 truncate max-w-[150px]">
+                            &ldquo;{log.notes}&rdquo;
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -1463,10 +1463,10 @@ export default function MobileAttendancePage() {
             <div className="pt-2 text-center">
               <button
                 onClick={loadHistory}
-                className="text-xs font-bold text-zinc-500 hover:text-zinc-800 inline-flex items-center gap-1 transition cursor-pointer"
+                className="text-xs font-bold text-zinc-500 hover:text-zinc-800 inline-flex items-center gap-1.5 transition cursor-pointer"
               >
-                <span>View all history</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                <span>Segarkan Riwayat</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLogs ? 'animate-spin' : ''}`} />
               </button>
             </div>
           </div>
@@ -1501,7 +1501,7 @@ export default function MobileAttendancePage() {
                 {currentEmployee.full_name}
               </h2>
               <p className="text-xs text-zinc-400 font-medium mt-0.5">
-                {currentEmployee.phone || '+1 (555) 332-2233'}
+                {currentEmployee.phone || '+62 812-3456-7890'}
               </p>
             </div>
 
@@ -1534,23 +1534,23 @@ export default function MobileAttendancePage() {
                     {presentDaysCount > 0 ? presentDaysCount : 12}
                   </span>
                   <span className="text-[11px] text-zinc-400 font-medium block mt-1.5">
-                    Rides
+                    Hadir
                   </span>
                 </div>
                 <div>
                   <span className="text-2xl font-black text-white font-mono block leading-none">
-                    {totalWorkedHours} km
+                    {totalWorkedHours} jam
                   </span>
                   <span className="text-[11px] text-zinc-400 font-medium block mt-1.5">
-                    Traveled
+                    Jam Kerja
                   </span>
                 </div>
                 <div>
                   <span className="text-2xl font-black text-[#FF6600] font-mono block leading-none">
-                    $124
+                    {disciplineScore}%
                   </span>
                   <span className="text-[11px] text-zinc-400 font-medium block mt-1.5">
-                    Saved
+                    Disiplin
                   </span>
                 </div>
               </div>
@@ -1560,16 +1560,16 @@ export default function MobileAttendancePage() {
                 <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-[#FF6600] rounded-full transition-all duration-500"
-                    style={{ width: '72%' }}
+                    style={{ width: `${Math.min(100, Math.max(15, disciplineScore))}%` }}
                   />
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium pt-2">
-                  <span>Monthly limit: 72%</span>
+                  <span>Target bulanan: 85%</span>
                   <button
                     onClick={() => setActiveTab('history')}
                     className="text-zinc-400 hover:text-white transition cursor-pointer"
                   >
-                    Edit
+                    Detail
                   </button>
                 </div>
               </div>
@@ -1676,83 +1676,39 @@ export default function MobileAttendancePage() {
         )}
       </main>
 
-      {/* 3. FLOATING BOTTOM DOCK NAVIGATION BAR (EXACT MOCKUP: ORANGE ACTIVE PILL + BLACK CENTER BUTTON) */}
-      <nav className="fixed bottom-4 left-4 right-4 max-w-sm mx-auto bg-white/95 backdrop-blur-md border border-zinc-100/90 rounded-full px-3 py-2 flex items-center justify-between z-30 shadow-2xl">
-        {/* Tab 1: Home */}
-        {activeTab === 'home' ? (
-          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
-            <Home className="w-4 h-4 stroke-[2.5]" />
-            <span>Home</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => setActiveTab('home')}
-            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
-            title="Home"
-          >
-            <Home className="w-5 h-5 stroke-[1.8]" />
-          </button>
-        )}
-
-        {/* Tab 2: Rides / Jadwal */}
-        {activeTab === 'schedule' ? (
-          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
-            <Briefcase className="w-4 h-4 stroke-[2.5]" />
-            <span>Rides</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => setActiveTab('schedule')}
-            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
-            title="Rides / Jadwal"
-          >
-            <Briefcase className="w-5 h-5 stroke-[1.8]" />
-          </button>
-        )}
-
-        {/* Center Action Button: Black Circle with Plus */}
-        <button
-          type="button"
-          onClick={
-            isAlreadyClockedIn ? handleClockOut : handleClockIn
-          }
-          className="w-10 h-10 rounded-full bg-[#09090B] text-white flex items-center justify-center font-bold shadow-md hover:scale-105 active:scale-95 transition cursor-pointer shrink-0"
-          title="Quick Absen"
-        >
-          <Plus className="w-5 h-5 stroke-[2.5]" />
-        </button>
-
-        {/* Tab 3: Activity / Riwayat */}
-        {activeTab === 'history' ? (
-          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
-            <Clock className="w-4 h-4 stroke-[2.5]" />
-            <span>Activity</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => setActiveTab('history')}
-            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
-            title="Activity / Riwayat"
-          >
-            <Clock className="w-5 h-5 stroke-[1.8]" />
-          </button>
-        )}
-
-        {/* Tab 4: Profile / Akun */}
-        {activeTab === 'account' ? (
-          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
-            <User className="w-4 h-4 stroke-[2.5]" />
-            <span>Profile</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => setActiveTab('account')}
-            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
-            title="Profile / Akun"
-          >
-            <User className="w-5 h-5 stroke-[1.8]" />
-          </button>
-        )}
+      {/* 3. FLOATING BOTTOM DOCK NAVIGATION BAR (4 FUNCTIONAL TABS MATCHING MOCKUP DOCK) */}
+      <nav className="fixed bottom-4 left-4 right-4 max-w-sm mx-auto bg-white/95 backdrop-blur-md border border-zinc-100/90 rounded-full px-3 py-1.5 flex items-center justify-around z-30 shadow-2xl">
+        {[
+          { id: 'home', label: 'Absen', icon: Home },
+          { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
+          { id: 'history', label: 'Riwayat', icon: Clock },
+          { id: 'account', label: 'Profil', icon: User },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return isActive ? (
+            <div
+              key={tab.id}
+              className="bg-[#FF6600] text-white px-4 py-2 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25 active:scale-95 transition-all"
+            >
+              <Icon className="w-4 h-4 stroke-[2.5]" />
+              <span>{tab.label}</span>
+            </div>
+          ) : (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              className="flex flex-col items-center justify-center py-1 px-2.5 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
+              title={tab.label}
+            >
+              <Icon className="w-5 h-5 stroke-[1.8]" />
+              <span className="text-[10px] font-semibold leading-tight mt-0.5">
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
       </nav>
 
       {/* -------------------------------------------------------------------- */}

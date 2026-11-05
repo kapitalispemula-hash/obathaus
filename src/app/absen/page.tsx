@@ -857,17 +857,16 @@ export default function MobileAttendancePage() {
   if (!hasSeenOnboarding && !currentEmployee) {
     return (
       <div className="min-h-screen bg-[#FDFDFD] text-[#09090B] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden px-7 py-8 border-x border-zinc-100 font-sans shadow-2xl">
-        {/* Top Header / Branding */}
+        {/* Top Header / Branding with asetlogo02.png */}
         <div className="flex items-center justify-between pt-2">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-2xl bg-[#09090B] text-white flex items-center justify-center font-black text-sm shadow-sm">
-              OH
-            </div>
-            <span className="font-black text-base tracking-tight text-[#09090B]">
-              OBAT HAUS
-            </span>
+          <div className="h-11 sm:h-12 flex items-center">
+            <img
+              src="/asetlogo02.png"
+              alt="OBAT HAUS"
+              className="h-full w-auto object-contain filter drop-shadow-xs"
+            />
           </div>
-          <span className="px-3 py-1 rounded-full bg-orange-50 border border-orange-200/60 text-[#FF6600] text-[11px] font-bold">
+          <span className="px-3.5 py-1 rounded-full bg-orange-50 border border-orange-200/60 text-[#FF6600] text-[11px] font-bold">
             Aplikasi Presensi
           </span>
         </div>
@@ -955,7 +954,7 @@ export default function MobileAttendancePage() {
   if (!currentEmployee) {
     return (
       <div className="min-h-screen bg-[#FDFDFD] text-[#09090B] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden px-7 py-8 border-x border-zinc-100 font-sans shadow-2xl">
-        {/* Top Header Row with Circular Back Button */}
+        {/* Top Header Row with Circular Back Button and asetlogo02.png */}
         <div className="flex items-center justify-between pt-1">
           <button
             type="button"
@@ -966,9 +965,13 @@ export default function MobileAttendancePage() {
             <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
           </button>
 
-          <span className="px-3.5 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 text-[#FF6600] text-xs font-extrabold tracking-wider uppercase">
-            OBAT HAUS
-          </span>
+          <div className="h-10 sm:h-11 flex items-center">
+            <img
+              src="/asetlogo02.png"
+              alt="OBAT HAUS"
+              className="h-full w-auto object-contain filter drop-shadow-xs"
+            />
+          </div>
         </div>
 
         {/* Middle Form Area */}

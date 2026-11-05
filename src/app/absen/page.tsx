@@ -934,13 +934,19 @@ export default function MobileAttendancePage() {
             <span>Mulai Presensi Sekarang</span>
             <ArrowRight className="w-5 h-5 stroke-[2.5]" />
           </button>
-          <div className="text-center">
-            <Link
-              href="/pos"
-              className="text-xs font-semibold text-zinc-400 hover:text-zinc-700 transition-colors"
-            >
-              ← Buka Kasir POS Utama
-            </Link>
+          <div className="text-center pt-1">
+            <p className="text-[11px] text-zinc-400 font-normal">
+              Dikembangkan Oleh{' '}
+              <a
+                href="https://labide.site/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-zinc-700 hover:text-zinc-950 no-underline transition-colors"
+              >
+                LABIDE
+              </a>
+              {' '}- Digital Creative Hub.
+            </p>
           </div>
         </div>
       </div>
@@ -1060,14 +1066,20 @@ export default function MobileAttendancePage() {
           </form>
         </div>
 
-        {/* Bottom Navigation Link */}
+        {/* Footer Attribution Link */}
         <div className="text-center pt-2 pb-2">
-          <Link
-            href="/pos"
-            className="text-xs font-semibold text-zinc-400 hover:text-zinc-700 transition-colors"
-          >
-            ← Buka Kasir POS Utama
-          </Link>
+          <p className="text-[11px] text-zinc-400 font-normal">
+            Dikembangkan Oleh{' '}
+            <a
+              href="https://labide.site/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-zinc-700 hover:text-zinc-950 no-underline transition-colors"
+            >
+              LABIDE
+            </a>
+            {' '}- Digital Creative Hub.
+          </p>
         </div>
       </div>
     );

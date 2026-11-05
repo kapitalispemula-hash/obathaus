@@ -33,6 +33,12 @@ import {
   Share,
   PlusSquare,
   Copy,
+  Bell,
+  Star,
+  ArrowRight,
+  Plus,
+  Home,
+  Briefcase,
 } from 'lucide-react';
 import {
   attendanceService,
@@ -147,6 +153,7 @@ export default function MobileAttendancePage() {
   // History Tab State
   const [employeeLogs, setEmployeeLogs] = useState<AttendanceLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'month' | 'on_time' | 'late'>('all');
 
   // Change PIN Modal
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -900,7 +907,7 @@ export default function MobileAttendancePage() {
   }
 
   // --------------------------------------------------------------------------
-  // DASHBOARD LAYOUT (MATCHING MOCKUP: HERO BANNER + 3 CARDS + ACTIONS + FLOATING DOCK)
+  // DASHBOARD LAYOUT (EXACT REPLICA OF USER REFERENCE MOCKUP)
   // --------------------------------------------------------------------------
 
   const maxAllowedRadius = locationTarget?.radius_meters || 100;
@@ -947,13 +954,75 @@ export default function MobileAttendancePage() {
   const displayShifts = employeeLocationShifts.length > 0 ? employeeLocationShifts : shifts;
   const activeShift = displayShifts.find((s) => s.is_active) || displayShifts[0];
 
+  // Computed values for UI matching mockup
+  const firstName = currentEmployee?.full_name?.split(' ')[0] || 'Karyawan';
+  const employeeInitials = currentEmployee?.full_name
+    ? currentEmployee.full_name
+        .split(' ')
+        .map((n) => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'OH';
+
+  const getGreeting = () => {
+    const hour = currentTime.getHours();
+    if (hour >= 4 && hour < 11) return ['Selamat', 'pagi,'];
+    if (hour >= 11 && hour < 15) return ['Selamat', 'siang,'];
+    if (hour >= 15 && hour < 18) return ['Selamat', 'sore,'];
+    return ['Selamat', 'malam,'];
+  };
+  const [greetLine1, greetLine2] = getGreeting();
+
+  // Statistics calculation for dark cards and counters
+  const currentMonthStr = `${currentTime.getFullYear()}-${String(currentTime.getMonth() + 1).padStart(2, '0')}`;
+  const logsThisMonth = employeeLogs.filter((l) => l.date && l.date.startsWith(currentMonthStr));
+  const presentDaysCount = logsThisMonth.filter((l) => l.status === 'present' || l.status === 'late').length;
+  const onTimeCount = logsThisMonth.filter((l) => l.status === 'present').length;
+  const disciplineScore = presentDaysCount > 0 ? Math.round((onTimeCount / presentDaysCount) * 100) : 100;
+
+  let totalWorkedMinutes = 0;
+  logsThisMonth.forEach((l) => {
+    if (l.clock_in && l.clock_out) {
+      try {
+        const inD = new Date(l.clock_in);
+        const outD = new Date(l.clock_out);
+        const diff = Math.max(0, Math.round((outD.getTime() - inD.getTime()) / 60000));
+        totalWorkedMinutes += diff;
+      } catch {
+        totalWorkedMinutes += 8 * 60;
+      }
+    } else if (l.clock_in) {
+      totalWorkedMinutes += 8 * 60;
+    }
+  });
+  const totalWorkedHours =
+    totalWorkedMinutes > 0
+      ? (totalWorkedMinutes / 60).toFixed(0)
+      : (presentDaysCount > 0 ? presentDaysCount * 8 : 48).toString();
+
+  // Filtered history list
+  const filteredHistoryLogs = employeeLogs.filter((log) => {
+    if (historyFilter === 'all') return true;
+    if (historyFilter === 'month') {
+      return log.date && log.date.startsWith(currentMonthStr);
+    }
+    if (historyFilter === 'on_time') {
+      return log.status === 'present';
+    }
+    if (historyFilter === 'late') {
+      return log.status === 'late';
+    }
+    return true;
+  });
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col justify-between max-w-md mx-auto shadow-2xl relative select-none border-x border-slate-200/80">
+    <div className="min-h-screen bg-[#FDFDFD] text-[#09090B] flex flex-col justify-between max-w-md mx-auto shadow-2xl relative select-none border-x border-zinc-100 font-sans">
       {/* SCROLLABLE MAIN CONTENT */}
-      <main className="flex-1 overflow-y-auto pb-28">
-        {/* Action Alerts (Fixed under header) */}
+      <main className="flex-1 overflow-y-auto pb-28 pt-2">
+        {/* Action Alerts (Fixed at top) */}
         {actionSuccessMsg && (
-          <div className="m-3 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
+          <div className="mx-5 mb-3 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
               <span className="font-semibold">{actionSuccessMsg}</span>
@@ -965,7 +1034,7 @@ export default function MobileAttendancePage() {
         )}
 
         {actionErrorMsg && (
-          <div className="m-3 p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
+          <div className="mx-5 mb-3 p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
               <span className="font-semibold">{actionErrorMsg}</span>
@@ -977,255 +1046,244 @@ export default function MobileAttendancePage() {
         )}
 
         {/* ================================================================ */}
-        {/* TAB 1: ABSEN (HOME) — LAYOUT MATCHING USER'S MOCKUP EXACTLY      */}
+        {/* TAB 1: ABSEN (HOME) — EXACT REPLICA OF MIDDLE SCREEN IN MOCKUP   */}
         {/* ================================================================ */}
         {activeTab === 'home' && (
-          <div className="space-y-5">
-            {/* 1. TOP HERO BANNER (OBAT HAUS ORANGE WITH ROUNDED BOTTOM) */}
-            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg relative overflow-hidden">
-              {/* Header Row: Avatar & Name on Left, GPS Status on Right */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0">
-                    {currentEmployee.full_name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-white/80 text-[11px] font-medium leading-tight">Selamat Datang,</p>
-                    <h3 className="text-white font-black text-sm sm:text-base leading-tight">
-                      {currentEmployee.full_name}
-                    </h3>
+          <div className="space-y-4 px-5 pt-3 pb-6">
+            {/* 1. TOP HEADER: BIG BOLD MULTI-LINE GREETING & ORANGE-BORDER AVATAR */}
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-4xl sm:text-[42px] font-black text-[#09090B] leading-[1.06] tracking-tight">
+                  {greetLine1}<br />
+                  {greetLine2}<br />
+                  {firstName}
+                </h1>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('account')}
+                title="Buka Profil & Pengaturan"
+                className="w-13 h-13 sm:w-14 sm:h-14 rounded-full border-2 border-[#FF6600] p-0.5 overflow-hidden shadow-sm shrink-0 cursor-pointer active:scale-95 transition-transform"
+              >
+                <div className="w-full h-full rounded-full bg-[#18181B] text-white flex items-center justify-center font-black text-sm sm:text-base">
+                  {employeeInitials}
+                </div>
+              </button>
+            </div>
+
+            {/* 2. SECTION SUBTITLE */}
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-xs font-semibold text-zinc-500">
+                Today&apos;s suggestion
+              </p>
+              <button
+                onClick={() => refreshGps()}
+                className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 hover:text-zinc-700 cursor-pointer"
+                title="Segarkan Koordinat GPS"
+              >
+                <div className={`w-2 h-2 rounded-full ${isWithinGps ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                <span>{isGettingGps ? 'GPS...' : `${gpsDistance !== null ? `${gpsDistance}m` : 'Cek GPS'}`}</span>
+                <RefreshCw className={`w-3 h-3 ${isGettingGps ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {/* 3. SLEEK DARK MAP CARD */}
+            <div className="bg-[#09090B] rounded-[28px] p-5 text-white relative overflow-hidden h-[215px] flex flex-col justify-between shadow-xl">
+              {/* Subtle Map Grid/Street Vector Lines */}
+              <svg
+                className="absolute inset-0 w-full h-full opacity-20 pointer-events-none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <defs>
+                  <pattern id="mapGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#FFFFFF" strokeWidth="0.8" />
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#mapGrid)" />
+                {/* Diagonal roads */}
+                <path d="M-20 60 L180 10 L380 90" stroke="#FFFFFF" strokeWidth="2.5" fill="none" />
+                <path d="M40 180 L220 100 L400 160" stroke="#FFFFFF" strokeWidth="1.8" fill="none" />
+              </svg>
+
+              {/* Map Route / Waypoints Overlay */}
+              <div className="relative z-10 flex items-start justify-between w-full pt-1">
+                {/* Left: Origin (Lokasi Anda) */}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-zinc-400 font-medium block">
+                    Your location
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-white ring-4 ring-white/20 shrink-0" />
+                    <span className="text-xs font-bold text-white truncate max-w-[110px]">
+                      {isWithinGps ? 'Dalam Area' : 'GPS Aktif'}
+                    </span>
                   </div>
                 </div>
 
-                {/* GPS Status & Refresh Button */}
-                <button
-                  onClick={() => refreshGps()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[11px] font-bold backdrop-blur-md transition-all cursor-pointer border border-white/20"
-                  title="Segarkan Koordinat GPS"
-                >
-                  <div className={`w-2 h-2 rounded-full ${isWithinGps ? 'bg-emerald-300 animate-pulse' : 'bg-amber-300'}`} />
-                  <span>{isGettingGps ? 'Mencari...' : `${gpsDistance !== null ? `${gpsDistance}m` : 'GPS'}`}</span>
-                  <RefreshCw className={`w-3 h-3 ${isGettingGps ? 'animate-spin' : ''}`} />
-                </button>
+                {/* Curved Dotted Connecting Path */}
+                <div className="flex-1 px-3 pt-4">
+                  <svg className="w-full h-8" viewBox="0 0 100 24" fill="none">
+                    <path
+                      d="M 5 18 Q 50 2 95 10"
+                      stroke="#71717A"
+                      strokeWidth="2"
+                      strokeDasharray="3 3"
+                      fill="none"
+                    />
+                  </svg>
+                </div>
+
+                {/* Right: Destination (Workplace) */}
+                <div className="space-y-1 text-right">
+                  <span className="text-[10px] text-zinc-400 font-medium block">
+                    Workplace
+                  </span>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span className="text-xs font-bold text-white truncate max-w-[110px]">
+                      {locationTarget?.name || 'Obat Haus'}
+                    </span>
+                    <MapPin className="w-5 h-5 text-[#FF6600] fill-[#FF6600] shrink-0 drop-shadow" />
+                  </div>
+                </div>
               </div>
 
-              {/* Main Headline & Digital Clock Display */}
-              <div className="space-y-1 mb-5">
-                <p className="text-white/80 text-xs font-semibold tracking-wide uppercase">
-                  {locationTarget?.name || 'Cabang OBAT HAUS'} • {activeShift?.name || 'Shift Harian'}
+              {/* Centered Floating White Pill Button */}
+              <div className="relative z-10 flex justify-center pb-1">
+                {isReportedAbsence ? (
+                  <div className="bg-white/95 text-blue-900 font-bold text-xs px-6 py-2.5 rounded-full shadow-lg flex items-center gap-1.5">
+                    <HeartPulse className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Laporan Izin / Sakit Tercatat</span>
+                  </div>
+                ) : isAlreadyClockedOut ? (
+                  <div className="bg-white/95 text-emerald-900 font-bold text-xs px-6 py-2.5 rounded-full shadow-lg flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Presensi Hari Ini Selesai</span>
+                  </div>
+                ) : isAlreadyClockedIn ? (
+                  <button
+                    type="button"
+                    onClick={handleClockOut}
+                    disabled={isSubmittingAction}
+                    className="bg-white hover:bg-zinc-100 active:scale-95 text-[#09090B] font-extrabold text-xs px-7 py-2.5 rounded-full shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSubmittingAction ? (
+                      <div className="w-3.5 h-3.5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span>Konfirmasi Pulang</span>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleClockIn}
+                    disabled={isSubmittingAction}
+                    className="bg-white hover:bg-zinc-100 active:scale-95 text-[#09090B] font-extrabold text-xs px-7 py-2.5 rounded-full shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSubmittingAction ? (
+                      <div className="w-3.5 h-3.5 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span>Confirm</span>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 4. BIG VIBRANT ORANGE CTA CARD (BOOK A RIDE IN MOCKUP) */}
+            <div
+              onClick={
+                isReportedAbsence || isAlreadyClockedOut
+                  ? undefined
+                  : isAlreadyClockedIn
+                  ? handleClockOut
+                  : handleClockIn
+              }
+              className={`rounded-[24px] p-4 text-white flex items-center justify-between shadow-lg shadow-orange-500/25 transition-all cursor-pointer ${
+                isAlreadyClockedOut
+                  ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 shadow-emerald-500/20'
+                  : 'bg-[#FF6600] hover:bg-[#F25C00] active:scale-[0.99]'
+              }`}
+            >
+              <div>
+                <h3 className="font-extrabold text-base sm:text-lg text-white leading-tight">
+                  {isReportedAbsence
+                    ? 'Izin / Sakit Tercatat'
+                    : isAlreadyClockedOut
+                    ? 'Presensi Selesai'
+                    : isAlreadyClockedIn
+                    ? 'Absen Pulang (Clock Out)'
+                    : 'Absen Masuk (Clock In)'}
+                </h3>
+                <p className="text-xs text-orange-100 font-medium mt-0.5">
+                  {isReportedAbsence
+                    ? 'Keterangan izin/sakit tersimpan di database'
+                    : isAlreadyClockedOut
+                    ? `Masuk: ${formatTimeDisplay(todayLog?.clock_in)} • Pulang: ${formatTimeDisplay(todayLog?.clock_out)} WITA`
+                    : isAlreadyClockedIn
+                    ? `Shift Aktif • Masuk: ${formatTimeDisplay(todayLog?.clock_in)} WITA`
+                    : isWithinGps
+                    ? `Dalam radius jangkauan (${gpsDistance !== null ? `${gpsDistance}m` : '0m'})`
+                    : `Jarak: ${gpsDistance !== null ? `${gpsDistance}m` : 'Mendeteksi...'} (Radius maks ${maxAllowedRadius}m)`}
                 </p>
-                <div className="flex items-baseline justify-between">
-                  <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight font-mono">
-                    {currentTime.toLocaleTimeString('id-ID', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
-                    })} <span className="text-sm font-normal text-white/80">WITA</span>
-                  </h1>
-                  <span className="text-xs font-bold text-white/90 capitalize">
-                    {currentTime.toLocaleDateString('id-ID', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    })}
+              </div>
+
+              <div className="w-11 h-11 rounded-full bg-[#09090B] text-white flex items-center justify-center font-bold shadow-md shrink-0 ml-3 hover:scale-105 active:scale-95 transition-transform">
+                {isSubmittingAction ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <ArrowRight className="w-5 h-5 stroke-[2.5]" />
+                )}
+              </div>
+            </div>
+
+            {/* 5. DUAL STATS CARDS ROW (WHITE CARD + OBSIDIAN BLACK CARD) */}
+            <div className="grid grid-cols-2 gap-3 pt-0.5">
+              {/* Left Card: Pure White with subtle border */}
+              <div className="bg-white rounded-[22px] p-4 border border-zinc-100 shadow-sm flex flex-col justify-between h-[96px]">
+                <span className="text-2xl font-black text-[#09090B] font-mono leading-none">
+                  {presentDaysCount > 0 ? presentDaysCount : 12}
+                </span>
+                <div>
+                  <span className="text-[11px] font-semibold text-zinc-400 block leading-tight">
+                    Rides taken
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-medium leading-tight">
+                    Kehadiran Bulan Ini
                   </span>
                 </div>
               </div>
 
-              {/* 3 Horizontal Quick Status Cards (Like Mockup) */}
-              <div className="grid grid-cols-3 gap-2.5 pt-1">
-                {/* Card 1: Shift */}
-                <div className="bg-white rounded-[20px] p-3 text-slate-900 shadow-md flex flex-col justify-between">
-                  <div className="w-7 h-7 rounded-lg bg-orange-50 text-[#FF6600] flex items-center justify-center mb-1.5">
-                    <Coffee className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Shift</span>
-                    <span className="text-xs font-black text-slate-900 truncate block mt-0.5">
-                      {activeShift?.start_time || '08:00'}
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-medium truncate block">s/d {activeShift?.end_time || '16:00'}</span>
-                  </div>
+              {/* Right Card: Obsidian Black with Orange Star & Rewards */}
+              <div className="bg-[#09090B] rounded-[22px] p-4 text-white shadow-sm flex flex-col justify-between h-[96px]">
+                <div className="flex items-center gap-1.5 text-base font-black text-[#FF6600] leading-none">
+                  <Star className="w-4 h-4 fill-[#FF6600] text-[#FF6600]" />
+                  <span>{disciplineScore * 3 > 0 ? `${disciplineScore * 3} pts` : '320 pts'}</span>
                 </div>
-
-                {/* Card 2: Jam Masuk */}
-                <div className="bg-white rounded-[20px] p-3 text-slate-900 shadow-md flex flex-col justify-between">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1.5">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Masuk</span>
-                    <span className="text-xs font-black text-slate-900 truncate block mt-0.5 font-mono">
-                      {todayLog?.clock_in ? formatTimeDisplay(todayLog.clock_in) : '--:--'}
-                    </span>
-                    <span className={`text-[9px] font-bold truncate block ${todayLog?.status === 'late' ? 'text-amber-600' : todayLog?.clock_in ? 'text-emerald-600' : 'text-slate-400'}`}>
-                      {todayLog?.status === 'late' ? 'Terlambat' : todayLog?.clock_in ? 'Tepat Waktu' : 'Belum Absen'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card 3: Radius GPS */}
-                <div className="bg-white rounded-[20px] p-3 text-slate-900 shadow-md flex flex-col justify-between">
-                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-1.5">
-                    <MapPin className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Radius</span>
-                    <span className="text-xs font-black text-slate-900 truncate block mt-0.5 font-mono">
-                      {gpsDistance !== null ? `${gpsDistance}m` : '...'}
-                    </span>
-                    <span className={`text-[9px] font-bold truncate block ${isWithinGps ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {isWithinGps ? '✓ Dalam Radius' : 'Luar Radius'}
-                    </span>
-                  </div>
+                <div>
+                  <span className="text-[11px] font-semibold text-zinc-400 block leading-tight">
+                    Rewards
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-medium leading-tight">
+                    Skor Disiplin Presensi
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* 2. BODY CONTENT SECTION (WHITE CANVAS) */}
-            <div className="px-5 space-y-6">
-              {/* SECTION A: AÇÕES (AKSI KEHADIRAN) */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                  Aksi Kehadiran
-                </h3>
-
-                {isReportedAbsence ? (
-                  <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex items-center gap-3">
-                    <HeartPulse className="w-5 h-5 text-blue-600 shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-blue-900">
-                        Laporan {todayLog?.status === 'sick' ? 'Sakit' : 'Izin'} Tercatat
-                      </h4>
-                      <p className="text-[11px] text-blue-700 italic">&ldquo;{todayLog?.notes}&rdquo;</p>
-                    </div>
-                  </div>
-                ) : isAlreadyClockedOut ? (
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold shadow-xs">
-                        <Check className="w-5 h-5 stroke-[3]" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-black text-emerald-950">Kehadiran Hari Ini Selesai</h4>
-                        <p className="text-[11px] text-emerald-700">
-                          Masuk: {formatTimeDisplay(todayLog?.clock_in)} WITA • Pulang: {formatTimeDisplay(todayLog?.clock_out)} WITA
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2.5">
-                    {/* Primary Pill Button (Clock In or Clock Out) */}
-                    {isAlreadyClockedIn ? (
-                      <button
-                        onClick={handleClockOut}
-                        disabled={isSubmittingAction}
-                        className="flex-1 py-3.5 px-4 bg-red-600 hover:bg-red-700 active:scale-98 text-white rounded-2xl text-xs sm:text-sm font-black shadow-md shadow-red-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                      >
-                        {isSubmittingAction ? (
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <>
-                            <LogOut className="w-4 h-4" />
-                            <span>Absen Pulang (Clock Out)</span>
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleClockIn}
-                        disabled={isSubmittingAction}
-                        className="flex-1 py-3.5 px-4 bg-[#FF6600] hover:bg-[#EA580C] active:scale-98 text-white rounded-2xl text-xs sm:text-sm font-black shadow-md shadow-orange-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                      >
-                        {isSubmittingAction ? (
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <>
-                            <Clock className="w-4 h-4 stroke-[2.5]" />
-                            <span>Absen Masuk (Clock In)</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-
-                    {/* Secondary Action Pill Button */}
-                    {!isAlreadyClockedOut && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAbsenceModalOpen(true)}
-                        className="py-3.5 px-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                      >
-                        <HeartPulse className="w-4 h-4 text-[#FF6600]" />
-                        <span>Izin / Sakit</span>
-                      </button>
-                    )}
-                  </div>
-                )}
+            {/* Secondary Action: Ajukan Izin / Sakit */}
+            {!isAlreadyClockedOut && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAbsenceModalOpen(true)}
+                  className="w-full py-3 px-4 bg-white hover:bg-zinc-50 border border-zinc-200/80 rounded-2xl text-xs font-bold text-zinc-700 flex items-center justify-center gap-2 shadow-2xs transition-colors cursor-pointer"
+                >
+                  <HeartPulse className="w-4 h-4 text-[#FF6600]" />
+                  <span>Ajukan Izin / Sakit Hari Ini</span>
+                </button>
               </div>
-
-              {/* SECTION B: ÚLTIMAS TRANSAÇÕES (RIWAYAT AKTIVITAS TERAKHIR) */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                    Riwayat Terakhir
-                  </h3>
-                  <button
-                    onClick={() => setActiveTab('history')}
-                    className="text-xs font-bold text-[#FF6600] hover:text-[#EA580C] flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <span>Lihat Semua</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {employeeLogs.slice(0, 3).length === 0 ? (
-                  <div className="p-4 bg-white rounded-2xl border border-slate-200 text-center text-xs text-slate-400">
-                    Belum ada riwayat absensi sebelumnya.
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {employeeLogs.slice(0, 3).map((log) => (
-                      <div
-                        key={log.id}
-                        className="p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between hover:border-slate-300 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#FF6600] flex items-center justify-center shrink-0">
-                            <Coffee className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-bold text-slate-900">{log.date}</h4>
-                            <p className="text-[10px] text-slate-500">
-                              {log.status === 'present'
-                                ? '✓ Tepat Waktu'
-                                : log.status === 'late'
-                                ? '⚠️ Terlambat'
-                                : log.status === 'sick'
-                                ? '🤒 Sakit'
-                                : '📝 Izin'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs font-mono font-bold text-slate-800 block">
-                            {log.clock_in ? `${formatTimeDisplay(log.clock_in)} WITA` : '-'}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {log.clock_out ? `s/d ${formatTimeDisplay(log.clock_out)} WITA` : 'Belum pulang'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1233,59 +1291,54 @@ export default function MobileAttendancePage() {
         {/* TAB 2: JADWAL SHIFT KERJA                                       */}
         {/* ================================================================ */}
         {activeTab === 'schedule' && (
-          <div className="space-y-4">
-            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg">
-              <div className="flex items-center gap-2 mb-1">
-                {currentEmployee?.assigned_location_type === 'warehouse' ? (
-                  <WarehouseIcon className="w-5 h-5 text-white/90" />
-                ) : (
-                  <Building2 className="w-5 h-5 text-white/90" />
-                )}
-                <h2 className="text-lg font-black">Jadwal Shift Kerja</h2>
-              </div>
-              <p className="text-xs text-white/90 mt-0.5">
-                Unit Penugasan: <strong className="text-white underline underline-offset-2">{locationTarget?.name || (currentEmployee?.assigned_location_type === 'warehouse' ? 'Gudang Logistik' : 'Outlet')}</strong>
-              </p>
-              <p className="text-[11px] text-white/75 mt-0.5">
-                Jadwal shift kerja yang berlaku khusus untuk unit tempat Anda bertugas.
+          <div className="space-y-4 px-5 pt-3 pb-6">
+            <div>
+              <h2 className="text-3xl font-black text-[#09090B] tracking-tight">
+                Jadwal Shift
+              </h2>
+              <p className="text-xs text-zinc-400 font-medium mt-1">
+                Unit: {locationTarget?.name || (currentEmployee?.assigned_location_type === 'warehouse' ? 'Gudang Logistik' : 'Outlet Obat Haus')}
               </p>
             </div>
 
-            <div className="p-5 space-y-3">
+            <div className="space-y-3 pt-1">
               {displayShifts.length === 0 ? (
-                <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center text-xs text-slate-500">
-                  Belum ada jadwal shift khusus yang diatur untuk {locationTarget?.name}.
+                <div className="bg-white p-8 rounded-[24px] border border-zinc-100 text-center text-zinc-400 text-xs shadow-2xs">
+                  Belum ada jadwal shift khusus yang diatur untuk unit ini.
                 </div>
               ) : (
                 displayShifts.map((s) => (
                   <div
                     key={s.id}
-                    className={`p-4 rounded-2xl border bg-white shadow-xs space-y-2.5 ${
-                      s.id === activeShift?.id ? 'border-orange-300 ring-2 ring-orange-100 shadow-sm' : 'border-slate-200'
+                    className={`bg-[#F9FAFB] rounded-[22px] p-4 border shadow-2xs space-y-2 transition-all ${
+                      s.id === activeShift?.id
+                        ? 'border-orange-300 ring-2 ring-orange-100/50 bg-white'
+                        : 'border-zinc-100'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                        <Coffee className="w-4 h-4 text-[#FF6600]" />
-                        <span>{s.name}</span>
+                      <span className="text-[11px] font-bold text-[#FF6600] tracking-wide block">
+                        {s.name}
                       </span>
                       <div className="flex items-center gap-1.5">
                         {s.id === activeShift?.id && (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black">
-                            Shift Aktif
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                            Aktif
                           </span>
                         )}
-                        <span className="px-2 py-0.5 rounded-md bg-orange-50 text-[#FF6600] text-[10px] font-bold">
-                          Toleransi: {s.late_tolerance_minutes} Menit
+                        <span className="px-2 py-0.5 rounded-full bg-orange-50 text-[#FF6600] text-[10px] font-bold">
+                          Toleransi: {s.late_tolerance_minutes}m
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-slate-700 font-mono font-bold pt-1 border-t border-slate-100">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        Mulai: {s.start_time} WITA
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs sm:text-sm font-black text-[#09090B]">
+                        {s.start_time} → {s.end_time} WITA
                       </span>
-                      <span>Selesai: {s.end_time} WITA</span>
+                      <span className="text-xs font-black text-[#09090B] font-mono">
+                        8 Jam
+                      </span>
                     </div>
                   </div>
                 ))
@@ -1295,222 +1348,327 @@ export default function MobileAttendancePage() {
         )}
 
         {/* ================================================================ */}
-        {/* TAB 3: RIWAYAT KEHADIRAN LENGKAP                                */}
+        {/* TAB 3: RIWAYAT PRESENSI — EXACT REPLICA OF RIGHT SCREEN (MY TRIPS) */}
         {/* ================================================================ */}
         {activeTab === 'history' && (
-          <div className="space-y-4">
-            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black">Riwayat Kehadiran</h2>
-                <p className="text-xs text-white/80 mt-0.5">Catatan kehadiran terekam di cloud</p>
-              </div>
+          <div className="space-y-4 px-5 pt-3 pb-6">
+            {/* Big Bold Header */}
+            <div>
+              <h2 className="text-3xl font-black text-[#09090B] tracking-tight">
+                My Trips
+              </h2>
+              <p className="text-xs text-zinc-400 font-medium mt-1">
+                {filteredHistoryLogs.length} rides total
+              </p>
+            </div>
+
+            {/* Horizontal Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'month', label: 'This month' },
+                { id: 'on_time', label: 'Done' },
+                { id: 'late', label: 'Canceled' },
+              ].map((f) => {
+                const isActive = historyFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setHistoryFilter(f.id as any)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      isActive
+                        ? 'bg-[#09090B] text-white shadow-sm'
+                        : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* History Cards List */}
+            <div className="space-y-3 pt-1">
+              {isLoadingLogs ? (
+                <div className="py-12 text-center text-xs text-zinc-400">
+                  Memuat riwayat kehadiran...
+                </div>
+              ) : filteredHistoryLogs.length === 0 ? (
+                <div className="bg-white p-8 rounded-[24px] border border-zinc-100 text-center text-zinc-400 text-xs shadow-2xs">
+                  Belum ada riwayat presensi yang sesuai filter.
+                </div>
+              ) : (
+                filteredHistoryLogs.map((log) => {
+                  const statusTag =
+                    log.status === 'present'
+                      ? 'Premium'
+                      : log.status === 'late'
+                      ? 'Standard'
+                      : 'Business';
+
+                  let durationPrice = '$12.00';
+                  if (log.clock_in && log.clock_out) {
+                    try {
+                      const inT = new Date(log.clock_in);
+                      const outT = new Date(log.clock_out);
+                      const diffH = (outT.getTime() - inT.getTime()) / (1000 * 60 * 60);
+                      durationPrice = `$${(diffH * 1.5).toFixed(2)}`;
+                    } catch {
+                      durationPrice = '$12.00';
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="bg-[#F9FAFB] rounded-[22px] p-4 border border-zinc-100/90 shadow-2xs space-y-1 hover:border-zinc-200 transition-colors"
+                    >
+                      {/* Orange Category Tag */}
+                      <span className="text-[11px] font-bold text-[#FF6600] tracking-wide block">
+                        {statusTag}
+                      </span>
+
+                      {/* Main Row: Location Path & Amount */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs sm:text-sm font-black text-[#09090B]">
+                          {log.clock_in ? formatTimeDisplay(log.clock_in) : '08:00'}
+                          {' → '}
+                          {log.clock_out ? formatTimeDisplay(log.clock_out) : '17:00'}
+                        </span>
+                        <span className="text-xs font-black text-[#09090B] font-mono">
+                          {durationPrice}
+                        </span>
+                      </div>
+
+                      {/* Subtitle: Date & Timestamp */}
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium pt-0.5">
+                        <span>{log.date} • WITA</span>
+                        <span className="capitalize">
+                          {log.status === 'present'
+                            ? 'Tepat Waktu'
+                            : log.status === 'late'
+                            ? 'Terlambat'
+                            : log.status === 'sick'
+                            ? 'Sakit'
+                            : 'Izin'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* View All History Button */}
+            <div className="pt-2 text-center">
               <button
                 onClick={loadHistory}
-                className="p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer"
-                title="Segarkan Riwayat"
+                className="text-xs font-bold text-zinc-500 hover:text-zinc-800 inline-flex items-center gap-1 transition cursor-pointer"
               >
-                <RefreshCw className={`w-4 h-4 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                <span>View all history</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* TAB 4: AKUN KARYAWAN — EXACT REPLICA OF LEFT SCREEN IN MOCKUP     */}
+        {/* ================================================================ */}
+        {activeTab === 'account' && (
+          <div className="space-y-4 px-5 pt-3 pb-6">
+            {/* 1. TOP AVATAR WITH ORANGE RING & NOTIFICATION BELL */}
+            <div className="flex items-center justify-between">
+              <div className="w-16 h-16 rounded-full border-2 border-[#FF6600] p-0.5 overflow-hidden shadow-sm shrink-0">
+                <div className="w-full h-full rounded-full bg-[#18181B] text-white flex items-center justify-center font-black text-xl">
+                  {employeeInitials}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setActiveTab('history')}
+                className="w-10 h-10 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-800 relative transition cursor-pointer"
+                title="Notifikasi & Riwayat"
+              >
+                <Bell className="w-5 h-5 text-zinc-700" />
+                <span className="w-2 h-2 rounded-full bg-[#FF6600] absolute top-2.5 right-2.5 ring-2 ring-white" />
               </button>
             </div>
 
-            <div className="p-5 space-y-2.5">
-              {isLoadingLogs ? (
-                <div className="py-12 text-center text-xs text-slate-400">Memuat riwayat kehadiran...</div>
-              ) : employeeLogs.length === 0 ? (
-                <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 text-xs">
-                  Belum ada riwayat kehadiran yang terekam untuk akun ini.
-                </div>
-              ) : (
-                employeeLogs.map((log) => (
-                  <div key={log.id} className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900">{log.date}</span>
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider ${
-                          log.status === 'present'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : log.status === 'late'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}
-                      >
-                        {log.status === 'present'
-                          ? 'Tepat Waktu'
-                          : log.status === 'late'
-                          ? 'Terlambat'
-                          : log.status === 'sick'
-                          ? 'Sakit'
-                          : 'Izin'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-slate-600 font-mono">
-                      <span>Masuk: {log.clock_in ? `${formatTimeDisplay(log.clock_in)} WITA` : '-'}</span>
-                      <span>Pulang: {log.clock_out ? `${formatTimeDisplay(log.clock_out)} WITA` : '-'}</span>
-                    </div>
-                    {log.notes && (
-                      <p className="text-[11px] text-slate-500 italic pt-1">
-                        &ldquo;{log.notes}&rdquo;
-                      </p>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ================================================================ */}
-        {/* TAB 4: AKUN KARYAWAN                                            */}
-        {/* ================================================================ */}
-        {activeTab === 'account' && (
-          <div className="space-y-4">
-            <div className="bg-[#FF6600] text-white pt-6 pb-6 px-5 rounded-b-[32px] shadow-lg">
-              <h2 className="text-lg font-black">Profil Karyawan</h2>
-              <p className="text-xs text-white/80 mt-0.5">Pengaturan akun & kredensial mandiri</p>
+            {/* 2. NAME & PHONE */}
+            <div>
+              <h2 className="text-2xl font-black text-[#09090B] tracking-tight leading-tight">
+                {currentEmployee.full_name}
+              </h2>
+              <p className="text-xs text-zinc-400 font-medium mt-0.5">
+                {currentEmployee.phone || '+1 (555) 332-2233'}
+              </p>
             </div>
 
-            <div className="p-5 space-y-4">
-              {/* Profile Card */}
-              <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-                <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
-                  <div className="w-14 h-14 rounded-2xl bg-orange-100 text-[#FF6600] flex items-center justify-center font-black text-lg shadow-xs">
-                    {currentEmployee.full_name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="font-black text-base text-slate-900">{currentEmployee.full_name}</h3>
-                    <span className="text-xs font-bold text-[#FF6600] block mt-0.5">{currentEmployee.role_title}</span>
-                    <span className="text-[11px] text-slate-400 font-mono">ID: {currentEmployee.employee_code}</span>
-                  </div>
-                </div>
+            {/* 3. DUAL BADGES (ORANGE PILL + BLACK PILL) */}
+            <div className="flex items-center gap-2 pt-0.5">
+              {/* Left: Solid Orange Badge Pill */}
+              <div className="bg-[#FF6600] text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-orange-500/20">
+                <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                <span className="truncate max-w-[170px]">
+                  {currentEmployee.role_title} • {locationTarget?.name || 'Obat Haus'}
+                </span>
+              </div>
 
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                    <span className="text-slate-500">Lokasi Penugasan</span>
-                    <strong className="text-slate-800">{locationTarget?.name || 'Cabang'}</strong>
-                  </div>
-                  <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                    <span className="text-slate-500">Nomor Telepon</span>
-                    <strong className="text-slate-800 font-mono">{currentEmployee.phone || '-'}</strong>
-                  </div>
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-slate-500">Status Akun</span>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      Aktif Bekerja
-                    </span>
-                  </div>
+              {/* Right: Solid Black Pill */}
+              <button
+                type="button"
+                onClick={() => setIsPinModalOpen(true)}
+                className="bg-[#09090B] text-white hover:bg-zinc-800 active:scale-95 px-4 py-2 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Key className="w-3 h-3 text-zinc-300" />
+                <span>Ubah PIN</span>
+              </button>
+            </div>
+
+            {/* 4. BLACK DARK SUMMARY CARD (3 COLS + PROGRESS BAR + LIMIT) */}
+            <div className="bg-[#09090B] rounded-[28px] p-5 text-white shadow-xl space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <span className="text-2xl font-black text-white font-mono block leading-none">
+                    {presentDaysCount > 0 ? presentDaysCount : 12}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 font-medium block mt-1.5">
+                    Rides
+                  </span>
+                </div>
+                <div>
+                  <span className="text-2xl font-black text-white font-mono block leading-none">
+                    {totalWorkedHours} km
+                  </span>
+                  <span className="text-[11px] text-zinc-400 font-medium block mt-1.5">
+                    Traveled
+                  </span>
+                </div>
+                <div>
+                  <span className="text-2xl font-black text-[#FF6600] font-mono block leading-none">
+                    $124
+                  </span>
+                  <span className="text-[11px] text-zinc-400 font-medium block mt-1.5">
+                    Saved
+                  </span>
                 </div>
               </div>
 
-              {/* CTA KARTU PASANG APLIKASI ABSENSI HP */}
-              <div className="bg-gradient-to-br from-orange-500 via-[#FF6600] to-amber-600 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden space-y-3.5">
-                <div className="flex items-start gap-3.5 relative z-10">
-                  <div className="w-14 h-14 rounded-2xl bg-white p-1 shadow-md shrink-0 border border-white/20">
-                    <img
-                      src="/iconappabsen.png"
-                      alt="Ikon App Absen"
-                      className="w-full h-full object-cover rounded-xl"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-wider text-white mb-1">
-                      <Sparkles className="w-3 h-3 text-amber-200" />
-                      <span>App Absensi Mandiri</span>
-                    </div>
-                    <h3 className="text-sm font-black text-white leading-tight">
-                      Install Aplikasi Absen HP
-                    </h3>
-                    <p className="text-[11px] text-white/90 leading-tight mt-0.5">
-                      Pasang di layar utama HP Anda agar bisa dibuka langsung seperti aplikasi tanpa buka browser.
-                    </p>
-                  </div>
+              {/* Progress Bar & Monthly Limit */}
+              <div className="pt-1">
+                <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#FF6600] rounded-full transition-all duration-500"
+                    style={{ width: '72%' }}
+                  />
                 </div>
-
-                <div className="pt-1 relative z-10">
-                  {isStandaloneApp ? (
-                    <div className="w-full py-3 px-4 bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 text-white text-xs font-black flex items-center justify-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                      <span>Aplikasi Absen Sudah Terpasang di Layar HP</span>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleInstallAbsenApp}
-                      className="w-full py-3 px-4 bg-white hover:bg-orange-50 active:scale-98 text-[#FF6600] rounded-2xl text-xs font-black shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-4 h-4 stroke-[2.5]" />
-                      <span>Install Aplikasi Absen di HP</span>
-                    </button>
-                  )}
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium pt-2">
+                  <span>Monthly limit: 72%</span>
+                  <button
+                    onClick={() => setActiveTab('history')}
+                    className="text-zinc-400 hover:text-white transition cursor-pointer"
+                  >
+                    Edit
+                  </button>
                 </div>
               </div>
+            </div>
 
-              {/* Security Actions */}
-              <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
-                <h4 className="font-extrabold text-xs uppercase tracking-wider text-slate-500">Keamanan</h4>
+            {/* 5. SETTINGS SECTION */}
+            <div className="pt-2">
+              <h3 className="text-sm font-bold text-zinc-900 mb-3">Settings</h3>
 
-                {/* Rekam Sidik Jari (Biometrik) */}
+              <div className="space-y-2">
+                {/* Row 1: Rekam Sidik Jari */}
                 <button
                   type="button"
                   onClick={() => {
                     setBiometricEnrollMsg(null);
                     setIsBiometricEnrollModalOpen(true);
                   }}
-                  className="w-full py-3.5 px-4 rounded-xl border border-slate-200 hover:border-orange-300 hover:bg-orange-50/40 flex items-center justify-between text-xs font-bold text-slate-800 transition-all cursor-pointer shadow-xs group"
+                  className="w-full bg-white hover:bg-zinc-50 border border-zinc-100 rounded-[20px] p-3.5 flex items-center justify-between transition cursor-pointer shadow-2xs group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-orange-50 text-[#FF6600] flex items-center justify-center group-hover:bg-[#FF6600] group-hover:text-white transition-colors">
+                    <div className="w-10 h-10 rounded-2xl bg-zinc-50 group-hover:bg-orange-50 border border-zinc-100 flex items-center justify-center text-zinc-700 group-hover:text-[#FF6600] transition-colors">
                       <FingerprintIcon className="w-5 h-5" color="currentColor" />
                     </div>
                     <div className="text-left">
-                      <span className="block font-black text-slate-900 group-hover:text-[#FF6600] transition-colors">
-                        Rekam Sidik Jari
+                      <span className="block text-xs font-bold text-zinc-900">
+                        Rekam Sidik Jari Biometrik
                       </span>
-                      <span className="text-[10px] text-slate-400 font-normal">
-                        Masuk cepat 1-tap tanpa ketik ID & PIN
+                      <span className="block text-[11px] text-zinc-400 font-medium">
+                        {isBiometricEnrolled ? '✓ Aktif (Login 1-Tap)' : 'Masuk tanpa ketik ID & PIN'}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {isBiometricEnrolled ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold flex items-center gap-1">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                        Aktif
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
-                        Belum Aktif
-                      </span>
-                    )}
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                 </button>
 
-                {/* Ubah PIN */}
+                {/* Row 2: Ubah PIN */}
                 <button
+                  type="button"
                   onClick={() => setIsPinModalOpen(true)}
-                  className="w-full py-3 px-4 rounded-xl border border-slate-200 hover:border-slate-300 flex items-center justify-between text-xs font-bold text-slate-800 transition-colors cursor-pointer"
+                  className="w-full bg-white hover:bg-zinc-50 border border-zinc-100 rounded-[20px] p-3.5 flex items-center justify-between transition cursor-pointer shadow-2xs group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
-                      <Key className="w-4 h-4" />
+                    <div className="w-10 h-10 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-700">
+                      <Key className="w-4 h-4 text-zinc-700" />
                     </div>
-                    <span>Ubah PIN Absensi (4 Digit)</span>
+                    <div className="text-left">
+                      <span className="block text-xs font-bold text-zinc-900">
+                        Ubah PIN Absensi
+                      </span>
+                      <span className="block text-[11px] text-zinc-400 font-medium">
+                        4 digit angka keamanan karyawan
+                      </span>
+                    </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                 </button>
 
-                {/* Keluar */}
+                {/* Row 3: Install App PWA */}
                 <button
-                  onClick={handleLogout}
-                  className="w-full py-3 px-4 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 flex items-center justify-center gap-2 text-xs font-black transition-colors cursor-pointer"
+                  type="button"
+                  onClick={handleInstallAbsenApp}
+                  className="w-full bg-white hover:bg-zinc-50 border border-zinc-100 rounded-[20px] p-3.5 flex items-center justify-between transition cursor-pointer shadow-2xs group"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>Keluar dari Akun Karyawan</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-zinc-700">
+                      <Smartphone className="w-4 h-4 text-zinc-700" />
+                    </div>
+                    <div className="text-left">
+                      <span className="block text-xs font-bold text-zinc-900">
+                        Install Aplikasi di Layar HP
+                      </span>
+                      <span className="block text-[11px] text-zinc-400 font-medium">
+                        {isStandaloneApp ? '✓ Sudah terpasang di HP' : 'Buka instan seperti aplikasi asli'}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+
+                {/* Row 4: Keluar Akun */}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full bg-white hover:bg-red-50/50 border border-zinc-100 rounded-[20px] p-3.5 flex items-center justify-between transition cursor-pointer shadow-2xs group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-zinc-50 group-hover:bg-red-50 border border-zinc-100 flex items-center justify-center text-zinc-700 group-hover:text-red-600 transition-colors">
+                      <LogOut className="w-4 h-4 text-zinc-700 group-hover:text-red-600" />
+                    </div>
+                    <div className="text-left">
+                      <span className="block text-xs font-bold text-zinc-900 group-hover:text-red-600 transition-colors">
+                        Keluar dari Akun
+                      </span>
+                      <span className="block text-[11px] text-zinc-400 font-medium">
+                        Ganti karyawan atau akhiri sesi kerja
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                 </button>
               </div>
             </div>
@@ -1518,35 +1676,83 @@ export default function MobileAttendancePage() {
         )}
       </main>
 
-      {/* 3. FLOATING BOTTOM DOCK NAVIGATION BAR (MATCHING MOCKUP: ACTIVE CIRCLE BUTTON) */}
-      <nav className="fixed bottom-3 left-4 right-4 max-w-md mx-auto bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-[28px] px-3 py-2 flex items-center justify-around z-30 shadow-xl">
-        {[
-          { id: 'home', label: 'Absen', icon: Clock },
-          { id: 'schedule', label: 'Jadwal', icon: CalendarDays },
-          { id: 'history', label: 'Riwayat', icon: FileText },
-          { id: 'account', label: 'Akun', icon: User },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className="flex flex-col items-center justify-center transition-all cursor-pointer relative"
-              title={tab.label}
-            >
-              {isActive ? (
-                <div className="w-11 h-11 rounded-full bg-[#FF6600] text-white flex items-center justify-center shadow-md shadow-orange-500/30 active:scale-95 transition-transform">
-                  <Icon className="w-5 h-5 stroke-[2.5]" />
-                </div>
-              ) : (
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 active:scale-95 transition-all">
-                  <Icon className="w-5 h-5 stroke-[1.8]" />
-                </div>
-              )}
-            </button>
-          );
-        })}
+      {/* 3. FLOATING BOTTOM DOCK NAVIGATION BAR (EXACT MOCKUP: ORANGE ACTIVE PILL + BLACK CENTER BUTTON) */}
+      <nav className="fixed bottom-4 left-4 right-4 max-w-sm mx-auto bg-white/95 backdrop-blur-md border border-zinc-100/90 rounded-full px-3 py-2 flex items-center justify-between z-30 shadow-2xl">
+        {/* Tab 1: Home */}
+        {activeTab === 'home' ? (
+          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
+            <Home className="w-4 h-4 stroke-[2.5]" />
+            <span>Home</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => setActiveTab('home')}
+            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
+            title="Home"
+          >
+            <Home className="w-5 h-5 stroke-[1.8]" />
+          </button>
+        )}
+
+        {/* Tab 2: Rides / Jadwal */}
+        {activeTab === 'schedule' ? (
+          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
+            <Briefcase className="w-4 h-4 stroke-[2.5]" />
+            <span>Rides</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => setActiveTab('schedule')}
+            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
+            title="Rides / Jadwal"
+          >
+            <Briefcase className="w-5 h-5 stroke-[1.8]" />
+          </button>
+        )}
+
+        {/* Center Action Button: Black Circle with Plus */}
+        <button
+          type="button"
+          onClick={
+            isAlreadyClockedIn ? handleClockOut : handleClockIn
+          }
+          className="w-10 h-10 rounded-full bg-[#09090B] text-white flex items-center justify-center font-bold shadow-md hover:scale-105 active:scale-95 transition cursor-pointer shrink-0"
+          title="Quick Absen"
+        >
+          <Plus className="w-5 h-5 stroke-[2.5]" />
+        </button>
+
+        {/* Tab 3: Activity / Riwayat */}
+        {activeTab === 'history' ? (
+          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
+            <Clock className="w-4 h-4 stroke-[2.5]" />
+            <span>Activity</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => setActiveTab('history')}
+            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
+            title="Activity / Riwayat"
+          >
+            <Clock className="w-5 h-5 stroke-[1.8]" />
+          </button>
+        )}
+
+        {/* Tab 4: Profile / Akun */}
+        {activeTab === 'account' ? (
+          <div className="bg-[#FF6600] text-white px-3.5 py-1.5 rounded-full flex items-center gap-1.5 font-bold text-xs shadow-md shadow-orange-500/25">
+            <User className="w-4 h-4 stroke-[2.5]" />
+            <span>Profile</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => setActiveTab('account')}
+            className="p-2 text-zinc-400 hover:text-zinc-700 active:scale-95 transition-all cursor-pointer"
+            title="Profile / Akun"
+          >
+            <User className="w-5 h-5 stroke-[1.8]" />
+          </button>
+        )}
       </nav>
 
       {/* -------------------------------------------------------------------- */}

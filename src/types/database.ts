@@ -12,6 +12,7 @@ export interface Outlet {
   name: string;
   address?: string | null;
   phone?: string | null;
+  avatar_url?: string | null;
   is_active: boolean;
   invoice_prefix?: string | null;
   receipt_header?: string | null;
@@ -29,6 +30,7 @@ export interface Warehouse {
   name: string;
   address?: string | null;
   phone?: string | null;
+  avatar_url?: string | null;
   is_active: boolean;
   latitude?: number | null;
   longitude?: number | null;
@@ -735,6 +737,7 @@ export interface EmployeeProfile {
   assigned_location_type: LocationType;
   assigned_location_id: string;
   phone?: string | null;
+  avatar_url?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

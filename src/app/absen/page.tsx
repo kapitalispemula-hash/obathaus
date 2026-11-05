@@ -39,6 +39,9 @@ import {
   Plus,
   Home,
   Briefcase,
+  Camera,
+  Upload,
+  Edit3,
 } from 'lucide-react';
 import {
   attendanceService,
@@ -160,6 +163,15 @@ export default function MobileAttendancePage() {
   const [newPin, setNewPin] = useState('');
   const [pinChangeMsg, setPinChangeMsg] = useState<string | null>(null);
 
+  // Edit Profile Modal State
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [editProfileMsg, setEditProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // --------------------------------------------------------------------------
   // INITIALIZATION & REAL-TIME CLOCK
   // --------------------------------------------------------------------------
@@ -183,6 +195,10 @@ export default function MobileAttendancePage() {
         if (savedEmpId) {
           const match = emps.find((e) => e.id === savedEmpId && e.is_active);
           if (match) {
+            const savedAvatar = localStorage.getItem(`obathaus_employee_avatar_${match.id}`);
+            if (savedAvatar && !match.avatar_url) {
+              match.avatar_url = savedAvatar;
+            }
             setCurrentEmployee(match);
           }
         }
@@ -729,16 +745,105 @@ export default function MobileAttendancePage() {
   };
 
   // --------------------------------------------------------------------------
-  // RENDER: LOADING STATE
+  // EDIT PROFILE HANDLERS (FOTO/AVATAR, NAMA, JABATAN, NO. WA)
+  // --------------------------------------------------------------------------
+
+  const openEditProfileModal = () => {
+    if (!currentEmployee) return;
+    setEditName(currentEmployee.full_name || '');
+    setEditRole(currentEmployee.role_title || '');
+    setEditPhone(currentEmployee.phone || '');
+    setEditAvatarUrl(currentEmployee.avatar_url || null);
+    setEditProfileMsg(null);
+    setIsEditProfileModalOpen(true);
+  };
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setEditProfileMsg({ type: 'error', text: 'Ukuran foto maksimal 5 MB.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new (window as any).Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = Math.min(img.width, img.height);
+        const targetSize = 360;
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const startX = (img.width - size) / 2;
+          const startY = (img.height - size) / 2;
+          ctx.drawImage(img, startX, startY, size, size, 0, 0, targetSize, targetSize);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          setEditAvatarUrl(dataUrl);
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentEmployee) return;
+    if (!editName.trim()) {
+      setEditProfileMsg({ type: 'error', text: 'Nama karyawan tidak boleh kosong.' });
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setEditProfileMsg(null);
+    try {
+      const updatedProfile: EmployeeProfile = {
+        ...currentEmployee,
+        full_name: editName.trim(),
+        role_title: editRole.trim() || 'Barista',
+        phone: editPhone.trim(),
+        avatar_url: editAvatarUrl || '',
+        updated_at: new Date().toISOString(),
+      };
+
+      const saved = await attendanceService.saveEmployee(updatedProfile);
+      if (editAvatarUrl) {
+        localStorage.setItem(`obathaus_employee_avatar_${currentEmployee.id}`, editAvatarUrl);
+      } else {
+        localStorage.removeItem(`obathaus_employee_avatar_${currentEmployee.id}`);
+      }
+
+      setCurrentEmployee(saved);
+      setAllEmployees((prev) => prev.map((e) => (e.id === saved.id ? saved : e)));
+      setEditProfileMsg({ type: 'success', text: 'Profil berhasil diperbarui!' });
+
+      setTimeout(() => {
+        setIsEditProfileModalOpen(false);
+        setEditProfileMsg(null);
+      }, 1000);
+    } catch (err: any) {
+      console.error('Failed to update profile:', err);
+      setEditProfileMsg({ type: 'error', text: 'Gagal menyimpan perubahan profil.' });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // RENDER: LOADING STATE (MINIMALIST MODERN THEME)
   // --------------------------------------------------------------------------
 
   if (isLoadingAuth) {
     return (
-      <div className="min-h-screen bg-[#FF6600] flex items-center justify-center p-6 text-white select-none">
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 text-[#09090B] select-none">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-bold text-white tracking-wider uppercase">
-            Memuat Absensi OBAT HAUS...
+          <div className="w-10 h-10 border-3 border-zinc-200 border-t-[#FF6600] rounded-full animate-spin" />
+          <p className="text-xs font-bold text-zinc-400 tracking-wider uppercase font-mono">
+            Memuat Presensi Obat Haus...
           </p>
         </div>
       </div>
@@ -746,161 +851,220 @@ export default function MobileAttendancePage() {
   }
 
   // --------------------------------------------------------------------------
-  // SCREEN 1: ONBOARDING SCREEN (aplikasiabsenobathaus001.jpg EXACT REPLICA)
+  // SCREEN 1: ONBOARDING SCREEN (COHESIVE WITH NEW MINIMALIST THEME)
   // --------------------------------------------------------------------------
 
   if (!hasSeenOnboarding && !currentEmployee) {
     return (
-      <div className="min-h-screen bg-[#FF6600] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden px-8 py-12">
-        {/* Top Logo & App Title Section */}
-        <div className="flex-1 flex flex-col justify-center items-start space-y-6 pt-10">
-          <div className="w-56 max-w-[80%]">
-            <img
-              src="/logo-white-transparent.png"
-              alt="OBAT HAUS"
-              className="w-full h-auto object-contain filter drop-shadow-sm"
-            />
+      <div className="min-h-screen bg-[#FDFDFD] text-[#09090B] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden px-7 py-8 border-x border-zinc-100 font-sans shadow-2xl">
+        {/* Top Header / Branding */}
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-2xl bg-[#09090B] text-white flex items-center justify-center font-black text-sm shadow-sm">
+              OH
+            </div>
+            <span className="font-black text-base tracking-tight text-[#09090B]">
+              OBAT HAUS
+            </span>
+          </div>
+          <span className="px-3 py-1 rounded-full bg-orange-50 border border-orange-200/60 text-[#FF6600] text-[11px] font-bold">
+            Aplikasi Presensi
+          </span>
+        </div>
+
+        {/* Center Hero Card Visual (Matching Dashboard Dark Card) */}
+        <div className="my-auto py-4 space-y-6">
+          {/* Sleek Obsidian Feature Card */}
+          <div className="bg-[#09090B] rounded-[28px] p-6 text-white shadow-xl relative overflow-hidden space-y-4">
+            <svg
+              className="absolute inset-0 w-full h-full opacity-15 pointer-events-none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <pattern id="onboardingGrid" width="36" height="36" patternUnits="userSpaceOnUse">
+                <path d="M 36 0 L 0 0 0 36" fill="none" stroke="#FFFFFF" strokeWidth="0.8" />
+              </pattern>
+              <rect width="100%" height="100%" fill="url(#onboardingGrid)" />
+            </svg>
+
+            <div className="relative z-10 flex items-center justify-between">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                Presensi Mandiri Digital
+              </span>
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            </div>
+
+            <div className="relative z-10 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+                <div className="w-2.5 h-2.5 rounded-full bg-white ring-4 ring-white/20" />
+                <span>Geofencing Radius GPS Otomatis</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+                <MapPin className="w-3.5 h-3.5 text-[#FF6600] fill-[#FF6600]" />
+                <span>Validasi Unit Outlet &amp; Gudang</span>
+              </div>
+            </div>
+
+            <div className="relative z-10 pt-2 flex items-center justify-between border-t border-zinc-800 text-[11px] text-zinc-400">
+              <span>Sensor Biometrik 1-Tap</span>
+              <span className="font-bold text-[#FF6600]">Aktif</span>
+            </div>
           </div>
 
-          <div className="text-white space-y-1 text-left">
-            <h2 className="text-[26px] sm:text-[30px] font-normal leading-tight tracking-normal">
-              Aplikasi Absensi
-            </h2>
-            <h2 className="text-[26px] sm:text-[30px] font-normal leading-tight tracking-normal">
-              Karyawan
-            </h2>
-            <h1 className="text-[28px] sm:text-[32px] font-black leading-tight tracking-wide">
-              Obat Haus
+          {/* Big Bold Typography */}
+          <div className="space-y-2">
+            <h1 className="text-4xl sm:text-[42px] font-black text-[#09090B] leading-[1.06] tracking-tight">
+              Presensi<br />
+              Karyawan<br />
+              <span className="text-[#FF6600]">Obat Haus</span>
             </h1>
+            <p className="text-xs text-zinc-400 font-medium leading-relaxed pt-1">
+              Sistem absensi mandiri karyawan Obat Haus dengan verifikasi lokasi GPS terintegrasi dan login instan sidik jari.
+            </p>
           </div>
         </div>
 
-        {/* Bottom CTA Button */}
-        <div className="pb-4 pt-8">
+        {/* Bottom CTA Action */}
+        <div className="space-y-3 pt-4 pb-2">
           <button
             onClick={() => {
               setHasSeenOnboarding(true);
               localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
             }}
-            className="w-full py-4 bg-white hover:bg-slate-50 active:scale-98 text-slate-900 text-base sm:text-lg font-black rounded-2xl shadow-xl transition-all cursor-pointer text-center tracking-normal"
+            className="w-full py-4 bg-[#FF6600] hover:bg-[#F25C00] active:scale-98 text-white text-base font-extrabold rounded-full shadow-lg shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
           >
-            Masuk & Absen
+            <span>Mulai Presensi Sekarang</span>
+            <ArrowRight className="w-5 h-5 stroke-[2.5]" />
           </button>
+          <div className="text-center">
+            <Link
+              href="/pos"
+              className="text-xs font-semibold text-zinc-400 hover:text-zinc-700 transition-colors"
+            >
+              ← Buka Kasir POS Utama
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   // --------------------------------------------------------------------------
-  // SCREEN 2: LOGIN SCREEN (aplikasiabsenobathaus002.jpg EXACT REPLICA)
+  // SCREEN 2: LOGIN SCREEN (COHESIVE WITH NEW MINIMALIST THEME)
   // --------------------------------------------------------------------------
 
   if (!currentEmployee) {
     return (
-      <div className="min-h-screen bg-[#FF6600] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden">
-        {/* Top Section (~62% Height): Solid Orange with White Logo & Text */}
-        <div className="flex-1 flex flex-col justify-center items-start px-8 pt-8 pb-4 relative">
+      <div className="min-h-screen bg-[#FDFDFD] text-[#09090B] flex flex-col justify-between max-w-md mx-auto select-none relative overflow-hidden px-7 py-8 border-x border-zinc-100 font-sans shadow-2xl">
+        {/* Top Header Row with Circular Back Button */}
+        <div className="flex items-center justify-between pt-1">
           <button
+            type="button"
             onClick={() => setHasSeenOnboarding(false)}
-            className="absolute top-6 left-6 p-2 text-white/80 hover:text-white transition-colors cursor-pointer"
+            className="w-11 h-11 rounded-full bg-zinc-100 hover:bg-zinc-200 active:scale-95 flex items-center justify-center text-zinc-800 transition cursor-pointer"
             title="Kembali ke Layar Pembuka"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
           </button>
 
-          <div className="w-52 max-w-[75%] mb-4">
-            <img
-              src="/logo-white-transparent.png"
-              alt="OBAT HAUS"
-              className="w-full h-auto object-contain filter drop-shadow-sm"
-            />
-          </div>
-
-          <div className="text-white space-y-1 text-left">
-            <h2 className="text-[24px] sm:text-[28px] font-normal leading-tight tracking-normal">
-              Aplikasi Absensi
-            </h2>
-            <h2 className="text-[24px] sm:text-[28px] font-normal leading-tight tracking-normal">
-              Karyawan
-            </h2>
-            <h1 className="text-[26px] sm:text-[30px] font-black leading-tight tracking-wide">
-              Obat Haus
-            </h1>
-          </div>
+          <span className="px-3.5 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 text-[#FF6600] text-xs font-extrabold tracking-wider uppercase">
+            OBAT HAUS
+          </span>
         </div>
 
-        {/* Bottom Section (~38% Height): Pure White Clean Sheet Container */}
-        <div className="bg-white rounded-t-[32px] sm:rounded-t-[36px] px-7 pt-7 pb-8 space-y-4 shadow-2xl">
+        {/* Middle Form Area */}
+        <div className="my-auto py-4 space-y-5">
+          {/* Big Bold Greeting Typography */}
+          <div className="space-y-1.5">
+            <h1 className="text-4xl sm:text-[42px] font-black text-[#09090B] leading-[1.06] tracking-tight">
+              Selamat<br />
+              datang,<br />
+              Karyawan
+            </h1>
+            <p className="text-xs text-zinc-400 font-medium leading-relaxed pt-1">
+              Masukkan ID Karyawan dan PIN 4 digit untuk memulai sesi presensi Anda.
+            </p>
+          </div>
+
+          {/* Alert Notifications */}
           {loginError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-800 text-xs flex items-center gap-2.5 animate-in fade-in">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-              <span>{loginError}</span>
+              <span className="font-semibold">{loginError}</span>
             </div>
           )}
 
           {biometricSuccess && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center justify-center gap-2 font-bold animate-in fade-in">
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs flex items-center justify-center gap-2 font-bold animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>Sidik Jari Terverifikasi! Masuk...</span>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-3">
-            <div className="relative">
+          {/* Login Form */}
+          <form onSubmit={handleLogin} className="space-y-3.5 pt-1">
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block pl-1">
+                ID Karyawan
+              </label>
               <input
                 type="text"
                 value={loginCode}
                 onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
-                placeholder="Masukkan ID Karyawan"
+                placeholder="Contoh: EMP-001"
                 required
-                className="w-full py-3.5 px-5 bg-[#E5E7EB] hover:bg-[#DDE1E6] focus:bg-white border-2 border-transparent focus:border-[#FF6600] rounded-2xl text-center text-sm font-bold text-slate-800 placeholder:text-slate-500 focus:outline-none transition-all shadow-inner"
+                className="w-full py-4 px-5 bg-zinc-50 hover:bg-zinc-100/70 focus:bg-white border-2 border-zinc-200 focus:border-[#FF6600] rounded-[22px] text-center text-sm font-black text-zinc-900 placeholder:text-zinc-400 focus:outline-none transition-all shadow-2xs"
               />
             </div>
 
-            <div className="relative">
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block pl-1">
+                PIN Absensi
+              </label>
               <input
                 type="password"
                 maxLength={6}
                 value={loginPin}
                 onChange={(e) => setLoginPin(e.target.value)}
-                placeholder="Masukkan PIN (4 Digit)"
+                placeholder="••••"
                 required
-                className="w-full py-3.5 px-5 bg-[#E5E7EB] hover:bg-[#DDE1E6] focus:bg-white border-2 border-transparent focus:border-[#FF6600] rounded-2xl text-center text-sm font-bold tracking-widest text-slate-800 placeholder:text-slate-500 placeholder:tracking-normal focus:outline-none transition-all shadow-inner font-mono"
+                className="w-full py-4 px-5 bg-zinc-50 hover:bg-zinc-100/70 focus:bg-white border-2 border-zinc-200 focus:border-[#FF6600] rounded-[22px] text-center text-base font-black tracking-widest text-zinc-900 placeholder:text-zinc-400 placeholder:tracking-normal focus:outline-none transition-all shadow-2xs font-mono"
               />
             </div>
 
-            <div className="flex items-center gap-3 pt-1">
+            {/* Action Buttons: Big Orange Pill + Obsidian Biometric Button */}
+            <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
                 disabled={isLoggingIn}
-                className="flex-1 py-4 bg-[#FF6600] hover:bg-[#EA580C] active:scale-98 text-white text-base font-bold rounded-2xl shadow-lg shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-[#FF6600] hover:bg-[#F25C00] active:scale-98 text-white text-base font-extrabold rounded-full shadow-lg shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 {isLoggingIn ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <span>Masuk</span>
+                  <span>Masuk Akun</span>
                 )}
               </button>
 
               <button
                 type="button"
                 onClick={handleBiometricLogin}
-                title="Login Biometrik Sidik Jari"
-                className="w-14 h-14 shrink-0 rounded-2xl bg-orange-50 hover:bg-orange-100 border border-orange-200 flex items-center justify-center text-[#FF6600] active:scale-95 transition-all cursor-pointer shadow-xs"
+                title="Login Biometrik Sidik Jari 1-Tap"
+                className="w-14 h-14 rounded-full bg-[#09090B] hover:bg-zinc-800 active:scale-95 text-white flex items-center justify-center transition cursor-pointer shadow-md shrink-0"
               >
-                <FingerprintIcon className="w-8 h-8" color="#FF6600" />
+                <FingerprintIcon className="w-7 h-7" color="#FFFFFF" />
               </button>
             </div>
           </form>
+        </div>
 
-          <div className="text-center pt-2">
-            <Link
-              href="/pos"
-              className="text-xs font-bold text-slate-400 hover:text-slate-700 transition-colors"
-            >
-              ← Buka Kasir POS Utama
-            </Link>
-          </div>
+        {/* Bottom Navigation Link */}
+        <div className="text-center pt-2 pb-2">
+          <Link
+            href="/pos"
+            className="text-xs font-semibold text-zinc-400 hover:text-zinc-700 transition-colors"
+          >
+            ← Buka Kasir POS Utama
+          </Link>
         </div>
       </div>
     );
@@ -1064,10 +1228,18 @@ export default function MobileAttendancePage() {
                 type="button"
                 onClick={() => setActiveTab('account')}
                 title="Buka Profil & Pengaturan"
-                className="w-13 h-13 sm:w-14 sm:h-14 rounded-full border-2 border-[#FF6600] p-0.5 overflow-hidden shadow-sm shrink-0 cursor-pointer active:scale-95 transition-transform"
+                className="w-12 h-12 rounded-full aspect-square border-2 border-[#FF6600] p-0.5 overflow-hidden shadow-sm shrink-0 cursor-pointer active:scale-95 transition-transform flex items-center justify-center bg-white"
               >
-                <div className="w-full h-full rounded-full bg-[#18181B] text-white flex items-center justify-center font-black text-sm sm:text-base">
-                  {employeeInitials}
+                <div className="w-full h-full rounded-full aspect-square overflow-hidden bg-[#18181B] text-white flex items-center justify-center font-black text-sm">
+                  {currentEmployee.avatar_url ? (
+                    <img
+                      src={currentEmployee.avatar_url}
+                      alt={currentEmployee.full_name}
+                      className="w-full h-full object-cover rounded-full aspect-square"
+                    />
+                  ) : (
+                    <span>{employeeInitials}</span>
+                  )}
                 </div>
               </button>
             </div>
@@ -1479,10 +1651,29 @@ export default function MobileAttendancePage() {
           <div className="space-y-4 px-5 pt-3 pb-6">
             {/* 1. TOP AVATAR WITH ORANGE RING & NOTIFICATION BELL */}
             <div className="flex items-center justify-between">
-              <div className="w-16 h-16 rounded-full border-2 border-[#FF6600] p-0.5 overflow-hidden shadow-sm shrink-0">
-                <div className="w-full h-full rounded-full bg-[#18181B] text-white flex items-center justify-center font-black text-xl">
-                  {employeeInitials}
+              <div className="relative">
+                <div className="w-16 h-16 rounded-full aspect-square border-2 border-[#FF6600] p-0.5 overflow-hidden shadow-sm shrink-0 flex items-center justify-center bg-white">
+                  <div className="w-full h-full rounded-full aspect-square overflow-hidden bg-[#18181B] text-white flex items-center justify-center font-black text-xl">
+                    {currentEmployee.avatar_url ? (
+                      <img
+                        src={currentEmployee.avatar_url}
+                        alt={currentEmployee.full_name}
+                        className="w-full h-full object-cover rounded-full aspect-square"
+                      />
+                    ) : (
+                      <span>{employeeInitials}</span>
+                    )}
+                  </div>
                 </div>
+                {/* Camera upload trigger badge */}
+                <button
+                  type="button"
+                  onClick={openEditProfileModal}
+                  className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#FF6600] text-white flex items-center justify-center shadow-md border-2 border-white hover:scale-110 active:scale-95 transition-transform cursor-pointer"
+                  title="Upload / Ubah Foto Profil"
+                >
+                  <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                </button>
               </div>
 
               <button
@@ -1500,13 +1691,13 @@ export default function MobileAttendancePage() {
               <h2 className="text-2xl font-black text-[#09090B] tracking-tight leading-tight">
                 {currentEmployee.full_name}
               </h2>
-              <p className="text-xs text-zinc-400 font-medium mt-0.5">
-                {currentEmployee.phone || '+62 812-3456-7890'}
+              <p className="text-xs text-zinc-400 font-medium mt-0.5 font-mono">
+                {currentEmployee.phone || '+62 812-xxxx-xxxx'}
               </p>
             </div>
 
             {/* 3. DUAL BADGES (ORANGE PILL + BLACK PILL) */}
-            <div className="flex items-center gap-2 pt-0.5">
+            <div className="flex items-center gap-2 pt-0.5 flex-wrap">
               {/* Left: Solid Orange Badge Pill */}
               <div className="bg-[#FF6600] text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-orange-500/20">
                 <Sparkles className="w-3.5 h-3.5 text-amber-200" />
@@ -1515,14 +1706,24 @@ export default function MobileAttendancePage() {
                 </span>
               </div>
 
-              {/* Right: Solid Black Pill */}
+              {/* Edit Profil Pill Button */}
+              <button
+                type="button"
+                onClick={openEditProfileModal}
+                className="bg-[#09090B] text-white hover:bg-zinc-800 active:scale-95 px-4 py-2 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Edit3 className="w-3 h-3 text-zinc-300" />
+                <span>Edit Profil</span>
+              </button>
+
+              {/* Ubah PIN Pill Button */}
               <button
                 type="button"
                 onClick={() => setIsPinModalOpen(true)}
-                className="bg-[#09090B] text-white hover:bg-zinc-800 active:scale-95 px-4 py-2 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                className="bg-zinc-100 text-zinc-800 hover:bg-zinc-200 active:scale-95 px-3.5 py-2 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
               >
-                <Key className="w-3 h-3 text-zinc-300" />
-                <span>Ubah PIN</span>
+                <Key className="w-3 h-3 text-zinc-600" />
+                <span>PIN</span>
               </button>
             </div>
 
@@ -1580,6 +1781,28 @@ export default function MobileAttendancePage() {
               <h3 className="text-sm font-bold text-zinc-900 mb-3">Settings</h3>
 
               <div className="space-y-2">
+                {/* Row 0: Edit Profil Karyawan (Foto, Nama, Posisi, No WA) */}
+                <button
+                  type="button"
+                  onClick={openEditProfileModal}
+                  className="w-full bg-white hover:bg-zinc-50 border border-zinc-100 rounded-[20px] p-3.5 flex items-center justify-between transition cursor-pointer shadow-2xs group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-zinc-50 group-hover:bg-orange-50 border border-zinc-100 flex items-center justify-center text-zinc-700 group-hover:text-[#FF6600] transition-colors">
+                      <Edit3 className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <span className="block text-xs font-bold text-zinc-900 group-hover:text-[#FF6600] transition-colors">
+                        Edit Profil Karyawan
+                      </span>
+                      <span className="block text-[11px] text-zinc-400 font-medium">
+                        Foto, Nama, Jabatan/Posisi &amp; No. WhatsApp
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+
                 {/* Row 1: Rekam Sidik Jari */}
                 <button
                   type="button"
@@ -2156,6 +2379,180 @@ export default function MobileAttendancePage() {
             >
               Mengerti &amp; Tutup
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------------- */}
+      {/* MODAL: EDIT PROFIL KARYAWAN (FOTO, NAMA, JABATAN, NO. WA)            */}
+      {/* -------------------------------------------------------------------- */}
+      {isEditProfileModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#FF6600] flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-zinc-900">Edit Profil Karyawan</h3>
+                  <p className="text-[10px] text-zinc-400">Foto, Nama, Jabatan, dan No. WA</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditProfileModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Alert Notification */}
+            {editProfileMsg && (
+              <div
+                className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
+                  editProfileMsg.type === 'success'
+                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                    : 'bg-red-50 border border-red-200 text-red-800'
+                }`}
+              >
+                {editProfileMsg.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                )}
+                <span>{editProfileMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              {/* Photo Upload Section */}
+              <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full aspect-square border-2 border-[#FF6600] p-0.5 overflow-hidden shadow-sm flex items-center justify-center bg-zinc-100">
+                    {editAvatarUrl ? (
+                      <img
+                        src={editAvatarUrl}
+                        alt="Preview Foto"
+                        className="w-full h-full object-cover rounded-full aspect-square"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-[#18181B] text-white flex items-center justify-center font-black text-2xl">
+                        {employeeInitials}
+                      </div>
+                    )}
+                  </div>
+
+                  <label
+                    htmlFor="avatar-file-upload"
+                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#FF6600] hover:bg-[#EA580C] text-white flex items-center justify-center shadow-md border-2 border-white cursor-pointer active:scale-95 transition-transform"
+                    title="Pilih Foto Profil"
+                  >
+                    <Camera className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </label>
+                  <input
+                    id="avatar-file-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarFileChange}
+                    className="hidden"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <label
+                    htmlFor="avatar-file-upload"
+                    className="text-[11px] font-bold text-[#FF6600] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>Upload Foto Baru</span>
+                  </label>
+                  {editAvatarUrl && (
+                    <>
+                      <span className="text-zinc-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditAvatarUrl(null)}
+                        className="text-[11px] font-bold text-red-500 hover:underline cursor-pointer"
+                      >
+                        Hapus Foto
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Nama Lengkap */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  Nama Lengkap
+                </label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Contoh: Rafka Marwan"
+                  required
+                  className="w-full py-2.5 px-3.5 bg-zinc-50 border border-zinc-200 focus:border-[#FF6600] rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6600]/20"
+                />
+              </div>
+
+              {/* Jabatan / Posisi */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  Jabatan / Posisi
+                </label>
+                <input
+                  type="text"
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                  placeholder="Contoh: Barista, Kasir, Kepala Toko"
+                  required
+                  className="w-full py-2.5 px-3.5 bg-zinc-50 border border-zinc-200 focus:border-[#FF6600] rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6600]/20"
+                />
+              </div>
+
+              {/* No. WhatsApp / Telepon */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  No. WhatsApp / Telepon
+                </label>
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="Contoh: 081234567890"
+                  className="w-full py-2.5 px-3.5 bg-zinc-50 border border-zinc-200 focus:border-[#FF6600] rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#FF6600]/20 font-mono"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditProfileModalOpen(false)}
+                  className="flex-1 py-3 border border-zinc-200 rounded-xl text-xs font-bold text-zinc-600 hover:bg-zinc-50 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="flex-1 py-3 bg-[#FF6600] hover:bg-[#EA580C] text-white rounded-xl text-xs font-black shadow-md shadow-orange-500/20 transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isSavingProfile ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <span>Simpan Perubahan</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

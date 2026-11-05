@@ -248,6 +248,7 @@ class AttendanceService {
       assigned_location_type: emp.assigned_location_type || 'outlet',
       assigned_location_id: emp.assigned_location_id,
       phone: emp.phone || '',
+      avatar_url: emp.avatar_url || '',
       is_active: emp.is_active ?? true,
       created_at: emp.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),

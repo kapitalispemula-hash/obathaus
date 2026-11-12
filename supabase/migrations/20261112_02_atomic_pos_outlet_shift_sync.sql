@@ -72,6 +72,7 @@ RETURNS TABLE (
   minimum_stock NUMERIC,
   updated_at TIMESTAMPTZ
 ) AS $$
+#variable_conflict use_column
 BEGIN
   RETURN QUERY
   INSERT INTO public.outlet_stocks (
@@ -124,7 +125,7 @@ BEGIN
   ON CONFLICT (warehouse_id, raw_material_id) DO UPDATE
     SET quantity = GREATEST(0, public.warehouse_stocks.quantity + COALESCE(p_delta, 0)),
         updated_at = timezone('utc'::text, now())
-  RETURNING quantity INTO v_new_qty;
+  RETURNING public.warehouse_stocks.quantity INTO v_new_qty;
 
   RETURN COALESCE(v_new_qty, 0);
 END;

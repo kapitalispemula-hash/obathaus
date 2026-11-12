@@ -3148,7 +3148,7 @@ export const dbService = {
                 outlet_id: out.id,
                 raw_material_id: newRaw.id,
                 quantity: 0,
-                minimum_stock: newRaw.minimum_stock || 100,
+                minimum_stock: newRaw.minimum_stock ?? 0,
                 updated_at: new Date().toISOString(),
               },
               { onConflict: 'outlet_id,raw_material_id' }
@@ -3172,13 +3172,24 @@ export const dbService = {
     return newRaw;
   },
 
-  async updateRawMaterial(id: string, payload: Partial<RawMaterial>): Promise<RawMaterial> {
+  async updateRawMaterial(
+    id: string,
+    payload: Partial<RawMaterial>,
+    options?: { syncOutletMinimums?: boolean }
+  ): Promise<RawMaterial> {
+    const now = new Date().toISOString();
+    const shouldSyncOutlets =
+      Boolean(options?.syncOutletMinimums) &&
+      payload.minimum_stock !== undefined &&
+      payload.minimum_stock !== null;
+    const syncedMin = shouldSyncOutlets ? Math.max(0, Number(payload.minimum_stock) || 0) : null;
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('raw_materials')
-          .update({ ...payload, updated_at: new Date().toISOString() })
+          .update({ ...payload, updated_at: now })
           .eq('id', id)
           .select('*, category:raw_material_categories(*), standard_unit:units(*)')
           .single();
@@ -3186,6 +3197,24 @@ export const dbService = {
           console.error('Supabase updateRawMaterial error:', error);
           throw new Error(`Gagal memperbarui di Supabase: ${error.message}`);
         }
+
+        if (shouldSyncOutlets && syncedMin !== null) {
+          const { error: syncErr } = await supabase
+            .from('outlet_stocks')
+            .update({ minimum_stock: syncedMin, updated_at: now })
+            .eq('raw_material_id', id);
+          if (syncErr) {
+            console.error('Supabase sync outlet_stocks minimum_stock error:', syncErr);
+            throw new Error(`Master tersimpan, namun gagal menyinkronkan batas aman cabang: ${syncErr.message}`);
+          }
+
+          const cachedStocks = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+          localOutletStocks = cachedStocks.map((s) =>
+            s.raw_material_id === id ? { ...s, minimum_stock: syncedMin, updated_at: now } : s
+          );
+          setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+        }
+
         if (data) return data as RawMaterial;
       } catch (e: any) {
         console.error('updateRawMaterial exception:', e);
@@ -3194,9 +3223,18 @@ export const dbService = {
     }
 
     const current = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
-    const updated = current.map((r) => (r.id === id ? { ...r, ...payload, updated_at: new Date().toISOString() } : r));
+    const updated = current.map((r) => (r.id === id ? { ...r, ...payload, updated_at: now } : r));
     localRawMaterials = updated;
     setStorageItem(STORAGE_KEYS.RAW_MATERIALS, updated);
+
+    if (shouldSyncOutlets && syncedMin !== null) {
+      const cachedStocks = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+      localOutletStocks = cachedStocks.map((s) =>
+        s.raw_material_id === id ? { ...s, minimum_stock: syncedMin, updated_at: now } : s
+      );
+      setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+    }
+
     const target = updated.find((r) => r.id === id);
     if (!target) throw new Error('Bahan baku tidak ditemukan');
     return target;
@@ -6002,7 +6040,10 @@ export const dbService = {
           cloudRows = (data as OutletStock[]).map((row) => ({
             ...row,
             quantity: Number(row.quantity) || 0,
-            minimum_stock: Number(row.minimum_stock) || 0,
+            minimum_stock:
+              row.minimum_stock !== undefined && row.minimum_stock !== null
+                ? Number(row.minimum_stock)
+                : Number(row.raw_material?.minimum_stock ?? 0),
           }));
           if (!outletId) {
             localOutletStocks = cloudRows;
@@ -6036,12 +6077,116 @@ export const dbService = {
         outlet_id: outletId,
         raw_material_id: m.id,
         quantity: existing ? Number(existing.quantity) : 0,
-        minimum_stock: existing?.minimum_stock ?? (m.minimum_stock || 100),
+        minimum_stock: existing?.minimum_stock ?? (m.minimum_stock ?? 0),
         updated_at: existing ? existing.updated_at : new Date().toISOString(),
         outlet: existing?.outlet || targetOutlet,
         raw_material: existing?.raw_material || m,
       };
     });
+  },
+
+  async updateOutletStockMinimum(outletId: string, rawMaterialId: string, minimumStock: number): Promise<OutletStock> {
+    const safeMin = Math.max(0, Number(minimumStock) || 0);
+    const now = new Date().toISOString();
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: existing, error: selErr } = await supabase
+          .from('outlet_stocks')
+          .select('*')
+          .eq('outlet_id', outletId)
+          .eq('raw_material_id', rawMaterialId)
+          .maybeSingle();
+
+        if (selErr && !isNetworkFailure(selErr)) {
+          throw new Error(`Gagal membaca data stok cabang: ${selErr.message}`);
+        }
+
+        if (existing) {
+          const { data, error: updErr } = await supabase
+            .from('outlet_stocks')
+            .update({ minimum_stock: safeMin, updated_at: now })
+            .eq('id', existing.id)
+            .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units(*))')
+            .single();
+          if (updErr && !isNetworkFailure(updErr)) {
+            throw new Error(`Gagal memperbarui batas aman cabang: ${updErr.message}`);
+          }
+          if (data) {
+            const updated: OutletStock = {
+              ...(data as OutletStock),
+              quantity: Number(data.quantity) || 0,
+              minimum_stock: Number(data.minimum_stock ?? safeMin),
+            };
+            const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+            const hasRow = current.some(
+              (s) => s.id === updated.id || (s.outlet_id === outletId && s.raw_material_id === rawMaterialId)
+            );
+            localOutletStocks = hasRow
+              ? current.map((s) =>
+                  s.id === updated.id || (s.outlet_id === outletId && s.raw_material_id === rawMaterialId)
+                    ? { ...s, ...updated }
+                    : s
+                )
+              : [updated, ...current];
+            setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+            return updated;
+          }
+        } else {
+          const { data, error: insErr } = await supabase
+            .from('outlet_stocks')
+            .insert({
+              outlet_id: outletId,
+              raw_material_id: rawMaterialId,
+              quantity: 0,
+              minimum_stock: safeMin,
+              updated_at: now,
+            })
+            .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units(*))')
+            .single();
+          if (insErr && !isNetworkFailure(insErr)) {
+            throw new Error(`Gagal menyimpan batas aman cabang: ${insErr.message}`);
+          }
+          if (data) {
+            const inserted: OutletStock = {
+              ...(data as OutletStock),
+              quantity: Number(data.quantity) || 0,
+              minimum_stock: Number(data.minimum_stock ?? safeMin),
+            };
+            const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+            localOutletStocks = [inserted, ...current];
+            setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+            return inserted;
+          }
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+        console.warn('Falling back to local updateOutletStockMinimum:', e);
+      }
+    }
+
+    const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+    const target = current.find((s) => s.outlet_id === outletId && s.raw_material_id === rawMaterialId);
+    if (target) {
+      target.minimum_stock = safeMin;
+      target.updated_at = now;
+      localOutletStocks = [...current];
+      setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+      return target;
+    }
+
+    const newStock: OutletStock = {
+      id: crypto.randomUUID(),
+      outlet_id: outletId,
+      raw_material_id: rawMaterialId,
+      quantity: 0,
+      minimum_stock: safeMin,
+      updated_at: now,
+    };
+    localOutletStocks = [newStock, ...current];
+    setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+    return newStock;
   },
 
   async updateOutletStock(outletId: string, rawMaterialId: string, deltaQuantity: number): Promise<OutletStock> {
@@ -6069,7 +6214,7 @@ export const dbService = {
             outlet_id: row.outlet_id,
             raw_material_id: row.raw_material_id,
             quantity: Number(row.quantity) || 0,
-            minimum_stock: Number(row.minimum_stock) || 500,
+            minimum_stock: Number(row.minimum_stock ?? 0),
             updated_at: row.updated_at || now,
           };
           const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
@@ -6120,12 +6265,20 @@ export const dbService = {
             return updated;
           }
         } else {
+          const { data: matRow } = await supabase
+            .from('raw_materials')
+            .select('minimum_stock')
+            .eq('id', rawMaterialId)
+            .maybeSingle();
+          const defaultMin = Number(matRow?.minimum_stock ?? 0);
+
           const { data, error: insErr } = await supabase
             .from('outlet_stocks')
             .insert({
               outlet_id: outletId,
               raw_material_id: rawMaterialId,
               quantity: newQty,
+              minimum_stock: defaultMin,
               updated_at: now,
             })
             .select('*, outlet:outlets(*), raw_material:raw_materials(*)')
@@ -6158,12 +6311,14 @@ export const dbService = {
       return target;
     }
 
+    const localMats = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
+    const matFallback = localMats.find((m) => m.id === rawMaterialId);
     const newStock: OutletStock = {
       id: crypto.randomUUID(),
       outlet_id: outletId,
       raw_material_id: rawMaterialId,
       quantity: Math.max(0, deltaQuantity),
-      minimum_stock: 500,
+      minimum_stock: Number(matFallback?.minimum_stock ?? 0),
       updated_at: now,
     };
     localOutletStocks = [newStock, ...current];

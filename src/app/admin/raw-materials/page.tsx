@@ -45,6 +45,7 @@ export default function AdminRawMaterialsPage() {
   const [matMinStock, setMatMinStock] = useState<number>(100);
   const [matEstimatedCost, setMatEstimatedCost] = useState<number>(0);
   const [matIsActive, setMatIsActive] = useState(true);
+  const [syncMinToOutlets, setSyncMinToOutlets] = useState(true);
   const [matFormError, setMatFormError] = useState<string | null>(null);
   const [isSavingMat, setIsSavingMat] = useState(false);
 
@@ -87,9 +88,10 @@ export default function AdminRawMaterialsPage() {
     setMatSku('');
     setMatCategoryId(categories[0]?.id || '');
     setMatUnitId(units[0]?.id || '11111111-0000-0000-0000-000000000001');
-    setMatMinStock(500);
+    setMatMinStock(100);
     setMatEstimatedCost(150);
     setMatIsActive(true);
+    setSyncMinToOutlets(true);
     setMatFormError(null);
     setIsMatModalOpen(true);
   };
@@ -104,6 +106,7 @@ export default function AdminRawMaterialsPage() {
     setMatMinStock(m.minimum_stock);
     setMatEstimatedCost(m.estimated_unit_cost);
     setMatIsActive(m.is_active);
+    setSyncMinToOutlets(true);
     setMatFormError(null);
     setIsMatModalOpen(true);
   };
@@ -130,16 +133,20 @@ export default function AdminRawMaterialsPage() {
     setIsSavingMat(true);
     try {
       if (editingMat) {
-        await dbService.updateRawMaterial(editingMat.id, {
-          code: matCode.trim().toUpperCase(),
-          name: matName.trim(),
-          sku: matSku.trim() || null,
-          category_id: matCategoryId,
-          standard_unit_id: matUnitId,
-          minimum_stock: Number(matMinStock),
-          estimated_unit_cost: Number(matEstimatedCost),
-          is_active: matIsActive,
-        });
+        await dbService.updateRawMaterial(
+          editingMat.id,
+          {
+            code: matCode.trim().toUpperCase(),
+            name: matName.trim(),
+            sku: matSku.trim() || null,
+            category_id: matCategoryId,
+            standard_unit_id: matUnitId,
+            minimum_stock: Math.max(0, Number(matMinStock) || 0),
+            estimated_unit_cost: Number(matEstimatedCost),
+            is_active: matIsActive,
+          },
+          { syncOutletMinimums: syncMinToOutlets }
+        );
       } else {
         await dbService.createRawMaterial({
           code: matCode.trim().toUpperCase(),
@@ -590,17 +597,37 @@ export default function AdminRawMaterialsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 pt-1">
-                  <input
-                    type="checkbox"
-                    id="matActive"
-                    checked={matIsActive}
-                    onChange={(e) => setMatIsActive(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#FF6B00] focus:ring-[#FF6B00] border-borderline"
-                  />
-                  <label htmlFor="matActive" className="text-xs font-medium text-heading cursor-pointer">
-                    Bahan Baku Aktif Digunakan di Resep
-                  </label>
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      id="matActive"
+                      checked={matIsActive}
+                      onChange={(e) => setMatIsActive(e.target.checked)}
+                      className="w-4 h-4 rounded text-[#FF6B00] focus:ring-[#FF6B00] border-borderline"
+                    />
+                    <label htmlFor="matActive" className="text-xs font-medium text-heading cursor-pointer">
+                      Bahan Baku Aktif Digunakan di Resep
+                    </label>
+                  </div>
+
+                  {editingMat && (
+                    <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-orange-50/70 border border-orange-200/70">
+                      <input
+                        type="checkbox"
+                        id="syncMinToOutlets"
+                        checked={syncMinToOutlets}
+                        onChange={(e) => setSyncMinToOutlets(e.target.checked)}
+                        className="w-4 h-4 mt-0.5 rounded text-[#FF6B00] focus:ring-[#FF6B00] border-orange-300"
+                      />
+                      <label htmlFor="syncMinToOutlets" className="text-xs text-heading cursor-pointer leading-snug">
+                        <span className="font-semibold block">Terapkan Batas Min. Stok ini ke semua cabang</span>
+                        <span className="text-[11px] text-mutedtext">
+                          Otomatis menyamakan batas aman seluruh outlet/cabang (menimpa pengaturan khusus cabang).
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">

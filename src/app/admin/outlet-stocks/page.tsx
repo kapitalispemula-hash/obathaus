@@ -16,6 +16,9 @@ import {
   Layers,
   ArrowRight,
   Filter,
+  Edit2,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 import Link from 'next/link';
 import { INITIAL_OUTLETS, INITIAL_OUTLET_STOCKS } from '@/lib/mock-data';
@@ -24,24 +27,33 @@ export default function AdminOutletStocksPage() {
   const [outlets, setOutlets] = useState<Outlet[]>(INITIAL_OUTLETS);
   const [selectedOutletId, setSelectedOutletId] = useState<string>(INITIAL_OUTLETS[0]?.id || 'out-01');
   const [stocks, setStocks] = useState<OutletStock[]>(INITIAL_OUTLET_STOCKS);
+  const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [categories, setCategories] = useState<RawMaterialCategory[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [stockStatusFilter, setStockStatusFilter] = useState<'all' | 'low' | 'safe'>('all');
   const [loading, setLoading] = useState(true);
 
+  // Edit Batas Aman Modal State
+  const [editingStock, setEditingStock] = useState<OutletStock | null>(null);
+  const [editMinValue, setEditMinValue] = useState<number>(0);
+  const [isSavingMin, setIsSavingMin] = useState(false);
+  const [editMinError, setEditMinError] = useState<string | null>(null);
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const [outList, stkList, catList] = await Promise.all([
+      const [outList, stkList, catList, matList] = await Promise.all([
         dbService.getOutlets(),
         dbService.getOutletStocks(),
         dbService.getRawMaterialCategories(),
+        dbService.getRawMaterials(),
       ]);
       setOutlets(outList);
       setStocks(stkList);
       setCategories(catList);
-      if (!selectedOutletId && outList.length > 0) {
+      setMaterials(matList);
+      if (outList.length > 0 && !outList.some((o) => o.id === selectedOutletId)) {
         setSelectedOutletId(outList[0].id);
       }
     } catch (err) {
@@ -55,8 +67,73 @@ export default function AdminOutletStocksPage() {
     loadData();
   }, []);
 
+  const buildStocksForOutlet = (targetOutletId: string): OutletStock[] => {
+    const rawOutletRows = stocks.filter((s) => s.outlet_id === targetOutletId);
+    if (materials.length === 0) return rawOutletRows;
+
+    const targetOutlet = outlets.find((o) => o.id === targetOutletId);
+    const merged: OutletStock[] = materials.map((mat) => {
+      const existing = rawOutletRows.find((s) => s.raw_material_id === mat.id);
+      return {
+        id: existing?.id || `ostk-${targetOutletId}-${mat.id}`,
+        outlet_id: targetOutletId,
+        raw_material_id: mat.id,
+        quantity: existing ? Number(existing.quantity) : 0,
+        minimum_stock: existing ? Number(existing.minimum_stock ?? mat.minimum_stock ?? 0) : Number(mat.minimum_stock ?? 0),
+        updated_at: existing?.updated_at || new Date().toISOString(),
+        outlet: existing?.outlet || targetOutlet,
+        raw_material: {
+          ...mat,
+          ...(existing?.raw_material || {}),
+          category: mat.category || existing?.raw_material?.category,
+          standard_unit: mat.standard_unit || existing?.raw_material?.standard_unit,
+        },
+      };
+    });
+
+    // Include any orphan stock row not in active materials list
+    for (const row of rawOutletRows) {
+      if (!merged.some((m) => m.raw_material_id === row.raw_material_id)) {
+        merged.push(row);
+      }
+    }
+    return merged;
+  };
+
   const currentOutlet = outlets.find((o) => o.id === selectedOutletId) || outlets[0];
-  const outletStocks = stocks.filter((s) => s.outlet_id === selectedOutletId);
+  const outletStocks = buildStocksForOutlet(selectedOutletId);
+
+  const openEditMinModal = (stk: OutletStock) => {
+    const currentMin = Number(stk.minimum_stock ?? stk.raw_material?.minimum_stock ?? 0);
+    setEditingStock(stk);
+    setEditMinValue(currentMin);
+    setEditMinError(null);
+  };
+
+  const handleSaveMinStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStock) return;
+    if (Number.isNaN(editMinValue) || editMinValue < 0) {
+      setEditMinError('Batas minimum tidak boleh bernilai negatif.');
+      return;
+    }
+
+    setIsSavingMin(true);
+    setEditMinError(null);
+    try {
+      await dbService.updateOutletStockMinimum(
+        editingStock.outlet_id,
+        editingStock.raw_material_id,
+        Number(editMinValue)
+      );
+      setEditingStock(null);
+      await loadData();
+    } catch (err: any) {
+      setEditMinError(err.message || 'Gagal menyimpan batas minimum cabang.');
+    } finally {
+      setIsSavingMin(false);
+    }
+  };
 
   const filteredStocks = outletStocks.filter((s) => {
     const mat = s.raw_material;
@@ -68,7 +145,7 @@ export default function AdminOutletStocksPage() {
     const matchCategory =
       selectedCategory === 'all' || mat?.category_id === selectedCategory;
 
-    const min = s.minimum_stock || mat?.minimum_stock || 0;
+    const min = Number(s.minimum_stock ?? mat?.minimum_stock ?? 0);
     const isLow = s.quantity <= min;
     const matchStatus =
       stockStatusFilter === 'all' ||
@@ -79,7 +156,7 @@ export default function AdminOutletStocksPage() {
   });
 
   const lowStockCount = outletStocks.filter((s) => {
-    const min = s.minimum_stock || s.raw_material?.minimum_stock || 0;
+    const min = Number(s.minimum_stock ?? s.raw_material?.minimum_stock ?? 0);
     return s.quantity <= min;
   }).length;
 
@@ -120,8 +197,10 @@ export default function AdminOutletStocksPage() {
           <div className="flex items-center gap-2 min-w-max">
             {outlets.map((outlet) => {
               const isSelected = outlet.id === selectedOutletId;
-              const outletItems = stocks.filter((s) => s.outlet_id === outlet.id);
-              const branchLowCount = outletItems.filter((s) => s.quantity <= (s.minimum_stock || 500)).length;
+              const outletItems = buildStocksForOutlet(outlet.id);
+              const branchLowCount = outletItems.filter(
+                (s) => s.quantity <= Number(s.minimum_stock ?? s.raw_material?.minimum_stock ?? 0)
+              ).length;
 
               return (
                 <button
@@ -291,7 +370,9 @@ export default function AdminOutletStocksPage() {
                 ) : (
                   filteredStocks.map((stk) => {
                     const mat = stk.raw_material;
-                    const min = stk.minimum_stock || mat?.minimum_stock || 0;
+                    const min = Number(stk.minimum_stock ?? mat?.minimum_stock ?? 0);
+                    const masterMin = materials.find((m) => m.id === stk.raw_material_id)?.minimum_stock;
+                    const isCustomMin = masterMin !== undefined && Number(masterMin) !== min;
                     const isLow = stk.quantity <= min;
                     const percentage = min > 0 ? Math.min(Math.round((stk.quantity / (min * 3)) * 100), 100) : 50;
 
@@ -318,7 +399,26 @@ export default function AdminOutletStocksPage() {
                         </td>
 
                         <td className="py-4 px-4 text-right text-xs text-subtle font-medium">
-                          {min.toLocaleString('id-ID')} {mat?.standard_unit?.symbol || ''}
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            <div className="text-right">
+                              <div className="font-bold text-dark">
+                                {min.toLocaleString('id-ID')} {mat?.standard_unit?.symbol || ''}
+                              </div>
+                              {isCustomMin && (
+                                <span className="text-[10px] text-[#FF6B00] font-semibold">
+                                  Khusus cabang
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openEditMinModal(stk)}
+                              title="Atur batas aman khusus cabang ini"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-[#FF6B00] hover:bg-orange-50 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
 
                         <td className="py-4 px-4 text-center">
@@ -361,6 +461,116 @@ export default function AdminOutletStocksPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal Atur Batas Aman Cabang */}
+      {editingStock && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-dark text-sm sm:text-base">
+                  Atur Batas Aman Cabang
+                </h3>
+                <p className="text-[11px] text-subtle">
+                  {currentOutlet?.name || 'Cabang'} • {editingStock.raw_material?.name || 'Bahan Baku'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingStock(null)}
+                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-dark rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveMinStock} className="p-6 space-y-4">
+              {editMinError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs">
+                  {editMinError}
+                </div>
+              )}
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-subtle">Saldo Saat Ini di Cabang:</span>
+                  <span className="font-bold text-dark">
+                    {editingStock.quantity.toLocaleString('id-ID')}{' '}
+                    {editingStock.raw_material?.standard_unit?.symbol || ''}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-subtle">Standar Master Bahan Baku:</span>
+                  <span className="font-bold text-[#FF6B00]">
+                    {Number(
+                      materials.find((m) => m.id === editingStock.raw_material_id)?.minimum_stock ??
+                        editingStock.raw_material?.minimum_stock ??
+                        0
+                    ).toLocaleString('id-ID')}{' '}
+                    {editingStock.raw_material?.standard_unit?.symbol || ''}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-dark mb-1">
+                  Batas Minimum Stok Cabang ({editingStock.raw_material?.standard_unit?.symbol || 'unit'})
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editMinValue}
+                  onChange={(e) => setEditMinValue(Number(e.target.value))}
+                  className="w-full text-sm p-2.5 bg-white border border-borderline rounded-xl text-dark font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                  required
+                />
+                <p className="text-[11px] text-subtle mt-1.5">
+                  Jika saldo cabang &le; angka ini, status berubah menjadi <strong>Stok Kritis / Menipis</strong> di Admin &amp; Kasir POS.
+                </p>
+              </div>
+
+              {(() => {
+                const masterVal = Number(
+                  materials.find((m) => m.id === editingStock.raw_material_id)?.minimum_stock ??
+                    editingStock.raw_material?.minimum_stock ??
+                    0
+                );
+                if (editMinValue !== masterVal) {
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setEditMinValue(masterVal)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#FF6B00] hover:underline cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Ikuti nilai Master ({masterVal.toLocaleString('id-ID')})</span>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-borderline">
+                <button
+                  type="button"
+                  onClick={() => setEditingStock(null)}
+                  className="px-4 py-2 border border-borderline text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingMin}
+                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {isSavingMin ? 'Menyimpan...' : 'Simpan Batas Aman'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

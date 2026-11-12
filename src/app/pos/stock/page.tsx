@@ -424,7 +424,7 @@ export default function PosStockPage() {
                 ) : (
                   filteredStocks.map((s) => {
                     const mat = s.raw_material;
-                    const min = s.minimum_stock || 500;
+                    const min = Number(s.minimum_stock ?? mat?.minimum_stock ?? 0);
                     const isLow = s.quantity <= min;
 
                     return (

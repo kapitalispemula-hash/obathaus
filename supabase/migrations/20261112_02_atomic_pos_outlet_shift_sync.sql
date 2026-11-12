@@ -73,18 +73,27 @@ RETURNS TABLE (
   updated_at TIMESTAMPTZ
 ) AS $$
 #variable_conflict use_column
+DECLARE
+  v_default_min NUMERIC := 0;
 BEGIN
+  SELECT COALESCE(rm.minimum_stock, 0)
+  INTO v_default_min
+  FROM public.raw_materials rm
+  WHERE rm.id = p_raw_material_id;
+
   RETURN QUERY
   INSERT INTO public.outlet_stocks (
     outlet_id,
     raw_material_id,
     quantity,
+    minimum_stock,
     updated_at
   )
   VALUES (
     p_outlet_id,
     p_raw_material_id,
     GREATEST(0, COALESCE(p_delta, 0)),
+    COALESCE(v_default_min, 0),
     timezone('utc'::text, now())
   )
   ON CONFLICT (outlet_id, raw_material_id) DO UPDATE

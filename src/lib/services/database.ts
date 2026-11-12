@@ -2,6 +2,7 @@
 // CAFE POS — POINT OF SALE & FINANCIAL ANALYTICS
 
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import { convertUnitQuantity, enrichUnitConversions, roundStockQty } from '@/lib/unit-conversion';
 import {
   enqueueOfflineTransaction,
   enqueueOfflineShiftOp,
@@ -909,6 +910,8 @@ export const dbService = {
         cachedPosRead('profiles', 60_000, () => this.getProfiles()),
         cachedPosRead('products', POS_CACHE_TTL_MS, () => this.getProducts()),
         cachedPosRead('rawMaterials', POS_CACHE_TTL_MS, () => this.getRawMaterials()),
+        cachedPosRead('units', POS_CACHE_TTL_MS, () => this.getUnits()),
+        cachedPosRead('unitConversions', POS_CACHE_TTL_MS, () => this.getUnitConversions()),
         cachedPosRead('settings', 60_000, () => this.getStoreSettings()),
         cachedPosRead(`outletMenus:${resolvedOutletId}`, POS_CACHE_TTL_MS, () =>
           this.getOutletMenus(resolvedOutletId)
@@ -994,7 +997,7 @@ export const dbService = {
       currentOutlets[0];
     const targetOutletId = targetOutlet?.id || candidateOutletId || 'd0000000-0000-0000-0000-000000000001';
 
-    const [outletMenus, recipes, stockSnapshots, activeShift] = await Promise.all([
+    const [outletMenus, recipes, stockSnapshots, activeShift, rawConversions, allUnits] = await Promise.all([
       cachedPosRead(`outletMenus:${targetOutletId}`, POS_CACHE_TTL_MS, () => this.getOutletMenus(targetOutletId)),
       cachedPosRead(`recipes:${targetOutletId}`, POS_CACHE_TTL_MS, () => this.getRecipes(targetOutletId)),
       cachedPosRead(`outletStockSnapshot:${targetOutletId}`, POS_CACHE_TTL_MS, async () => {
@@ -1026,7 +1029,10 @@ export const dbService = {
       cachedPosRead(`activeShift:${payload.cashier_id}:${targetOutletId}`, 60_000, () =>
         this.getActiveShift(payload.cashier_id, targetOutletId)
       ),
+      cachedPosRead('unitConversions', POS_CACHE_TTL_MS, () => this.getUnitConversions()),
+      cachedPosRead('units', POS_CACHE_TTL_MS, () => this.getUnits()),
     ]);
+    const unitConversions = enrichUnitConversions(allUnits, rawConversions);
 
     localProducts = allProducts;
     localRawMaterials = rawMaterials;
@@ -1172,23 +1178,46 @@ export const dbService = {
         let recipeHpp = 0;
         for (const rItem of recipe.items) {
           const mat = rawMaterials.find((m) => m.id === rItem.raw_material_id);
-          const unitCost = rItem.unit_cost || mat?.estimated_unit_cost || 0;
-          recipeHpp += rItem.quantity * unitCost;
+          const stdUnitId = mat?.standard_unit_id || rItem.unit_id;
+          const {
+            convertedQuantity: stdQtyPerServing,
+            factor: recipeToStockFactor,
+            matched: hasConversion,
+          } = convertUnitQuantity(rItem.quantity, rItem.unit_id, stdUnitId, unitConversions);
 
-          const neededQty = rItem.quantity * v.quantity;
+          // Biaya per satuan dasar stok (mis. Rp 165.000 / kg)
+          const baseUnitCost =
+            mat?.estimated_unit_cost !== undefined && mat.estimated_unit_cost !== null && Number(mat.estimated_unit_cost) > 0
+              ? Number(mat.estimated_unit_cost)
+              : rItem.unit_cost && recipeToStockFactor > 0
+                ? Number(rItem.unit_cost) / recipeToStockFactor
+                : 0;
+
+          recipeHpp += stdQtyPerServing * baseUnitCost;
+
+          const neededQty = roundStockQty(stdQtyPerServing * v.quantity, 4);
           const balBefore = runningBalances[rItem.raw_material_id] ?? 0;
-          const balAfter = Math.max(0, balBefore - neededQty);
+          const balAfter = Math.max(0, roundStockQty(balBefore - neededQty, 4));
           runningBalances[rItem.raw_material_id] = balAfter;
+
+          const stdSymbol = mat?.standard_unit?.symbol || 'g';
+          const recipeSymbol = rItem.unit?.symbol || stdSymbol;
+          const totalRecipeUsed = roundStockQty(rItem.quantity * v.quantity, 3);
+          const conversionSummary =
+            rItem.unit_id !== stdUnitId && hasConversion
+              ? `${totalRecipeUsed.toLocaleString('id-ID')} ${recipeSymbol} -> ${neededQty.toLocaleString('id-ID', { maximumFractionDigits: 4 })} ${stdSymbol}`
+              : undefined;
 
           stockDeductions.push({
             raw_material_id: rItem.raw_material_id,
             neededQty,
             balBefore,
             balAfter,
-            unitSymbol: mat?.standard_unit?.symbol || 'g',
-            unitCost,
+            unitSymbol: stdSymbol,
+            unitCost: baseUnitCost,
             productName: v.product.name,
             qtySold: v.quantity,
+            conversionSummary,
           });
         }
         if (recipeHpp > 0) {
@@ -1373,9 +1402,10 @@ export const dbService = {
           // Aggregate stock deductions per unique raw_material_id so multi-item recipes trigger only 1 atomic RPC per ingredient
           const aggregatedMaterialDeltas = new Map<string, number>();
           for (const ded of stockDeductions) {
+            const currentSum = aggregatedMaterialDeltas.get(ded.raw_material_id) || 0;
             aggregatedMaterialDeltas.set(
               ded.raw_material_id,
-              (aggregatedMaterialDeltas.get(ded.raw_material_id) || 0) + ded.neededQty
+              roundStockQty(currentSum + ded.neededQty, 4)
             );
           }
 
@@ -1394,11 +1424,11 @@ export const dbService = {
             balance_after: ded.balAfter,
             unit_symbol: ded.unitSymbol || 'pcs',
             unit_cost: ded.unitCost || 0,
-            total_cost: ded.neededQty * ded.unitCost,
+            total_cost: Math.round(ded.neededQty * ded.unitCost),
             reference_document_type: 'pos_transaction',
             reference_document_id: newTransaction.id,
             reference_document_number: newTransaction.invoice_number,
-            notes: `Pemakaian resep: ${ded.productName} (${ded.qtySold}x)`,
+            notes: `Pemakaian resep: ${ded.productName} (${ded.qtySold}x)${ded.conversionSummary ? ` [${ded.conversionSummary}]` : ''}`,
             created_by: cashier.id,
           }));
 
@@ -1741,11 +1771,14 @@ export const dbService = {
 
     // 1. Restore consumed ingredients back to branch stock
     if (trx.items && trx.items.length > 0 && trx.outlet_id) {
-      const [recipes, materials, outletStocks] = await Promise.all([
+      const [recipes, materials, outletStocks, rawConversions, allUnits] = await Promise.all([
         this.getRecipes(trx.outlet_id),
         this.getRawMaterials(),
         this.getOutletStocks(trx.outlet_id),
+        this.getUnitConversions(),
+        this.getUnits(),
       ]);
+      const unitConversions = enrichUnitConversions(allUnits, rawConversions);
 
       for (const itm of trx.items) {
         const recipe = recipes.find(
@@ -1753,11 +1786,19 @@ export const dbService = {
         );
         if (recipe && recipe.items) {
           for (const rItm of recipe.items) {
-            const restoredQty = rItm.quantity * itm.quantity;
-            const prevBal = outletStocks.find((s) => s.raw_material_id === rItm.raw_material_id)?.quantity || 0;
+            const mat = materials.find((m) => m.id === rItm.raw_material_id);
+            const stdUnitId = mat?.standard_unit_id || rItm.unit_id;
+            const { convertedQuantity: stdQtyPerServing } = convertUnitQuantity(
+              rItm.quantity,
+              rItm.unit_id,
+              stdUnitId,
+              unitConversions
+            );
+            const restoredQty = roundStockQty(stdQtyPerServing * itm.quantity, 4);
+            const prevBal = Number(outletStocks.find((s) => s.raw_material_id === rItm.raw_material_id)?.quantity || 0);
             await this.updateOutletStock(trx.outlet_id, rItm.raw_material_id, restoredQty);
 
-            const mat = materials.find((m) => m.id === rItm.raw_material_id);
+            const baseUnitCost = mat?.estimated_unit_cost || 0;
             await this.recordStockMovement({
               location_type: 'outlet',
               location_id: trx.outlet_id,
@@ -1766,10 +1807,10 @@ export const dbService = {
               movement_type: 'pos_void_restoration',
               quantity_change: restoredQty,
               balance_before: prevBal,
-              balance_after: prevBal + restoredQty,
+              balance_after: roundStockQty(prevBal + restoredQty, 4),
               unit_symbol: mat?.standard_unit?.symbol || 'g',
-              unit_cost: mat?.estimated_unit_cost || 0,
-              total_cost: restoredQty * (mat?.estimated_unit_cost || 0),
+              unit_cost: baseUnitCost,
+              total_cost: Math.round(restoredQty * baseUnitCost),
               reference_document_type: 'pos_transaction',
               reference_document_id: trx.id,
               reference_document_number: trx.invoice_number,
@@ -3328,6 +3369,7 @@ export const dbService = {
   },
 
   async createRawMaterial(payload: Partial<RawMaterial>): Promise<RawMaterial> {
+    invalidatePosCache('rawMaterials');
     const newRaw: RawMaterial = {
       id: payload.id || crypto.randomUUID(),
       code: payload.code || `RAW-${Math.floor(Math.random() * 900 + 100)}`,
@@ -3407,6 +3449,7 @@ export const dbService = {
     payload: Partial<RawMaterial>,
     options?: { syncOutletMinimums?: boolean }
   ): Promise<RawMaterial> {
+    invalidatePosCache('rawMaterials');
     const now = new Date().toISOString();
     const shouldSyncOutlets =
       Boolean(options?.syncOutletMinimums) &&
@@ -3608,6 +3651,7 @@ export const dbService = {
   },
 
   async createUnitConversion(payload: Partial<UnitConversion>): Promise<UnitConversion> {
+    invalidatePosCache('unitConversions');
     const newConv: UnitConversion = {
       id: payload.id || crypto.randomUUID(),
       from_unit_id: payload.from_unit_id || '',
@@ -3638,6 +3682,7 @@ export const dbService = {
   },
 
   async deleteUnitConversion(id: string): Promise<boolean> {
+    invalidatePosCache('unitConversions');
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -6050,12 +6095,14 @@ export const dbService = {
   // PHASE 4: RECIPES (BOM), OUTLET STOCKS & MULTI-OUTLET STOCK LEDGER
   // =========================================================================
   async getRecipes(outletId?: string): Promise<Recipe[]> {
-    const [products, outlets, materials, units] = await Promise.all([
+    const [products, outlets, materials, units, rawConversions] = await Promise.all([
       this.getProducts(),
       this.getOutlets(),
       this.getRawMaterials(),
       this.getUnits(),
+      this.getUnitConversions(),
     ]);
+    const conversions = enrichUnitConversions(units, rawConversions);
 
     let list: Recipe[] = getStorageItem<Recipe[]>(STORAGE_KEYS.RECIPES, localRecipes);
 
@@ -6088,8 +6135,15 @@ export const dbService = {
       let calcHpp = 0;
       const hydratedItems = (r.items || []).map((itm) => {
         const mat = materials.find((m) => m.id === itm.raw_material_id);
-        const un = units.find((u) => u.id === itm.unit_id);
-        const cost = Number(itm.unit_cost) || Number(mat?.estimated_unit_cost) || 0;
+        const un = units.find((u) => u.id === itm.unit_id) || mat?.standard_unit;
+        const stdUnitId = mat?.standard_unit_id || itm.unit_id;
+        const { factor } = convertUnitQuantity(1, itm.unit_id, stdUnitId, conversions);
+
+        // unit_cost pada RecipeItem adalah biaya per 1 satuan resep (mis. Rp 165/g dari Rp 165.000/kg)
+        const cost =
+          mat?.estimated_unit_cost !== undefined && Number(mat.estimated_unit_cost) > 0
+            ? Number(mat.estimated_unit_cost) * factor
+            : Number(itm.unit_cost) || 0;
         const total = Number(itm.quantity) * cost;
         calcHpp += total;
         return {
@@ -6536,7 +6590,7 @@ export const dbService = {
     const target = current.find((s) => s.outlet_id === outletId && s.raw_material_id === rawMaterialId);
 
     if (target) {
-      target.quantity = Math.max(0, Number(target.quantity) + deltaQuantity);
+      target.quantity = Math.max(0, roundStockQty(Number(target.quantity) + deltaQuantity, 4));
       target.updated_at = now;
       localOutletStocks = [...current];
       setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);

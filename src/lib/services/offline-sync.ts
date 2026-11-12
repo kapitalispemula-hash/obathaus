@@ -17,6 +17,7 @@ export interface OfflineStockDeduction {
   unitCost: number;
   productName: string;
   qtySold: number;
+  conversionSummary?: string;
 }
 
 export interface QueuedOfflineTransaction {
@@ -488,7 +489,7 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
                 reference_document_type: 'pos_transaction',
                 reference_document_id: transaction.id,
                 reference_document_number: transaction.invoice_number,
-                notes: `Pemakaian resep (Sync Offline): ${ded.productName} (${ded.qtySold}x)`,
+                notes: `Pemakaian resep (Sync Offline): ${ded.productName} (${ded.qtySold}x)${ded.conversionSummary ? ` [${ded.conversionSummary}]` : ''}`,
                 created_by: UUID_REGEX.test(transaction.cashier_id) ? transaction.cashier_id : null,
               });
               if (ledgerErr) {

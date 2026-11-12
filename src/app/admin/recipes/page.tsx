@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
-import { Recipe, Product, RawMaterial, RecipeItem, Category } from '@/types/database';
+import { Recipe, Product, RawMaterial, RecipeItem, Category, Unit, UnitConversion } from '@/types/database';
 import { formatRupiah } from '@/lib/format';
+import { convertUnitQuantity, enrichUnitConversions, getCompatibleUnits, roundStockQty } from '@/lib/unit-conversion';
 import {
   BookOpen,
   Plus,
@@ -24,13 +25,21 @@ import {
   Coffee,
   Info,
 } from 'lucide-react';
-import { INITIAL_RECIPES, INITIAL_PRODUCTS, INITIAL_RAW_MATERIALS } from '@/lib/mock-data';
+import {
+  INITIAL_RECIPES,
+  INITIAL_PRODUCTS,
+  INITIAL_RAW_MATERIALS,
+  INITIAL_UNITS,
+  INITIAL_UNIT_CONVERSIONS,
+} from '@/lib/mock-data';
 
 export default function AdminRecipesPage() {
   const [recipes, setRecipes] = useState<Recipe[]>(INITIAL_RECIPES);
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [materials, setMaterials] = useState<RawMaterial[]>(INITIAL_RAW_MATERIALS);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [units, setUnits] = useState<Unit[]>(INITIAL_UNITS);
+  const [conversions, setConversions] = useState<UnitConversion[]>(INITIAL_UNIT_CONVERSIONS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -57,16 +66,20 @@ export default function AdminRecipesPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [rcpList, prodList, matList, catList] = await Promise.all([
+      const [rcpList, prodList, matList, catList, unitList, convList] = await Promise.all([
         dbService.getRecipes(),
         dbService.getProducts(),
         dbService.getRawMaterials(),
         dbService.getCategories(),
+        dbService.getUnits(),
+        dbService.getUnitConversions(),
       ]);
       setRecipes(rcpList);
       setProducts(prodList);
       setMaterials(matList);
       setCategories(catList);
+      setUnits(unitList);
+      setConversions(enrichUnitConversions(unitList, convList));
     } catch (err) {
       console.error('Failed to load recipes:', err);
     } finally {
@@ -146,12 +159,26 @@ export default function AdminRecipesPage() {
     setRecipeItems(updated);
   };
 
-  // Live calculation of recipe HPP & Margin
+  // Live calculation of recipe HPP & Margin (supports unit conversion e.g. kg -> gram)
+  const getConvertedCostInfo = (rawMaterialId: string, quantity: number, recipeUnitId: string) => {
+    const mat = materials.find((m) => m.id === rawMaterialId);
+    const baseUnitCost = mat?.estimated_unit_cost || 0;
+    const stdUnitId = mat?.standard_unit_id || recipeUnitId;
+    const { convertedQuantity: stdQty, factor, matched } = convertUnitQuantity(
+      quantity,
+      recipeUnitId,
+      stdUnitId,
+      conversions
+    );
+    const unitCostInRecipeUnit = baseUnitCost * factor;
+    const subtotal = quantity * unitCostInRecipeUnit;
+    return { mat, stdUnitId, stdQty, factor, matched, unitCostInRecipeUnit, subtotal };
+  };
+
   const selectedProduct = products.find((p) => p.id === selectedProductId);
   const liveCalculatedHpp = recipeItems.reduce((acc, itm) => {
-    const mat = materials.find((m) => m.id === itm.raw_material_id);
-    const unitCost = mat?.estimated_unit_cost || 0;
-    return acc + itm.quantity * unitCost;
+    const { subtotal } = getConvertedCostInfo(itm.raw_material_id, itm.quantity, itm.unit_id);
+    return acc + subtotal;
   }, 0);
 
   const liveSellingPrice = selectedProduct?.selling_price || 0;
@@ -181,16 +208,19 @@ export default function AdminRecipesPage() {
     try {
       setIsSaving(true);
       const itemsPayload: RecipeItem[] = recipeItems.map((itm, idx) => {
-        const mat = materials.find((m) => m.id === itm.raw_material_id);
-        const cost = mat?.estimated_unit_cost || 0;
+        const { unitCostInRecipeUnit, subtotal } = getConvertedCostInfo(
+          itm.raw_material_id,
+          itm.quantity,
+          itm.unit_id
+        );
         return {
           id: `rcpi-${Date.now()}-${idx}`,
           recipe_id: editingRecipeId || '',
           raw_material_id: itm.raw_material_id,
           quantity: itm.quantity,
           unit_id: itm.unit_id,
-          unit_cost: cost,
-          total_cost: itm.quantity * cost,
+          unit_cost: Number(unitCostInRecipeUnit.toFixed(2)),
+          total_cost: Number(subtotal.toFixed(2)),
         };
       });
 
@@ -599,7 +629,7 @@ export default function AdminRecipesPage() {
                         <tr>
                           <th className="py-2.5 px-3 text-left">Bahan Baku</th>
                           <th className="py-2.5 px-3 text-right w-28">Kuantitas</th>
-                          <th className="py-2.5 px-3 text-center w-20">Satuan</th>
+                          <th className="py-2.5 px-3 text-center w-28">Satuan Resep</th>
                           <th className="py-2.5 px-3 text-right w-28">Biaya/Unit</th>
                           <th className="py-2.5 px-3 text-right w-28">Subtotal</th>
                           <th className="py-2.5 px-2 text-center w-12">Hapus</th>
@@ -607,9 +637,10 @@ export default function AdminRecipesPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {recipeItems.map((itm, idx) => {
-                          const mat = materials.find((m) => m.id === itm.raw_material_id);
-                          const unitCost = mat?.estimated_unit_cost || 0;
-                          const subtotal = itm.quantity * unitCost;
+                          const { mat, stdUnitId, stdQty, matched, unitCostInRecipeUnit, subtotal } =
+                            getConvertedCostInfo(itm.raw_material_id, itm.quantity, itm.unit_id);
+                          const compatibleUnits = getCompatibleUnits(stdUnitId, units, conversions);
+                          const isDifferentUnit = itm.unit_id !== stdUnitId;
 
                           return (
                             <tr key={idx} className="hover:bg-slate-50">
@@ -627,12 +658,18 @@ export default function AdminRecipesPage() {
                                     </option>
                                   ))}
                                 </select>
+                                {isDifferentUnit && matched && (
+                                  <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                    Konversi stok: potong {roundStockQty(stdQty, 4).toLocaleString('id-ID', { maximumFractionDigits: 4 })}{' '}
+                                    {mat?.standard_unit?.symbol || ''} per cup
+                                  </div>
+                                )}
                               </td>
 
-                              <td className="py-2 px-3 text-right">
+                              <td className="py-2 px-3 text-right align-top">
                                 <input
                                   type="number"
-                                  min={0.1}
+                                  min={0.001}
                                   step="any"
                                   value={itm.quantity}
                                   onChange={(e) =>
@@ -646,19 +683,37 @@ export default function AdminRecipesPage() {
                                 />
                               </td>
 
-                              <td className="py-2 px-3 text-center font-medium text-slate-500">
-                                {mat?.standard_unit?.symbol || '-'}
+                              <td className="py-2 px-3 text-center align-top">
+                                {compatibleUnits.length > 1 ? (
+                                  <select
+                                    value={itm.unit_id}
+                                    onChange={(e) =>
+                                      handleIngredientChange(idx, 'unit_id', e.target.value)
+                                    }
+                                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-700 focus:ring-1 focus:ring-[#FF6B00]"
+                                  >
+                                    {compatibleUnits.map((u) => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.symbol} ({u.name})
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className="inline-block py-1.5 font-medium text-slate-500">
+                                    {mat?.standard_unit?.symbol || '-'}
+                                  </span>
+                                )}
                               </td>
 
-                              <td className="py-2 px-3 text-right text-slate-500">
-                                {formatRupiah(unitCost)}
+                              <td className="py-2 px-3 text-right text-slate-500 align-top">
+                                <div className="py-1">{formatRupiah(unitCostInRecipeUnit)}</div>
                               </td>
 
-                              <td className="py-2 px-3 text-right font-bold text-slate-800">
-                                {formatRupiah(subtotal)}
+                              <td className="py-2 px-3 text-right font-bold text-slate-800 align-top">
+                                <div className="py-1">{formatRupiah(subtotal)}</div>
                               </td>
 
-                              <td className="py-2 px-2 text-center">
+                              <td className="py-2 px-2 text-center align-top">
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveIngredientRow(idx)}
@@ -807,22 +862,43 @@ export default function AdminRecipesPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {viewingRecipe.items?.map((itm) => (
-                          <tr key={itm.id}>
-                            <td className="py-2.5 px-3 font-medium text-slate-800">
-                              {itm.raw_material?.name || 'Bahan'}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-bold text-slate-900">
-                              {itm.quantity} {itm.raw_material?.standard_unit?.symbol || ''}
-                            </td>
-                            <td className="py-2.5 px-3 text-right text-slate-500">
-                              {formatRupiah(itm.unit_cost || 0)}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-bold text-slate-800">
-                              {formatRupiah(itm.total_cost || 0)}
-                            </td>
-                          </tr>
-                        ))}
+                        {viewingRecipe.items?.map((itm) => {
+                          const mat = itm.raw_material;
+                          const stdUnitId = mat?.standard_unit_id || itm.unit_id;
+                          const recipeSymbol = itm.unit?.symbol || mat?.standard_unit?.symbol || '';
+                          const { convertedQuantity: stdQty, matched } = convertUnitQuantity(
+                            itm.quantity,
+                            itm.unit_id,
+                            stdUnitId,
+                            conversions
+                          );
+                          const isConverted = itm.unit_id !== stdUnitId && matched;
+
+                          return (
+                            <tr key={itm.id}>
+                              <td className="py-2.5 px-3 font-medium text-slate-800">
+                                {mat?.name || 'Bahan'}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-bold text-slate-900">
+                                <div>
+                                  {itm.quantity.toLocaleString('id-ID', { maximumFractionDigits: 3 })} {recipeSymbol}
+                                </div>
+                                {isConverted && (
+                                  <div className="text-[10px] font-medium text-emerald-700">
+                                    potong stok: {roundStockQty(stdQty, 4).toLocaleString('id-ID', { maximumFractionDigits: 4 })}{' '}
+                                    {mat?.standard_unit?.symbol || ''}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-right text-slate-500">
+                                {formatRupiah(itm.unit_cost || 0)}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-bold text-slate-800">
+                                {formatRupiah(itm.total_cost || 0)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

@@ -135,7 +135,14 @@ export default function AdminSupplierPOsPage() {
   const filteredPOs = pos.filter((p) => {
     // 1. Status Filter
     if (statusFilter === 'approved') {
-      if (p.status !== 'approved' && p.status !== 'received' && p.status !== 'completed') return false;
+      if (
+        p.status !== 'approved' &&
+        p.status !== 'partially_received' &&
+        p.status !== 'received' &&
+        p.status !== 'completed'
+      ) {
+        return false;
+      }
     } else if (statusFilter !== 'all' && p.status !== statusFilter) {
       return false;
     }
@@ -159,7 +166,11 @@ export default function AdminSupplierPOsPage() {
   // KPI calculations
   const countPending = pos.filter((p) => p.status === 'pending_approval').length;
   const countApproved = pos.filter(
-    (p) => p.status === 'approved' || p.status === 'received' || p.status === 'completed'
+    (p) =>
+      p.status === 'approved' ||
+      p.status === 'partially_received' ||
+      p.status === 'received' ||
+      p.status === 'completed'
   ).length;
   const totalValue = pos.reduce((acc, p) => {
     const pCost = p.items?.reduce((c, it) => c + (it.subtotal || (it.quantity_ordered * it.unit_cost)), 0) || 0;
@@ -361,6 +372,8 @@ export default function AdminSupplierPOsPage() {
                             ? 'bg-amber-50 text-amber-800 border border-amber-200'
                             : p.status === 'approved'
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : p.status === 'partially_received'
+                            ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
                             : p.status === 'received' || p.status === 'completed'
                             ? 'bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA]'
                             : 'bg-red-50 text-red-800 border border-red-200'
@@ -370,6 +383,8 @@ export default function AdminSupplierPOsPage() {
                           ? 'Menunggu'
                           : p.status === 'approved'
                           ? 'Disetujui'
+                          : p.status === 'partially_received'
+                          ? 'Diterima Sebagian'
                           : p.status === 'received' || p.status === 'completed'
                           ? 'Diterima'
                           : 'Ditolak'}
@@ -522,6 +537,8 @@ export default function AdminSupplierPOsPage() {
                                 ? 'bg-amber-50 text-amber-800 border border-amber-200'
                                 : p.status === 'approved'
                                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : p.status === 'partially_received'
+                                ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
                                 : p.status === 'received' || p.status === 'completed'
                                 ? 'bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA]'
                                 : 'bg-red-50 text-red-800 border border-red-200'
@@ -531,6 +548,8 @@ export default function AdminSupplierPOsPage() {
                               ? 'Menunggu Approval Admin'
                               : p.status === 'approved'
                               ? 'Disetujui Admin'
+                              : p.status === 'partially_received'
+                              ? 'Diterima Sebagian'
                               : p.status === 'received' || p.status === 'completed'
                               ? 'Barang Diterima Gudang'
                               : 'Ditolak'}
@@ -631,7 +650,9 @@ export default function AdminSupplierPOsPage() {
                           ? 'bg-amber-50 text-amber-800 border border-amber-200'
                           : selectedPO.status === 'approved'
                           ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : selectedPO.status === 'received'
+                          : selectedPO.status === 'partially_received'
+                          ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                          : selectedPO.status === 'received' || selectedPO.status === 'completed'
                           ? 'bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA]'
                           : 'bg-red-50 text-red-800 border border-red-200'
                       }`}
@@ -640,7 +661,9 @@ export default function AdminSupplierPOsPage() {
                         ? 'Menunggu Approval Admin'
                         : selectedPO.status === 'approved'
                         ? 'Disetujui Admin'
-                        : selectedPO.status === 'received'
+                        : selectedPO.status === 'partially_received'
+                        ? 'Diterima Sebagian'
+                        : selectedPO.status === 'received' || selectedPO.status === 'completed'
                         ? 'Barang Diterima'
                         : 'Ditolak'}
                     </span>

@@ -308,7 +308,9 @@ export default function WarehouseSupplierPOPage() {
                               ? 'bg-amber-50 text-amber-800 border border-amber-200'
                               : p.status === 'approved'
                               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : p.status === 'received'
+                              : p.status === 'partially_received'
+                              ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                              : p.status === 'received' || p.status === 'completed'
                               ? 'bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA]'
                               : 'bg-red-50 text-red-800 border border-red-200'
                           }`}
@@ -317,7 +319,9 @@ export default function WarehouseSupplierPOPage() {
                             ? 'Menunggu Approval Admin'
                             : p.status === 'approved'
                             ? 'Disetujui Admin'
-                            : p.status === 'received'
+                            : p.status === 'partially_received'
+                            ? 'Diterima Sebagian'
+                            : p.status === 'received' || p.status === 'completed'
                             ? 'Barang Telah Diterima'
                             : 'Ditolak'}
                         </span>

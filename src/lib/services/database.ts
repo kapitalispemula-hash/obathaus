@@ -3839,13 +3839,22 @@ export const dbService = {
         const supabase = createClient();
         let query = supabase
           .from('supplier_pos')
-          .select('*, supplier:suppliers(*), creator:profiles!supplier_pos_created_by_fkey(*), items:supplier_po_items(*, raw_material:raw_materials(*), unit:units(*))')
+          .select('*, supplier:suppliers(*), items:supplier_po_items(*, raw_material:raw_materials(*), unit:units(*))')
           .order('created_at', { ascending: false });
         if (warehouseId) query = query.eq('warehouse_id', warehouseId);
-        const { data, error } = await query;
-        if (!error && data) {
+        const [{ data, error }, profiles] = await Promise.all([
+          query,
+          this.getProfiles().catch(() => [] as Profile[]),
+        ]);
+        if (error) {
+          console.error('Supabase getSupplierPOs error:', error);
+          if (!isNetworkFailure(error)) {
+            throw new Error(`Gagal memuat daftar PO Supplier: ${error.message}`);
+          }
+        } else if (data) {
           const mappedPOs: SupplierPO[] = data.map((po: any) => ({
             ...po,
+            creator: profiles.find((p) => p.id === po.created_by),
             items: (po.items || []).map((it: any) => ({
               id: it.id,
               supplier_po_id: it.po_id || it.supplier_po_id || po.id,
@@ -3863,11 +3872,9 @@ export const dbService = {
           setStorageItem(STORAGE_KEYS.SUPPLIER_POS, localSupplierPOs);
           return mappedPOs;
         }
-        if (error) {
-          console.warn('Supabase getSupplierPOs error:', error);
-        }
-      } catch (e) {
-        console.warn('Falling back to local getSupplierPOs:', e);
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+        console.warn('Falling back to local getSupplierPOs (offline):', e);
       }
     }
 
@@ -4179,8 +4186,12 @@ export const dbService = {
           setStorageItem(STORAGE_KEYS.SUPPLIER_RECEIPTS, localSupplierReceipts);
           return mapped;
         }
-        if (error) console.warn('Supabase getSupplierReceipts error:', error);
-      } catch (e) {
+        if (error) {
+          console.error('Supabase getSupplierReceipts error:', error);
+          if (!isNetworkFailure(error)) throw new Error(`Gagal memuat penerimaan barang: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local getSupplierReceipts:', e);
       }
     }
@@ -4391,9 +4402,11 @@ export const dbService = {
           return mappedOrders;
         }
         if (error) {
-          console.warn('Supabase getOutletOrders error:', error);
+          console.error('Supabase getOutletOrders error:', error);
+          if (!isNetworkFailure(error)) throw new Error(`Gagal memuat permintaan cabang: ${error.message}`);
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local getOutletOrders:', e);
       }
     }
@@ -4583,9 +4596,11 @@ export const dbService = {
           return mapped;
         }
         if (error) {
-          console.warn('Supabase getDispatches error:', error);
+          console.error('Supabase getDispatches error:', error);
+          if (!isNetworkFailure(error)) throw new Error(`Gagal memuat pengiriman gudang: ${error.message}`);
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local getDispatches:', e);
       }
     }
@@ -4790,8 +4805,12 @@ export const dbService = {
           }
           return mapped;
         }
-        if (error) console.warn('Supabase getWarehouseReturns error:', error);
-      } catch (e) {
+        if (error) {
+          console.error('Supabase getWarehouseReturns error:', error);
+          if (!isNetworkFailure(error)) throw new Error(`Gagal memuat retur gudang: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local getWarehouseReturns:', e);
       }
     }
@@ -5494,13 +5513,17 @@ export const dbService = {
           query = query.eq('warehouse_id', warehouseId);
         }
         const { data, error } = await query;
-        if (!error && data) {
+        if (error) {
+          console.error('Supabase getStockOpnames error:', error);
+          if (!isNetworkFailure(error)) throw new Error(`Gagal memuat stock opname: ${error.message}`);
+        } else if (data) {
           const hydrated = hydrateOpnames(data as StockOpname[]);
           localStockOpnames = hydrated;
           setStorageItem(STORAGE_KEYS.STOCK_OPNAMES, localStockOpnames);
           return hydrated;
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local getStockOpnames:', e);
       }
     }

@@ -4,6 +4,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile, UserRole } from '@/types/database';
 import { dbService } from '@/lib/services/database';
+import { syncOfflineQueue } from '@/lib/services/offline-sync';
+import { attendanceService } from '@/lib/services/attendance';
 import { INITIAL_PROFILES } from '@/lib/mock-data';
 
 interface AuthContextType {
@@ -32,6 +34,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    const syncAllPending = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        void syncOfflineQueue();
+        void attendanceService.syncPendingAttendance();
+      }
+    };
+
     async function loadUser() {
       try {
         const storedUserId = typeof window !== 'undefined' ? localStorage.getItem(AUTH_STORAGE_KEY) : null;
@@ -42,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (found) {
             setUser(found);
             setIsLoading(false);
+            syncAllPending();
             return;
           }
         }
@@ -59,6 +69,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     loadUser();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', syncAllPending);
+      return () => {
+        window.removeEventListener('online', syncAllPending);
+      };
+    }
   }, []);
 
   const login = async (identifier: string, password?: string) => {
@@ -104,6 +121,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(found);
       if (typeof window !== 'undefined') {
         localStorage.setItem(AUTH_STORAGE_KEY, found.id);
+        if (navigator.onLine) {
+          void syncOfflineQueue();
+          void attendanceService.syncPendingAttendance();
+        }
       }
 
       setIsLoading(false);

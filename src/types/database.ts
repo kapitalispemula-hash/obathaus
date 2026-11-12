@@ -309,6 +309,8 @@ export type SupplierPOStatus =
   | 'pending_approval'
   | 'approved'
   | 'rejected'
+  | 'partially_received'
+  | 'completed'
   | 'ordered'
   | 'received'
   | 'cancelled';
@@ -465,11 +467,61 @@ export interface WarehouseReturn {
   return_date: string;
   reason: string;
   notes?: string | null;
+  created_by?: string | null;
   inspected_by?: string | null;
   inspected_at?: string | null;
   created_at: string;
   from_outlet?: Outlet;
   items?: WarehouseReturnItem[];
+}
+
+export type SupplierReturnStatus =
+  | 'draft'
+  | 'submitted'
+  | 'shipped_to_supplier'
+  | 'replaced'
+  | 'refunded'
+  | 'rejected'
+  | 'cancelled';
+
+export type SupplierReturnSettlementType = 'replacement' | 'refund' | 'credit_note';
+
+export interface SupplierReturnItem {
+  id: string;
+  supplier_return_id: string;
+  raw_material_id: string;
+  quantity_returned: number;
+  unit_id: string;
+  unit_cost: number;
+  subtotal: number;
+  notes?: string | null;
+  raw_material?: RawMaterial;
+  unit?: Unit;
+}
+
+export interface SupplierReturn {
+  id: string;
+  return_number: string;
+  warehouse_id: string;
+  supplier_id: string;
+  supplier_po_id?: string | null;
+  source_warehouse_return_id?: string | null;
+  status: SupplierReturnStatus;
+  settlement_type: SupplierReturnSettlementType;
+  total_return_value: number;
+  reason: string;
+  notes?: string | null;
+  return_date: string;
+  shipped_at?: string | null;
+  resolved_at?: string | null;
+  created_by?: string | null;
+  resolved_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  supplier?: Supplier;
+  supplier_po?: SupplierPO;
+  items?: SupplierReturnItem[];
+  deduct_stock?: boolean;
 }
 
 export type OpnameStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected';
@@ -556,6 +608,7 @@ export type StockMovementType =
   | 'pos_void_restoration'    // Automated stock restoration if transaction is voided
   | 'stock_opname_adjustment' // Adjustment resulting from physical count discrepancy
   | 'return_to_warehouse'     // Return from outlet back to central warehouse
+  | 'return_to_supplier'      // Return from central warehouse back to supplier
   | 'manual_adjustment';      // Audited manual balance correction
 
 export interface StockLedgerEntry {

@@ -49,6 +49,7 @@ import {
   formatTimeDisplay,
   purgeLegacyDemoData,
 } from '@/lib/services/attendance';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import {
   EmployeeProfile,
   AttendanceLog,
@@ -188,6 +189,7 @@ export default function MobileAttendancePage() {
     async function initSession() {
       try {
         purgeLegacyDemoData();
+        await attendanceService.syncPendingAttendance();
         const emps = await attendanceService.getEmployees();
         setAllEmployees(emps.filter((e) => e.is_active));
 
@@ -260,24 +262,27 @@ export default function MobileAttendancePage() {
     };
   }, []);
 
-  // When currentEmployee is active, load today's log & location & shifts & recent history
+  const currentEmployeeId = currentEmployee?.id;
+
+  // When currentEmployee is active, load today's log & location & shifts & recent history + subscribe Realtime
   useEffect(() => {
-    if (!currentEmployee) return;
+    if (!currentEmployee || !currentEmployeeId) return;
 
     // Check if current employee has enrolled fingerprint on this device
     const bioEmpId = localStorage.getItem(BIOMETRIC_EMP_ID_KEY);
-    setIsBiometricEnrolled(bioEmpId === currentEmployee.id);
+    setIsBiometricEnrolled(bioEmpId === currentEmployeeId);
 
-    async function loadEmployeeData() {
+    async function loadEmployeeData(skipGpsRefresh = false) {
+      if (!currentEmployee) return;
       try {
         const [today, shiftList, loc, logs] = await Promise.all([
-          attendanceService.getTodayAttendance(currentEmployee!.id),
+          attendanceService.getTodayAttendance(currentEmployeeId!),
           attendanceService.getShifts(),
           attendanceService.getLocationTarget(
-            currentEmployee!.assigned_location_type,
-            currentEmployee!.assigned_location_id
+            currentEmployee.assigned_location_type,
+            currentEmployee.assigned_location_id
           ),
-          attendanceService.getAllAttendanceLogs({ employeeId: currentEmployee!.id }),
+          attendanceService.getAllAttendanceLogs({ employeeId: currentEmployeeId! }),
         ]);
 
         const todayDate = attendanceService.getTodayDateStr();
@@ -285,7 +290,7 @@ export default function MobileAttendancePage() {
           today ||
           logs.find(
             (l) =>
-              l.employee_id === currentEmployee!.id &&
+              l.employee_id === currentEmployeeId &&
               (l.date === todayDate || (l.clock_in && !l.clock_out))
           ) ||
           null;
@@ -295,15 +300,60 @@ export default function MobileAttendancePage() {
         setLocationTarget(loc);
         setEmployeeLogs(logs);
 
-        // Fetch GPS coordinates
-        refreshGps(loc);
+        if (!skipGpsRefresh) {
+          refreshGps(loc);
+        }
       } catch (err) {
         console.warn('Error loading employee attendance data:', err);
       }
     }
 
-    loadEmployeeData();
-  }, [currentEmployee]);
+    loadEmployeeData(false);
+
+    const handleOnlineSync = async () => {
+      await attendanceService.syncPendingAttendance();
+      await loadEmployeeData(true);
+    };
+    window.addEventListener('online', handleOnlineSync);
+
+    let channel: any = null;
+    const supabase = isSupabaseConfigured() ? createClient() : null;
+    if (supabase) {
+      channel = supabase
+        .channel(`absen-emp-${currentEmployeeId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'employee_profiles', filter: `id=eq.${currentEmployeeId}` },
+          async () => {
+            const emps = await attendanceService.getEmployees();
+            setAllEmployees(emps.filter((e) => e.is_active));
+            const updated = emps.find((e) => e.id === currentEmployeeId);
+            if (updated) {
+              setCurrentEmployee(updated);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'attendance_logs', filter: `employee_id=eq.${currentEmployeeId}` },
+          () => {
+            loadEmployeeData(true);
+          }
+        )
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_shifts' }, async () => {
+          const shiftList = await attendanceService.getShifts();
+          setShifts(shiftList);
+        })
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnlineSync);
+      if (supabase && channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [currentEmployeeId]);
 
   // When switching to History tab, refresh logs
   useEffect(() => {
@@ -739,8 +789,8 @@ export default function MobileAttendancePage() {
         setNewPin('');
         setPinChangeMsg(null);
       }, 1200);
-    } catch {
-      setPinChangeMsg('Gagal memperbarui PIN.');
+    } catch (err: any) {
+      setPinChangeMsg(err?.message || 'Gagal memperbarui PIN.');
     }
   };
 
@@ -773,7 +823,7 @@ export default function MobileAttendancePage() {
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const size = Math.min(img.width, img.height);
-        const targetSize = 360;
+        const targetSize = 240;
         canvas.width = targetSize;
         canvas.height = targetSize;
         const ctx = canvas.getContext('2d');
@@ -781,7 +831,7 @@ export default function MobileAttendancePage() {
           const startX = (img.width - size) / 2;
           const startY = (img.height - size) / 2;
           ctx.drawImage(img, startX, startY, size, size, 0, 0, targetSize, targetSize);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
           setEditAvatarUrl(dataUrl);
         }
       };
@@ -811,23 +861,29 @@ export default function MobileAttendancePage() {
       };
 
       const saved = await attendanceService.saveEmployee(updatedProfile);
-      if (editAvatarUrl) {
-        localStorage.setItem(`obathaus_employee_avatar_${currentEmployee.id}`, editAvatarUrl);
+      const effectiveAvatar = saved.avatar_url ?? (editAvatarUrl || '');
+      if (effectiveAvatar) {
+        localStorage.setItem(`obathaus_employee_avatar_${currentEmployee.id}`, effectiveAvatar);
       } else {
         localStorage.removeItem(`obathaus_employee_avatar_${currentEmployee.id}`);
       }
 
-      setCurrentEmployee(saved);
-      setAllEmployees((prev) => prev.map((e) => (e.id === saved.id ? saved : e)));
-      setEditProfileMsg({ type: 'success', text: 'Profil berhasil diperbarui!' });
+      const finalProfile: EmployeeProfile = {
+        ...saved,
+        avatar_url: effectiveAvatar,
+      };
+
+      setCurrentEmployee(finalProfile);
+      setAllEmployees((prev) => prev.map((e) => (e.id === finalProfile.id ? finalProfile : e)));
+      setEditProfileMsg({ type: 'success', text: 'Profil berhasil diperbarui dan disinkronkan!' });
 
       setTimeout(() => {
         setIsEditProfileModalOpen(false);
         setEditProfileMsg(null);
-      }, 1000);
+      }, 900);
     } catch (err: any) {
       console.error('Failed to update profile:', err);
-      setEditProfileMsg({ type: 'error', text: 'Gagal menyimpan perubahan profil.' });
+      setEditProfileMsg({ type: 'error', text: err?.message || 'Gagal menyimpan perubahan profil.' });
     } finally {
       setIsSavingProfile(false);
     }

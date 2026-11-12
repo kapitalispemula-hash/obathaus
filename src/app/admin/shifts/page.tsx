@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { useOutlet } from '@/lib/outlet-context';
 import { CashierShift, ShiftCashMovement } from '@/types/database';
 import { formatRupiah, formatDateTime } from '@/lib/format';
@@ -65,6 +66,23 @@ export default function AdminShiftsPage() {
 
   useEffect(() => {
     loadShifts();
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel(`admin-shifts-${selectedOutlet}-${statusFilter}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cashier_shifts' }, () => void loadShifts())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_cash_movements' }, () => void loadShifts())
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, [selectedOutlet, statusFilter]);
 
   const openDetailModal = async (shift: CashierShift) => {

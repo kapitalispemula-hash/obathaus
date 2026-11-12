@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { SupplierPO, Supplier } from '@/types/database';
 import { formatRupiah } from '@/lib/format';
 import { useAuth } from '@/lib/auth-context';
@@ -65,9 +66,23 @@ export default function AdminSupplierPOsPage() {
     if (typeof window !== 'undefined') {
       window.addEventListener('obathaus_notifications_updated', handleUpdate);
     }
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel('admin-supplier-pos')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_pos' }, () => void loadData())
+        .subscribe();
+    }
+
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('obathaus_notifications_updated', handleUpdate);
+      }
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
       }
     };
   }, []);
@@ -119,7 +134,11 @@ export default function AdminSupplierPOsPage() {
   // Filtered List
   const filteredPOs = pos.filter((p) => {
     // 1. Status Filter
-    if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+    if (statusFilter === 'approved') {
+      if (p.status !== 'approved' && p.status !== 'received' && p.status !== 'completed') return false;
+    } else if (statusFilter !== 'all' && p.status !== statusFilter) {
+      return false;
+    }
 
     // 2. Supplier Filter
     if (selectedSupplierFilter !== 'all' && p.supplier_id !== selectedSupplierFilter) return false;
@@ -139,7 +158,9 @@ export default function AdminSupplierPOsPage() {
 
   // KPI calculations
   const countPending = pos.filter((p) => p.status === 'pending_approval').length;
-  const countApproved = pos.filter((p) => p.status === 'approved' || p.status === 'received').length;
+  const countApproved = pos.filter(
+    (p) => p.status === 'approved' || p.status === 'received' || p.status === 'completed'
+  ).length;
   const totalValue = pos.reduce((acc, p) => {
     const pCost = p.items?.reduce((c, it) => c + (it.subtotal || (it.quantity_ordered * it.unit_cost)), 0) || 0;
     return acc + pCost;
@@ -413,7 +434,7 @@ export default function AdminSupplierPOsPage() {
                                 ? 'bg-amber-50 text-amber-800 border border-amber-200'
                                 : p.status === 'approved'
                                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : p.status === 'received'
+                                : p.status === 'received' || p.status === 'completed'
                                 ? 'bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA]'
                                 : 'bg-red-50 text-red-800 border border-red-200'
                             }`}
@@ -422,7 +443,7 @@ export default function AdminSupplierPOsPage() {
                               ? 'Menunggu Approval Admin'
                               : p.status === 'approved'
                               ? 'Disetujui Admin'
-                              : p.status === 'received'
+                              : p.status === 'received' || p.status === 'completed'
                               ? 'Barang Diterima Gudang'
                               : 'Ditolak'}
                           </span>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { AuditLog } from '@/types/database';
 import { formatDateTime } from '@/lib/format';
 import {
@@ -32,6 +33,7 @@ export default function AdminAuditLogsPage() {
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [isRealtimeLive, setIsRealtimeLive] = useState<boolean>(false);
 
   const loadAuditLogs = async () => {
     try {
@@ -50,6 +52,26 @@ export default function AdminAuditLogsPage() {
 
   useEffect(() => {
     loadAuditLogs();
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel(`admin-audit-logs-${actionFilter}-${entityFilter}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, () => {
+          void loadAuditLogs();
+        })
+        .subscribe((status: string) => {
+          setIsRealtimeLive(status === 'SUBSCRIBED');
+        });
+    }
+
+    return () => {
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, [actionFilter, entityFilter]);
 
   const filteredLogs = useMemo(() => {
@@ -60,6 +82,7 @@ export default function AdminAuditLogsPage() {
         (log.details || '').toLowerCase().includes(q) ||
         (log.user?.full_name || '').toLowerCase().includes(q) ||
         (log.entity_id || '').toLowerCase().includes(q) ||
+        (log.entity_type || '').toLowerCase().includes(q) ||
         log.action.toLowerCase().includes(q);
 
       return matchSearch;
@@ -72,12 +95,29 @@ export default function AdminAuditLogsPage() {
     const shiftLogs = filteredLogs.filter(
       (l) => l.action === 'open_shift' || l.action === 'close_shift' || l.action === 'cash_movement'
     ).length;
-    const voidLogs = filteredLogs.filter((l) => l.action === 'void_transaction').length;
-    const stockLogs = filteredLogs.filter(
+    const voidLogs = filteredLogs.filter(
       (l) =>
-        l.action === 'stock_opname_approved' ||
-        l.action === 'dispatch_order' ||
-        l.action === 'receive_goods'
+        l.action === 'void_transaction' ||
+        l.action === 'process_refund' ||
+        l.action === 'delete_transaction' ||
+        l.action === 'clear_all_transactions'
+    ).length;
+    const stockLogs = filteredLogs.filter((l) =>
+      [
+        'stock_opname_approved',
+        'approve_stock_opname',
+        'create_stock_opname',
+        'reject_stock_opname',
+        'dispatch_order',
+        'create_dispatch',
+        'confirm_dispatch_receipt',
+        'receive_goods',
+        'create_supplier_receipt',
+        'create_warehouse_return',
+        'inspect_warehouse_return',
+        'create_supplier_return',
+        'update_supplier_return_status',
+      ].includes(l.action)
     ).length;
 
     return { total, shiftLogs, voidLogs, stockLogs };
@@ -86,11 +126,25 @@ export default function AdminAuditLogsPage() {
   // Color mapping helper for action tags
   const getActionBadge = (action: string) => {
     switch (action) {
+      case 'pos_checkout':
+        return {
+          bg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          icon: CheckCircle2,
+          label: 'Checkout POS',
+        };
       case 'void_transaction':
+      case 'delete_transaction':
+      case 'clear_all_transactions':
         return {
           bg: 'bg-red-50 text-red-700 border-red-200',
           icon: AlertTriangle,
-          label: 'VOID Transaksi',
+          label: action === 'void_transaction' ? 'VOID Transaksi' : action === 'delete_transaction' ? 'Hapus Transaksi' : 'Reset Transaksi',
+        };
+      case 'process_refund':
+        return {
+          bg: 'bg-rose-50 text-rose-700 border-rose-200',
+          icon: RotateCcw,
+          label: 'Refund Transaksi',
         };
       case 'close_shift':
         return {
@@ -110,11 +164,42 @@ export default function AdminAuditLogsPage() {
           icon: RotateCcw,
           label: 'Mutasi Kas Kasir',
         };
+      case 'approve_stock_opname':
       case 'stock_opname_approved':
+      case 'create_stock_opname':
+      case 'reject_stock_opname':
         return {
           bg: 'bg-purple-50 text-purple-700 border-purple-200',
           icon: ShieldCheck,
-          label: 'Opname Disetujui',
+          label: action === 'create_stock_opname' ? 'Input Stock Opname' : action === 'reject_stock_opname' ? 'Tolak Opname' : 'Opname Disetujui',
+        };
+      case 'create_warehouse_return':
+      case 'inspect_warehouse_return':
+      case 'create_supplier_return':
+      case 'update_supplier_return_status':
+        return {
+          bg: 'bg-orange-50 text-[#FF6B00] border-orange-200',
+          icon: RotateCcw,
+          label: action.replace(/_/g, ' '),
+        };
+      case 'create_supplier_po':
+      case 'approve_supplier_po':
+      case 'reject_supplier_po':
+      case 'create_supplier_receipt':
+      case 'create_dispatch':
+      case 'confirm_dispatch_receipt':
+        return {
+          bg: 'bg-sky-50 text-sky-700 border-sky-200',
+          icon: FileText,
+          label: action.replace(/_/g, ' '),
+        };
+      case 'create_operating_expense':
+      case 'update_operating_expense':
+      case 'delete_operating_expense':
+        return {
+          bg: 'bg-amber-50 text-amber-800 border-amber-200',
+          icon: FileText,
+          label: action.replace(/_/g, ' '),
         };
       default:
         return {
@@ -136,7 +221,10 @@ export default function AdminAuditLogsPage() {
                 <Lock className="w-3 h-3 text-[#FF6B00]" />
                 Immutable Audit Trail
               </span>
-              <span className="text-xs text-[#71717A]">• Phase 5 Security & Governance</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 border ${isRealtimeLive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-600 border-zinc-200'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isRealtimeLive ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
+                {isRealtimeLive ? 'Realtime Live' : 'Cloud Sync'}
+              </span>
             </div>
             <h1 className="text-2xl font-black text-[#18181B] tracking-tight mt-1">
               Jejak Audit & Integritas Sistem (Audit Logs)
@@ -246,11 +334,24 @@ export default function AdminAuditLogsPage() {
                 className="bg-transparent focus:outline-none cursor-pointer"
               >
                 <option value="all">Semua Jenis Aksi</option>
+                <option value="pos_checkout">🛒 Checkout POS Kasir</option>
                 <option value="open_shift">🟢 Buka Shift</option>
-                <option value="close_shift">🔒 Tutup Shift & Rekonsiliasi</option>
+                <option value="close_shift">🔒 Tutup Shift &amp; Rekonsiliasi</option>
                 <option value="cash_movement">💵 Mutasi Kas Kasir (Petty Cash)</option>
                 <option value="void_transaction">🔴 Pembatalan Transaksi (Void)</option>
-                <option value="stock_opname_approved">📦 Persetujuan Opname Stok</option>
+                <option value="process_refund">↩️ Refund Transaksi</option>
+                <option value="create_operating_expense">🧾 Tambah Biaya Operasional</option>
+                <option value="create_supplier_po">📝 Pengajuan PO Supplier</option>
+                <option value="approve_supplier_po">✅ Persetujuan PO Supplier</option>
+                <option value="create_supplier_receipt">📥 Penerimaan Barang Supplier</option>
+                <option value="create_dispatch">🚚 Pengiriman ke Cabang</option>
+                <option value="confirm_dispatch_receipt">📦 Konfirmasi Terima Cabang</option>
+                <option value="create_warehouse_return">↩️ Retur Outlet ke Gudang</option>
+                <option value="inspect_warehouse_return">🔍 Inspeksi Retur Gudang</option>
+                <option value="create_supplier_return">🏭 Retur Gudang ke Supplier</option>
+                <option value="update_supplier_return_status">🔄 Update Status Retur Supplier</option>
+                <option value="approve_stock_opname">📊 Persetujuan Opname Stok</option>
+                <option value="update_store_settings">⚙️ Perubahan Pengaturan Toko</option>
               </select>
             </div>
 
@@ -263,10 +364,20 @@ export default function AdminAuditLogsPage() {
                 className="bg-transparent focus:outline-none cursor-pointer"
               >
                 <option value="all">Semua Entitas Database</option>
+                <option value="transaction">transaction</option>
                 <option value="cashier_shift">cashier_shift</option>
                 <option value="shift_cash_movement">shift_cash_movement</option>
-                <option value="transaction">transaction</option>
+                <option value="operating_expense">operating_expense</option>
+                <option value="supplier_po">supplier_po</option>
+                <option value="supplier_receipt">supplier_receipt</option>
+                <option value="dispatch">dispatch</option>
+                <option value="warehouse_return">warehouse_return</option>
+                <option value="supplier_return">supplier_return</option>
                 <option value="stock_opname">stock_opname</option>
+                <option value="product">product</option>
+                <option value="recipe">recipe</option>
+                <option value="profile">profile</option>
+                <option value="store_settings">store_settings</option>
               </select>
             </div>
           </div>

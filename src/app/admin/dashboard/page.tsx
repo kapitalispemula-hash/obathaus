@@ -24,6 +24,7 @@ import { SalesTrendChart } from '@/components/dashboard/SalesTrendChart';
 import { PaymentMethodDonutChart } from '@/components/dashboard/PaymentMethodDonutChart';
 import { FinancialHealthRatio } from '@/components/dashboard/FinancialHealthRatio';
 import { useOutlet } from '@/lib/outlet-context';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { Store } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -42,25 +43,59 @@ export default function AdminDashboardPage() {
   const [pendingPOsCount, setPendingPOsCount] = useState(0);
 
   useEffect(() => {
+    const selectedOutletId = isAllOutletsSelected ? undefined : activeOutlet?.id;
+    let cancelled = false;
+
     async function loadDashboard() {
       try {
         setLoading(true);
         const [data, trxs, allPOs] = await Promise.all([
-          dbService.getFinancialAnalytics(period),
-          dbService.getTransactions({ limit: 6 }),
+          dbService.getFinancialAnalytics(period, selectedOutletId),
+          dbService.getTransactions({ limit: 6, outletId: selectedOutletId }),
           dbService.getSupplierPOs(),
         ]);
+        if (cancelled) return;
         setAnalytics(data);
         setRecentTrx(trxs);
         setPendingPOsCount(allPOs.filter((p) => p.status === 'pending_approval').length);
       } catch (err) {
         console.error('Failed to load dashboard analytics:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     loadDashboard();
-  }, [period]);
+
+    const handleSynced = () => {
+      void loadDashboard();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_offline_queue_synced', handleSynced);
+    }
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel(`admin-dashboard-${period}-${selectedOutletId || 'all'}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => void loadDashboard())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cashier_shifts' }, () => void loadDashboard())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'operating_expenses' }, () => void loadDashboard())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_pos' }, () => void loadDashboard())
+        .subscribe();
+    }
+
+    return () => {
+      cancelled = true;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_offline_queue_synced', handleSynced);
+      }
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [period, activeOutlet?.id, isAllOutletsSelected]);
 
   const summary = analytics?.summary;
 

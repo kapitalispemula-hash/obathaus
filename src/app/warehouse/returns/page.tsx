@@ -1,9 +1,22 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { WarehouseLayout } from '@/components/layout/WarehouseLayout';
 import { dbService } from '@/lib/services/database';
-import { WarehouseReturn, Outlet, RawMaterial, WarehouseReturnItem } from '@/types/database';
+import { useAuth } from '@/lib/auth-context';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import {
+  WarehouseReturn,
+  Outlet,
+  RawMaterial,
+  WarehouseReturnItem,
+  SupplierReturn,
+  Supplier,
+  SupplierPO,
+  Warehouse,
+  SupplierReturnStatus,
+  SupplierReturnSettlementType,
+} from '@/types/database';
 import {
   RotateCcw,
   Plus,
@@ -19,14 +32,23 @@ import {
   ShieldCheck,
   Ban,
   Clock,
-  Sparkles,
-  ArrowRight,
+  Factory,
+  Truck,
+  Send,
+  RefreshCw,
 } from 'lucide-react';
 import { INITIAL_WAREHOUSE_RETURNS } from '@/lib/mock-data';
 
 export default function WarehouseReturnsPage() {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'outlet_returns' | 'supplier_returns'>('outlet_returns');
+
   const [returns, setReturns] = useState<WarehouseReturn[]>(INITIAL_WAREHOUSE_RETURNS);
+  const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [supplierPOs, setSupplierPOs] = useState<SupplierPO[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending_inspection' | 'accepted' | 'rejected'>('all');
@@ -39,7 +61,7 @@ export default function WarehouseReturnsPage() {
   const [inspectNotes, setInspectNotes] = useState('Kemasan luar sedikit penyok namun segel alumunium dalam utuh & steril.');
   const [isSubmittingInspection, setIsSubmittingInspection] = useState(false);
 
-  // New Return Modal
+  // New Outlet Return Modal
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [fromOutletId, setFromOutletId] = useState('');
   const [returnReason, setReturnReason] = useState('Kemasan rusak saat pengantaran / cacat segel');
@@ -55,27 +77,75 @@ export default function WarehouseReturnsPage() {
   // Detail Modal (Read Only)
   const [selectedReturn, setSelectedReturn] = useState<WarehouseReturn | null>(null);
 
-  const loadData = async () => {
+  // Supplier Return Filters & Modals
+  const [supSearchQuery, setSupSearchQuery] = useState('');
+  const [supStatusFilter, setSupStatusFilter] = useState<'all' | SupplierReturnStatus>('all');
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [supSupplierId, setSupSupplierId] = useState('');
+  const [supPoId, setSupPoId] = useState('');
+  const [supSourceOutletReturnId, setSupSourceOutletReturnId] = useState<string | null>(null);
+  const [supSettlementType, setSupSettlementType] = useState<SupplierReturnSettlementType>('replacement');
+  const [supDeductStock, setSupDeductStock] = useState(true);
+  const [supReason, setSupReason] = useState('Cacat produksi / kemasan rusak saat diterima');
+  const [supNotes, setSupNotes] = useState('');
+  const [supItems, setSupItems] = useState<{
+    raw_material_id: string;
+    quantity_returned: number;
+    unit_cost: number;
+    notes: string;
+  }[]>([]);
+  const [supFormError, setSupFormError] = useState<string | null>(null);
+  const [isSavingSupReturn, setIsSavingSupReturn] = useState(false);
+  const [selectedSupplierReturn, setSelectedSupplierReturn] = useState<SupplierReturn | null>(null);
+  const [processingSupReturnId, setProcessingSupReturnId] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [retList, outList, matList] = await Promise.all([
+      const [retList, supRetList, outList, supList, poList, whList, matList] = await Promise.all([
         dbService.getWarehouseReturns(),
+        dbService.getSupplierReturns(),
         dbService.getOutlets(),
+        dbService.getSuppliers(),
+        dbService.getSupplierPOs(),
+        dbService.getWarehouses(),
         dbService.getRawMaterials(),
       ]);
       setReturns(retList);
+      setSupplierReturns(supRetList);
       setOutlets(outList);
+      setSuppliers(supList);
+      setSupplierPOs(poList);
+      setWarehouses(whList);
       setMaterials(matList);
     } catch (err) {
       console.error('Failed to load returns data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel('warehouse-returns-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouse_returns' }, () => {
+        loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_returns' }, () => {
+        loadData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadData]);
 
   const openInspection = (ret: WarehouseReturn) => {
     setInspectingReturn(ret);
@@ -90,7 +160,7 @@ export default function WarehouseReturnsPage() {
       setIsSubmittingInspection(true);
       await dbService.inspectWarehouseReturn(
         inspectingReturn.id,
-        'b0000000-0000-0000-0000-000000000001', // Warehouse Operator ID
+        user?.id || '',
         inspectAction,
         inspectStatus,
         inspectNotes
@@ -147,8 +217,8 @@ export default function WarehouseReturnsPage() {
 
     try {
       setIsSaving(true);
-      const itemsPayload: WarehouseReturnItem[] = returnItems.map((itm, idx) => ({
-        id: `reti-${Date.now()}-${idx}`,
+      const itemsPayload: WarehouseReturnItem[] = returnItems.map((itm) => ({
+        id: crypto.randomUUID(),
         return_id: '',
         raw_material_id: itm.raw_material_id,
         quantity_returned: itm.quantity_returned,
@@ -158,9 +228,10 @@ export default function WarehouseReturnsPage() {
 
       await dbService.createWarehouseReturn({
         from_outlet_id: fromOutletId,
-        to_warehouse_id: 'e0000000-0000-0000-0000-000000000001',
+        to_warehouse_id: warehouses[0]?.id || '',
         reason: returnReason,
         notes: returnNotes,
+        created_by: user?.id,
         items: itemsPayload,
       });
 
@@ -172,6 +243,170 @@ export default function WarehouseReturnsPage() {
       setFormError(err.message || 'Gagal membuat dokumen retur');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // SUPPLIER RETURN HANDLERS
+  // --------------------------------------------------------------------------
+  const openCreateSupplierReturnModal = (fromOutletReturn?: WarehouseReturn) => {
+    setSupFormError(null);
+    setSupSupplierId(suppliers[0]?.id || '');
+    setSupPoId('');
+    setSupSettlementType('replacement');
+    setSupDeductStock(true);
+
+    if (fromOutletReturn) {
+      setSupSourceOutletReturnId(fromOutletReturn.id);
+      setSupReason(`Klaim vendor dari retur outlet #${fromOutletReturn.return_number}: ${fromOutletReturn.reason}`);
+      setSupNotes(fromOutletReturn.notes || '');
+      // If originating from outlet claim_supplier, stock is usually in quarantine already unless stored in warehouse
+      setSupDeductStock(fromOutletReturn.items?.[0]?.action === 'return_to_stock');
+      setSupItems(
+        (fromOutletReturn.items || []).map((it) => {
+          const mat = materials.find((m) => m.id === it.raw_material_id);
+          return {
+            raw_material_id: it.raw_material_id,
+            quantity_returned: Number(it.quantity_accepted || it.quantity_returned || 1),
+            unit_cost: Number(mat?.estimated_unit_cost || 0),
+            notes: '',
+          };
+        })
+      );
+      setSelectedReturn(null);
+      setActiveTab('supplier_returns');
+    } else {
+      setSupSourceOutletReturnId(null);
+      setSupReason('Barang cacat / kedaluwarsa saat diterima dari supplier');
+      setSupNotes('');
+      const firstMat = materials[0];
+      setSupItems(
+        firstMat
+          ? [
+              {
+                raw_material_id: firstMat.id,
+                quantity_returned: 1,
+                unit_cost: Number(firstMat.estimated_unit_cost || 0),
+                notes: '',
+              },
+            ]
+          : []
+      );
+    }
+    setIsSupplierModalOpen(true);
+  };
+
+  const handleAddSupItemRow = () => {
+    if (materials.length === 0) return;
+    const first = materials[0];
+    setSupItems((prev) => [
+      ...prev,
+      {
+        raw_material_id: first.id,
+        quantity_returned: 1,
+        unit_cost: Number(first.estimated_unit_cost || 0),
+        notes: '',
+      },
+    ]);
+  };
+
+  const handleRemoveSupItemRow = (idx: number) => {
+    setSupItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSupItemChange = (idx: number, field: string, value: any) => {
+    setSupItems((prev) => {
+      const copy = [...prev];
+      const current = { ...copy[idx], [field]: value };
+      if (field === 'raw_material_id') {
+        const mat = materials.find((m) => m.id === value);
+        current.unit_cost = Number(mat?.estimated_unit_cost || 0);
+      }
+      copy[idx] = current;
+      return copy;
+    });
+  };
+
+  const handleCreateSupplierReturn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSupFormError(null);
+    if (!supSupplierId) {
+      setSupFormError('Pilih Supplier tujuan retur.');
+      return;
+    }
+    if (!supReason.trim()) {
+      setSupFormError('Alasan retur wajib diisi.');
+      return;
+    }
+    if (supItems.length === 0) {
+      setSupFormError('Tambahkan minimal 1 item bahan baku.');
+      return;
+    }
+    if (supItems.some((it) => Number(it.quantity_returned) <= 0)) {
+      setSupFormError('Kuantitas retur setiap bahan harus lebih dari 0.');
+      return;
+    }
+
+    setIsSavingSupReturn(true);
+    try {
+      const created = await dbService.createSupplierReturn({
+        warehouse_id: warehouses[0]?.id || '',
+        supplier_id: supSupplierId,
+        supplier_po_id: supPoId || null,
+        source_warehouse_return_id: supSourceOutletReturnId,
+        settlement_type: supSettlementType,
+        deduct_stock: supDeductStock,
+        reason: supReason.trim(),
+        notes: supNotes.trim() || null,
+        created_by: user?.id,
+        items: supItems.map((it) => {
+          const mat = materials.find((m) => m.id === it.raw_material_id);
+          return {
+            id: crypto.randomUUID(),
+            supplier_return_id: '',
+            raw_material_id: it.raw_material_id,
+            quantity_returned: Number(it.quantity_returned),
+            unit_id: mat?.standard_unit_id || '',
+            unit_cost: Number(it.unit_cost || 0),
+            subtotal: Number(it.quantity_returned) * Number(it.unit_cost || 0),
+            notes: it.notes.trim() || null,
+          };
+        }),
+      });
+
+      setFeedback(
+        `Dokumen retur ke supplier #${created.return_number} berhasil dibuat.${supDeductStock ? ' Stok gudang telah disesuaikan otomatis.' : ''}`
+      );
+      setIsSupplierModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      setSupFormError(err?.message || 'Gagal menyimpan dokumen retur ke supplier.');
+    } finally {
+      setIsSavingSupReturn(false);
+    }
+  };
+
+  const handleUpdateSupplierReturnStatus = async (ret: SupplierReturn, nextStatus: SupplierReturnStatus) => {
+    const confirmLabels: Partial<Record<SupplierReturnStatus, string>> = {
+      shipped_to_supplier: `Tandai retur #${ret.return_number} sudah dikirim ke supplier?`,
+      replaced: `Konfirmasi barang pengganti untuk retur #${ret.return_number} telah diterima? Stok Gudang Pusat akan bertambah otomatis.`,
+      refunded: `Konfirmasi refund / potongan tagihan untuk retur #${ret.return_number} sudah selesai diterima?`,
+      rejected: `Tandai klaim retur #${ret.return_number} ditolak oleh supplier?`,
+    };
+    if (!confirm(confirmLabels[nextStatus] || `Ubah status retur menjadi ${nextStatus}?`)) return;
+
+    setProcessingSupReturnId(ret.id);
+    try {
+      await dbService.updateSupplierReturnStatus(ret.id, nextStatus, user?.id);
+      setFeedback(`Status retur supplier #${ret.return_number} berhasil diperbarui.`);
+      if (selectedSupplierReturn?.id === ret.id) {
+        setSelectedSupplierReturn(null);
+      }
+      await loadData();
+    } catch (err: any) {
+      alert(err?.message || 'Gagal memperbarui status retur supplier.');
+    } finally {
+      setProcessingSupReturnId(null);
     }
   };
 
@@ -189,21 +424,84 @@ export default function WarehouseReturnsPage() {
   const countAccepted = returns.filter((r) => r.status === 'accepted').length;
   const countRejected = returns.filter((r) => r.status === 'rejected').length;
 
+  const filteredSupplierReturns = supplierReturns.filter((r) => {
+    const q = supSearchQuery.toLowerCase();
+    const matchQuery =
+      !q ||
+      r.return_number.toLowerCase().includes(q) ||
+      (r.supplier?.name || '').toLowerCase().includes(q) ||
+      r.reason.toLowerCase().includes(q);
+    const matchStatus = supStatusFilter === 'all' || r.status === supStatusFilter;
+    return matchQuery && matchStatus;
+  });
+
+  const supPendingCount = supplierReturns.filter((r) => r.status === 'submitted' || r.status === 'shipped_to_supplier').length;
+  const supResolvedCount = supplierReturns.filter((r) => r.status === 'replaced' || r.status === 'refunded').length;
+  const supTotalValue = supplierReturns
+    .filter((r) => r.status !== 'rejected' && r.status !== 'cancelled')
+    .reduce((acc, r) => acc + Number(r.total_return_value || 0), 0);
+
   return (
     <WarehouseLayout>
       <div className="space-y-6">
         {/* Top Header Card */}
-        <div className="bg-white p-6 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-white p-6 rounded-2xl border border-borderline shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#FF6B00] border border-orange-200 flex items-center justify-center font-bold shadow-2xs">
               <RotateCcw className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-black text-dark tracking-tight">Pemeriksaan Retur Barang Cabang</h1>
+              <h1 className="text-xl font-black text-dark tracking-tight">Manajemen Retur Barang</h1>
               <p className="text-xs text-subtle mt-0.5">
-                Inspeksi kualitas fisik barang retur dari 7 outlet Obat Haus dan penetapan disposisi stok
+                Inspeksi retur barang dari Cabang Outlet ke Gudang Pusat serta Retur Gudang ke Supplier
               </p>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setActiveTab('outlet_returns')}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'outlet_returns'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Store className="w-3.5 h-3.5 text-[#FF6B00]" />
+                <span>Retur dari Outlet</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-orange-100 text-[#FF6B00] text-[10px]">
+                  {returns.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('supplier_returns')}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'supplier_returns'
+                    ? 'bg-[#18181B] text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Factory className="w-3.5 h-3.5" />
+                <span>Retur ke Supplier</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  activeTab === 'supplier_returns' ? 'bg-zinc-700 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {supplierReturns.length}
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadData}
+              className="p-2.5 rounded-xl border border-borderline bg-white hover:bg-slate-50 text-slate-600 cursor-pointer"
+              title="Refresh Data"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
         {/* Feedback Alert */}
@@ -222,6 +520,8 @@ export default function WarehouseReturnsPage() {
           </div>
         )}
 
+        {activeTab === 'outlet_returns' && (
+          <>
         {/* 1. Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white p-5 rounded-2xl border border-[#ECEEF1] shadow-xs">
@@ -271,7 +571,7 @@ export default function WarehouseReturnsPage() {
 
         {/* 2. Controls & Search */}
         <div className="bg-white p-4 rounded-2xl border border-[#ECEEF1] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
             <div className="relative w-full md:w-80">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -286,7 +586,7 @@ export default function WarehouseReturnsPage() {
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-medium text-slate-600">
               <button
                 onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   statusFilter === 'all' ? 'bg-[#18181B] text-white shadow-xs font-semibold' : 'hover:text-slate-900'
                 }`}
               >
@@ -294,7 +594,7 @@ export default function WarehouseReturnsPage() {
               </button>
               <button
                 onClick={() => setStatusFilter('pending_inspection')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   statusFilter === 'pending_inspection' ? 'bg-[#18181B] text-white font-semibold shadow-xs' : 'hover:text-slate-900'
                 }`}
               >
@@ -302,7 +602,7 @@ export default function WarehouseReturnsPage() {
               </button>
               <button
                 onClick={() => setStatusFilter('accepted')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   statusFilter === 'accepted' ? 'bg-[#18181B] text-white font-semibold shadow-xs' : 'hover:text-slate-900'
                 }`}
               >
@@ -310,7 +610,7 @@ export default function WarehouseReturnsPage() {
               </button>
               <button
                 onClick={() => setStatusFilter('rejected')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   statusFilter === 'rejected' ? 'bg-[#18181B] text-white font-semibold shadow-xs' : 'hover:text-slate-900'
                 }`}
               >
@@ -333,7 +633,7 @@ export default function WarehouseReturnsPage() {
               setFormError(null);
               setIsCreateModalOpen(true);
             }}
-            className="flex items-center gap-2 bg-[#FF6B00] hover:bg-[#e05e00] text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md shadow-orange-500/20 shrink-0 w-full md:w-auto justify-center"
+            className="flex items-center gap-2 bg-[#FF6B00] hover:bg-[#e05e00] text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md shadow-orange-500/20 shrink-0 w-full md:w-auto justify-center cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Catat Retur Fisik Baru</span>
@@ -371,6 +671,7 @@ export default function WarehouseReturnsPage() {
                   filteredReturns.map((ret) => {
                     const isPending = ret.status === 'pending_inspection';
                     const isAccepted = ret.status === 'accepted';
+                    const isClaimVendor = isAccepted && ret.items?.[0]?.action === 'claim_supplier';
 
                     return (
                       <tr key={ret.id} className="hover:bg-slate-50/70 transition-colors">
@@ -447,19 +748,31 @@ export default function WarehouseReturnsPage() {
                             {isPending ? (
                               <button
                                 onClick={() => openInspection(ret)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-medium transition-colors shadow-xs"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-medium transition-colors shadow-xs cursor-pointer"
                               >
                                 <ShieldCheck className="w-3.5 h-3.5" />
                                 <span>Periksa Fisik</span>
                               </button>
                             ) : (
-                              <button
-                                onClick={() => setSelectedReturn(ret)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-medium transition-colors"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>Detail Hasil</span>
-                              </button>
+                              <>
+                                {isClaimVendor && (
+                                  <button
+                                    onClick={() => openCreateSupplierReturnModal(ret)}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FFF7ED] hover:bg-orange-100 text-[#FF6B00] border border-orange-200 text-xs font-bold transition-colors cursor-pointer"
+                                    title="Buat Retur ke Supplier dari dokumen ini"
+                                  >
+                                    <Factory className="w-3.5 h-3.5" />
+                                    <span>Klaim Supplier</span>
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setSelectedReturn(ret)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Detail Hasil</span>
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -471,6 +784,258 @@ export default function WarehouseReturnsPage() {
             </table>
           </div>
         </div>
+          </>
+        )}
+
+        {activeTab === 'supplier_returns' && (
+          <>
+            {/* Supplier Returns KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-2xl border border-[#ECEEF1] shadow-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Retur Supplier</span>
+                  <div className="w-8 h-8 rounded-lg bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-800">
+                    <Factory className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-slate-900">{supplierReturns.length}</div>
+                <div className="text-xs text-slate-500 mt-1">Dokumen retur Gudang → Supplier</div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-[#ECEEF1] shadow-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Proses / Dikirim</span>
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-amber-600">{supPendingCount}</div>
+                <div className="text-xs text-amber-600 font-medium mt-1">Menunggu penggantian / refund</div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-[#ECEEF1] shadow-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Selesai (Diganti/Refund)</span>
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-emerald-700">{supResolvedCount}</div>
+                <div className="text-xs text-slate-500 mt-1">Klaim vendor tuntas</div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-[#ECEEF1] shadow-xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Estimasi Nilai Klaim</span>
+                  <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00]">
+                    <Package className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-[#FF6B00]">
+                  Rp {supTotalValue.toLocaleString('id-ID')}
+                </div>
+                <div className="text-xs text-slate-500 mt-1">Total nilai retur aktif</div>
+              </div>
+            </div>
+
+            {/* Search, Filter & Create Button */}
+            <div className="bg-white p-4 rounded-2xl border border-[#ECEEF1] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+                <div className="relative w-full md:w-72">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={supSearchQuery}
+                    onChange={(e) => setSupSearchQuery(e.target.value)}
+                    placeholder="Cari nomor RTS, supplier, atau alasan..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                  />
+                </div>
+
+                <select
+                  value={supStatusFilter}
+                  onChange={(e) => setSupStatusFilter(e.target.value as any)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden focus:border-[#FF6B00] cursor-pointer"
+                >
+                  <option value="all">Semua Status ({supplierReturns.length})</option>
+                  <option value="submitted">Diajukan (Siap Kirim)</option>
+                  <option value="shipped_to_supplier">Dikirim ke Supplier</option>
+                  <option value="replaced">Barang Pengganti Diterima</option>
+                  <option value="refunded">Refund / Potong Tagihan</option>
+                  <option value="rejected">Ditolak Supplier</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openCreateSupplierReturnModal()}
+                className="flex items-center gap-2 bg-[#18181B] hover:bg-black text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md shrink-0 w-full md:w-auto justify-center cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Buat Retur ke Supplier</span>
+              </button>
+            </div>
+
+            {/* Table of Supplier Returns */}
+            <div className="bg-white rounded-2xl border border-[#ECEEF1] shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#ECEEF1] bg-slate-50/50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                      <th className="py-3.5 px-5">No. Retur & Tanggal</th>
+                      <th className="py-3.5 px-4">Supplier Tujuan</th>
+                      <th className="py-3.5 px-4">Item & Nilai Klaim</th>
+                      <th className="py-3.5 px-4">Penyelesaian</th>
+                      <th className="py-3.5 px-4">Status</th>
+                      <th className="py-3.5 px-5 text-right">Aksi & Tindak Lanjut</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#ECEEF1] text-sm">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          Memuat daftar retur ke supplier...
+                        </td>
+                      </tr>
+                    ) : filteredSupplierReturns.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          Belum ada dokumen retur ke supplier. Klik &ldquo;Buat Retur ke Supplier&rdquo; untuk membuat baru.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSupplierReturns.map((sr) => {
+                        const isBusy = processingSupReturnId === sr.id;
+                        const statusMap: Record<SupplierReturnStatus, { label: string; cls: string }> = {
+                          draft: { label: 'Draft', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+                          submitted: { label: 'Siap Dikirim', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+                          shipped_to_supplier: { label: 'Dikirim ke Supplier', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+                          replaced: { label: 'Diganti Barang (Restock)', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                          refunded: { label: 'Refund Diterima', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                          rejected: { label: 'Ditolak Supplier', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+                          cancelled: { label: 'Dibatalkan', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+                        };
+                        const stBadge = statusMap[sr.status] || statusMap.submitted;
+                        const settlementLabel =
+                          sr.settlement_type === 'replacement'
+                            ? 'Tukar Barang Baru'
+                            : sr.settlement_type === 'refund'
+                            ? 'Pengembalian Dana'
+                            : 'Potong Tagihan (Credit Note)';
+
+                        return (
+                          <tr key={sr.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-4 px-5">
+                              <div className="font-mono font-bold text-slate-900 flex items-center gap-1.5">
+                                <Factory className="w-4 h-4 text-[#FF6B00]" />
+                                <span>{sr.return_number}</span>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {new Date(sr.return_date).toLocaleDateString('id-ID', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <div className="font-bold text-slate-800">{sr.supplier?.name || 'Supplier'}</div>
+                              {sr.supplier_po?.po_number && (
+                                <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                                  Ref PO: {sr.supplier_po.po_number}
+                                </div>
+                              )}
+                              <div className="text-[11px] text-slate-500 line-clamp-1 max-w-xs mt-0.5">
+                                {sr.reason}
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <div className="font-bold text-slate-900">
+                                Rp {Number(sr.total_return_value || 0).toLocaleString('id-ID')}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {sr.items?.length || 0} jenis bahan baku
+                              </div>
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <span className="inline-flex px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">
+                                {settlementLabel}
+                              </span>
+                            </td>
+
+                            <td className="py-4 px-4">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${stBadge.cls}`}>
+                                {stBadge.label}
+                              </span>
+                            </td>
+
+                            <td className="py-4 px-5 text-right">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                {sr.status === 'submitted' && (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => handleUpdateSupplierReturnStatus(sr, 'shipped_to_supplier')}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                                  >
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>Kirim</span>
+                                  </button>
+                                )}
+                                {(sr.status === 'submitted' || sr.status === 'shipped_to_supplier') && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      disabled={isBusy}
+                                      onClick={() => handleUpdateSupplierReturnStatus(sr, 'replaced')}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                                      title="Terima barang pengganti dan tambah stok gudang otomatis"
+                                    >
+                                      <CheckCircle className="w-3.5 h-3.5" />
+                                      <span>Terima Ganti</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isBusy}
+                                      onClick={() => handleUpdateSupplierReturnStatus(sr, 'refunded')}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FF6B00] hover:bg-[#e05e00] text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                                    >
+                                      <span>Refund</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={isBusy}
+                                      onClick={() => handleUpdateSupplierReturnStatus(sr, 'rejected')}
+                                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold cursor-pointer disabled:opacity-50"
+                                      title="Tolak klaim"
+                                    >
+                                      <Ban className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedSupplierReturn(sr)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-medium cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Detail</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* 4. Modal Pemeriksaan Fisik Barang Retur */}
         {inspectingReturn && (
@@ -942,10 +1507,360 @@ export default function WarehouseReturnsPage() {
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end">
+                <div className="pt-2 flex items-center justify-between gap-2">
+                  {selectedReturn.status === 'accepted' ? (
+                    <button
+                      type="button"
+                      onClick={() => openCreateSupplierReturnModal(selectedReturn)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 text-[#FF6B00] border border-orange-200 text-xs font-bold cursor-pointer"
+                    >
+                      <Factory className="w-3.5 h-3.5" />
+                      <span>Teruskan ke Retur Supplier</span>
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                   <button
                     onClick={() => setSelectedReturn(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 7. Modal Buat Retur ke Supplier */}
+        {isSupplierModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#18181B] text-white flex items-center justify-center">
+                    <Factory className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">Buat Dokumen Retur ke Supplier</h3>
+                    <p className="text-xs text-slate-500">Klaim barang rusak / tidak sesuai dari Gudang Pusat ke Vendor</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSupplierModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateSupplierReturn} className="p-6 overflow-y-auto space-y-4">
+                {supFormError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{supFormError}</span>
+                  </div>
+                )}
+
+                {supSourceOutletReturnId && (
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-900 flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-[#FF6B00] shrink-0" />
+                    <span>Tindak lanjut otomatis dari retur cabang yang diteruskan ke supplier.</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Supplier Tujuan *
+                    </label>
+                    <select
+                      value={supSupplierId}
+                      onChange={(e) => setSupSupplierId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900"
+                    >
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Referensi PO (Opsional)
+                    </label>
+                    <select
+                      value={supPoId}
+                      onChange={(e) => setSupPoId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                    >
+                      <option value="">-- Tanpa Referensi PO --</option>
+                      {supplierPOs
+                        .filter((p) => !supSupplierId || p.supplier_id === supSupplierId)
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.po_number} ({p.status})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Jenis Penyelesaian
+                    </label>
+                    <select
+                      value={supSettlementType}
+                      onChange={(e) => setSupSettlementType(e.target.value as SupplierReturnSettlementType)}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900"
+                    >
+                      <option value="replacement">Tukar Barang Baru (Replacement)</option>
+                      <option value="refund">Pengembalian Dana (Refund)</option>
+                      <option value="credit_note">Potong Tagihan Berikutnya</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-end">
+                    <label className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl w-full cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={supDeductStock}
+                        onChange={(e) => setSupDeductStock(e.target.checked)}
+                        className="rounded border-slate-300 text-[#FF6B00] focus:ring-[#FF6B00]"
+                      />
+                      <span className="text-xs font-semibold text-slate-700">Kurangi saldo stok Gudang Pusat saat ini</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Alasan Retur ke Supplier *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={supReason}
+                    onChange={(e) => setSupReason(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Catatan Ekspedisi / Batch
+                  </label>
+                  <input
+                    type="text"
+                    value={supNotes}
+                    onChange={(e) => setSupNotes(e.target.value)}
+                    placeholder="Contoh: Batch 2026-10 rusak segel..."
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                  />
+                </div>
+
+                {/* Supplier Return Items */}
+                <div className="pt-2 border-t border-slate-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                      Daftar Bahan Baku Diretur
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAddSupItemRow}
+                      className="text-xs text-[#FF6B00] hover:text-[#e05e00] font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Tambah Item
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {supItems.map((itm, idx) => {
+                      const mat = materials.find((m) => m.id === itm.raw_material_id);
+                      const unit = mat?.standard_unit?.symbol || 'satuan';
+                      return (
+                        <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                          <div className="col-span-5">
+                            <select
+                              value={itm.raw_material_id}
+                              onChange={(e) => handleSupItemChange(idx, 'raw_material_id', e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs"
+                            >
+                              {materials.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-span-3 flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0.1}
+                              step="any"
+                              value={itm.quantity_returned}
+                              onChange={(e) => handleSupItemChange(idx, 'quantity_returned', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right font-mono font-bold"
+                            />
+                            <span className="text-[10px] text-slate-500 shrink-0">{unit}</span>
+                          </div>
+                          <div className="col-span-3">
+                            <input
+                              type="number"
+                              min={0}
+                              value={itm.unit_cost}
+                              onChange={(e) => handleSupItemChange(idx, 'unit_cost', parseFloat(e.target.value) || 0)}
+                              placeholder="Harga/unit"
+                              className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right font-mono"
+                            />
+                          </div>
+                          <div className="col-span-1 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSupItemRow(idx)}
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-600">Estimasi Total Nilai Klaim:</span>
+                    <span className="font-black text-slate-900">
+                      Rp {supItems.reduce((acc, it) => acc + Number(it.quantity_returned || 0) * Number(it.unit_cost || 0), 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsSupplierModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-100 cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingSupReturn}
+                    className="flex items-center gap-2 bg-[#18181B] hover:bg-black text-white px-5 py-2 rounded-xl text-xs font-semibold transition-all shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>{isSavingSupReturn ? 'Menyimpan...' : 'Simpan Retur Supplier'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 8. Modal Detail Retur Supplier */}
+        {selectedSupplierReturn && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-slate-800">
+                    <Factory className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">Detail Retur ke Supplier</h3>
+                    <p className="text-xs font-mono text-slate-500">#{selectedSupplierReturn.return_number}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSupplierReturn(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-xs">
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div>
+                    <span className="text-slate-500 block">Supplier Tujuan:</span>
+                    <strong className="text-slate-900">{selectedSupplierReturn.supplier?.name || '-'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Status:</span>
+                    <strong className="uppercase text-slate-900">{selectedSupplierReturn.status}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Jenis Penyelesaian:</span>
+                    <strong className="capitalize text-slate-800">{selectedSupplierReturn.settlement_type}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Estimasi Klaim:</span>
+                    <strong className="text-[#FF6B00]">
+                      Rp {Number(selectedSupplierReturn.total_return_value || 0).toLocaleString('id-ID')}
+                    </strong>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider block mb-1">Alasan Retur:</span>
+                  <p className="text-slate-800 bg-amber-50/60 p-2.5 rounded-lg border border-amber-200/60">
+                    {selectedSupplierReturn.reason}
+                  </p>
+                </div>
+
+                {selectedSupplierReturn.notes && (
+                  <div>
+                    <span className="text-slate-500 font-semibold uppercase tracking-wider block mb-1">Catatan:</span>
+                    <p className="text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                      {selectedSupplierReturn.notes}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider block mb-2">Rincian Item Diretur:</span>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                        <tr>
+                          <th className="py-2 px-3">Bahan Baku</th>
+                          <th className="py-2 px-3 text-right">Qty</th>
+                          <th className="py-2 px-3 text-right">Subtotal Klaim</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedSupplierReturn.items?.map((it) => (
+                          <tr key={it.id}>
+                            <td className="py-2 px-3 font-medium text-slate-800">
+                              {it.raw_material?.name || it.raw_material_id}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold">
+                              {Number(it.quantity_returned).toLocaleString('id-ID')}{' '}
+                              <span className="font-normal text-slate-500">{it.unit?.symbol || it.raw_material?.standard_unit?.symbol || ''}</span>
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono">
+                              Rp {Number(it.subtotal || 0).toLocaleString('id-ID')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSupplierReturn(null)}
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
                   >
                     Tutup
                   </button>

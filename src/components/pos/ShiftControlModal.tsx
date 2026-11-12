@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { CashierShift, ShiftCashMovement } from '@/types/database';
 import { dbService } from '@/lib/services/database';
 import { useAuth } from '@/lib/auth-context';
+import { useOutlet } from '@/lib/outlet-context';
 import { formatRupiah, formatDateTime } from '@/lib/format';
 import {
   Clock,
@@ -41,6 +42,7 @@ export function ShiftControlModal({
   initialTab = 'movement',
 }: ShiftControlModalProps) {
   const { user } = useAuth();
+  const { activeOutlet, availableOutlets } = useOutlet();
   const [tab, setTab] = useState<'open' | 'movement' | 'close' | 'receipt'>(
     !activeShift ? 'open' : initialTab
   );
@@ -80,11 +82,16 @@ export function ShiftControlModal({
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    const targetOutletId = activeOutlet?.id || user.primary_outlet_id || availableOutlets[0]?.id || '';
+    if (!targetOutletId) {
+      alert('Cabang aktif belum terpilih. Silakan pilih cabang di menu POS terlebih dahulu.');
+      return;
+    }
     try {
       setIsOpening(true);
       await dbService.openShift({
         cashier_id: user.id,
-        outlet_id: user.primary_outlet_id || 'out-01',
+        outlet_id: targetOutletId,
         opening_cash: openingCash,
         notes: openNotes,
       });

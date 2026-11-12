@@ -4,7 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
-import { attendanceService } from '@/lib/services/attendance';
+import {
+  attendanceService,
+  getWitaDateStr,
+  formatAttendanceTime,
+} from '@/lib/services/attendance';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import {
   AttendanceShift,
   EmployeeProfile,
@@ -50,7 +55,12 @@ export default function AdminAttendancePage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
 
   // Filter State (Tab 1: Rekap)
-  const [filterDate, setFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [periodMode, setPeriodMode] = useState<'daily' | 'range' | 'all'>('daily');
+  const [filterDate, setFilterDate] = useState<string>(() => getWitaDateStr());
+  const [filterStartDate, setFilterStartDate] = useState<string>(() =>
+    getWitaDateStr(new Date(Date.now() - 6 * 86400000))
+  );
+  const [filterEndDate, setFilterEndDate] = useState<string>(() => getWitaDateStr());
   const [filterLocation, setFilterLocation] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchEmployeeQuery, setSearchEmployeeQuery] = useState('');
@@ -114,15 +124,37 @@ export default function AdminAttendancePage() {
 
   useEffect(() => {
     loadData();
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel('admin-attendance-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => void loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_profiles' }, () => void loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_shifts' }, () => void loadData())
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   // --------------------------------------------------------------------------
   // TAB 1: REKAP HANDLERS
   // --------------------------------------------------------------------------
 
-  const filteredLogs = logs.filter((log) => {
-    if (filterDate && log.date !== filterDate) return false;
-    if (filterStatus !== 'all' && log.status !== filterStatus) return false;
+  const periodLogs = logs.filter((log) => {
+    if (periodMode === 'daily') {
+      if (filterDate && log.date !== filterDate) return false;
+    } else if (periodMode === 'range') {
+      if (filterStartDate && log.date < filterStartDate) return false;
+      if (filterEndDate && log.date > filterEndDate) return false;
+    }
 
     const emp = employees.find((e) => e.id === log.employee_id);
     if (filterLocation !== 'all') {
@@ -139,8 +171,65 @@ export default function AdminAttendancePage() {
     return true;
   });
 
-  // Today metrics
-  const todayStr = new Date().toISOString().split('T')[0];
+  const filteredLogs = periodLogs.filter((log) => {
+    if (filterStatus !== 'all' && log.status !== filterStatus) return false;
+    return true;
+  });
+
+  // Periodic per-employee recap aggregation
+  const employeeRecapRows = employees
+    .filter((emp) => {
+      if (filterLocation !== 'all' && emp.assigned_location_id !== filterLocation) return false;
+      if (searchEmployeeQuery.trim()) {
+        const q = searchEmployeeQuery.toLowerCase();
+        if (
+          !emp.full_name.toLowerCase().includes(q) &&
+          !emp.employee_code.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .map((emp) => {
+      const empLogs = periodLogs.filter((l) => l.employee_id === emp.id);
+      const presentCount = empLogs.filter((l) => l.status === 'present').length;
+      const lateCount = empLogs.filter((l) => l.status === 'late').length;
+      const sickCount = empLogs.filter((l) => l.status === 'sick').length;
+      const leaveCount = empLogs.filter((l) => l.status === 'leave').length;
+      const alphaCount = empLogs.filter((l) => l.status === 'alpha').length;
+
+      let totalMinutes = 0;
+      empLogs.forEach((l) => {
+        if (l.clock_in && l.clock_out) {
+          const startMs = new Date(l.clock_in).getTime();
+          const endMs = new Date(l.clock_out).getTime();
+          if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {
+            totalMinutes += Math.round((endMs - startMs) / 60000);
+          }
+        }
+      });
+
+      const locName =
+        emp.assigned_location_type === 'warehouse'
+          ? warehouses.find((w) => w.id === emp.assigned_location_id)?.name || 'Gudang Pusat'
+          : outlets.find((o) => o.id === emp.assigned_location_id)?.name || 'Cabang Outlet';
+
+      return {
+        emp,
+        locName,
+        presentCount,
+        lateCount,
+        sickCount,
+        leaveCount,
+        alphaCount,
+        totalAttended: presentCount + lateCount,
+        totalHoursText: `${Math.floor(totalMinutes / 60)}j ${totalMinutes % 60}m`,
+      };
+    });
+
+  // Today metrics (WITA)
+  const todayStr = getWitaDateStr();
   const todayLogs = logs.filter((l) => l.date === todayStr);
   const totalPresentToday = todayLogs.filter((l) => l.status === 'present').length;
   const totalLateToday = todayLogs.filter((l) => l.status === 'late').length;
@@ -150,7 +239,7 @@ export default function AdminAttendancePage() {
 
   // Export CSV
   const exportRecapCsv = () => {
-    const headers = ['Tanggal', 'Kode Karyawan', 'Nama Lengkap', 'Jabatan', 'Lokasi Penempatan', 'Jam Masuk', 'Jam Pulang', 'Status', 'Catatan'];
+    const headers = ['Tanggal', 'Kode Karyawan', 'Nama Lengkap', 'Jabatan', 'Lokasi Penempatan', 'Jam Masuk (WITA)', 'Jam Pulang (WITA)', 'Status', 'Jarak GPS (m)', 'Catatan'];
     const rows = filteredLogs.map((l) => {
       const emp = employees.find((e) => e.id === l.employee_id);
       let locName = '-';
@@ -167,18 +256,25 @@ export default function AdminAttendancePage() {
         `"${emp?.full_name || '-'}"`,
         `"${emp?.role_title || '-'}"`,
         `"${locName}"`,
-        l.clock_in ? new Date(l.clock_in).toLocaleTimeString('id-ID') : '-',
-        l.clock_out ? new Date(l.clock_out).toLocaleTimeString('id-ID') : '-',
+        l.clock_in ? formatAttendanceTime(l.clock_in) : '-',
+        l.clock_out ? formatAttendanceTime(l.clock_out) : '-',
         l.status,
+        l.clock_in_distance_meters ?? '-',
         `"${l.notes || '-'}"`,
       ].join(',');
     });
 
+    const periodSlug =
+      periodMode === 'daily'
+        ? filterDate
+        : periodMode === 'range'
+        ? `${filterStartDate}_${filterEndDate}`
+        : 'semua';
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `rekap_absensi_obathaus_${filterDate || 'all'}.csv`);
+    link.setAttribute('download', `rekap_absensi_obathaus_${periodSlug}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -223,6 +319,8 @@ export default function AdminAttendancePage() {
       setIsShiftModalOpen(false);
       const updated = await attendanceService.getShifts();
       setShifts(updated);
+    } catch (err: any) {
+      alert(err?.message || 'Gagal menyimpan shift kerja.');
     } finally {
       setIsSavingShift(false);
     }
@@ -292,6 +390,8 @@ export default function AdminAttendancePage() {
       const [outList, whList] = await Promise.all([dbService.getOutlets(), dbService.getWarehouses()]);
       setOutlets(outList);
       setWarehouses(whList);
+    } catch (err: any) {
+      alert(err?.message || 'Gagal menyimpan titik lokasi GPS.');
     } finally {
       setIsSavingGps(false);
     }
@@ -346,11 +446,14 @@ export default function AdminAttendancePage() {
         assigned_location_id: empLocId,
         pin: empPin.trim() || '1234',
         phone: empPhone.trim(),
+        avatar_url: editingEmp?.avatar_url || null,
         is_active: empIsActive,
       });
       setIsEmpModalOpen(false);
       const updated = await attendanceService.getEmployees();
       setEmployees(updated);
+    } catch (err: any) {
+      alert(err?.message || 'Gagal menyimpan profil karyawan.');
     } finally {
       setIsSavingEmp(false);
     }
@@ -358,9 +461,13 @@ export default function AdminAttendancePage() {
 
   const handleDeleteEmp = async (id: string) => {
     if (!confirm('Yakin ingin menghapus karyawan ini dari sistem absensi?')) return;
-    await attendanceService.deleteEmployee(id);
-    const updated = await attendanceService.getEmployees();
-    setEmployees(updated);
+    try {
+      await attendanceService.deleteEmployee(id);
+      const updated = await attendanceService.getEmployees();
+      setEmployees(updated);
+    } catch (err: any) {
+      alert(err?.message || 'Gagal menghapus karyawan.');
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -392,6 +499,15 @@ export default function AdminAttendancePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-borderline text-heading text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Segarkan Data</span>
+            </button>
             <Link
               href="/absen"
               target="_blank"
@@ -465,16 +581,55 @@ export default function AdminAttendancePage() {
             </div>
 
             {/* Filter Bar */}
-            <div className="p-4 bg-white rounded-2xl border border-borderline shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="p-4 bg-white rounded-2xl border border-borderline shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2.5">
-                <div>
+                <div className="flex items-center p-1 bg-canvas border border-borderline rounded-xl text-xs font-bold">
+                  {[
+                    { id: 'daily', label: 'Harian' },
+                    { id: 'range', label: 'Rentang Tanggal' },
+                    { id: 'all', label: 'Semua Riwayat' },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setPeriodMode(m.id as 'daily' | 'range' | 'all')}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        periodMode === m.id
+                          ? 'bg-[#FF6B00] text-white shadow-2xs'
+                          : 'text-mutedtext hover:text-heading'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
+                {periodMode === 'daily' && (
                   <input
                     type="date"
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}
                     className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
                   />
-                </div>
+                )}
+
+                {periodMode === 'range' && (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                    />
+                    <span className="text-xs text-mutedtext font-bold">s/d</span>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <select
@@ -526,11 +681,83 @@ export default function AdminAttendancePage() {
               <button
                 type="button"
                 onClick={exportRecapCsv}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start md:self-auto"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start lg:self-auto shrink-0"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Ekspor CSV / Excel</span>
               </button>
+            </div>
+
+            {/* Periodic Recap per Employee */}
+            <div className="bg-white rounded-2xl border border-borderline shadow-xs overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 border-b border-borderline flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-black text-heading uppercase tracking-wider">
+                    Ringkasan Rekapitulasi Kehadiran per Karyawan
+                  </h3>
+                  <p className="text-[11px] text-mutedtext mt-0.5">
+                    Periode: {periodMode === 'daily' ? filterDate : periodMode === 'range' ? `${filterStartDate} s/d ${filterEndDate}` : 'Seluruh Riwayat'} • Total {employeeRecapRows.length} karyawan
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-borderline bg-slate-50/60 text-[11px] font-bold text-mutedtext uppercase tracking-wider">
+                      <th className="py-2.5 px-4">Karyawan</th>
+                      <th className="py-2.5 px-4">Penempatan</th>
+                      <th className="py-2.5 px-3 text-center text-emerald-700">Hadir</th>
+                      <th className="py-2.5 px-3 text-center text-amber-700">Telat</th>
+                      <th className="py-2.5 px-3 text-center text-purple-700">Sakit</th>
+                      <th className="py-2.5 px-3 text-center text-blue-700">Izin</th>
+                      <th className="py-2.5 px-3 text-center text-red-700">Alpha</th>
+                      <th className="py-2.5 px-4 text-right">Total Jam Kerja</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-borderline text-xs font-medium text-heading">
+                    {employeeRecapRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-6 text-center text-mutedtext">
+                          Belum ada karyawan terdaftar sesuai filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      employeeRecapRows.map((row) => (
+                        <tr key={row.emp.id} className="hover:bg-slate-50/50">
+                          <td className="py-2.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              {row.emp.avatar_url ? (
+                                <img
+                                  src={row.emp.avatar_url}
+                                  alt={row.emp.full_name}
+                                  className="w-8 h-8 rounded-full object-cover border border-borderline shrink-0"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF6B00] font-black text-xs flex items-center justify-center shrink-0">
+                                  {row.emp.full_name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="font-bold text-heading">{row.emp.full_name}</div>
+                                <div className="text-[10px] text-mutedtext font-mono">
+                                  {row.emp.employee_code} • {row.emp.role_title}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-4 text-xs text-mutedtext">{row.locName}</td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-700">{row.presentCount}</td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-amber-600">{row.lateCount}</td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-purple-600">{row.sickCount}</td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-blue-600">{row.leaveCount}</td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-red-600">{row.alphaCount}</td>
+                          <td className="py-2.5 px-4 text-right font-mono font-bold text-heading">{row.totalHoursText}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Attendance Table */}
@@ -583,11 +810,26 @@ export default function AdminAttendancePage() {
                           <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
                             <td className="py-3.5 px-4 font-mono font-bold text-mutedtext">{log.date}</td>
                             <td className="py-3.5 px-4">
-                              <div className="font-bold text-heading">{emp?.full_name || 'Karyawan'}</div>
-                              <div className="text-[11px] text-mutedtext flex items-center gap-1 mt-0.5">
-                                <span className="font-mono text-[#FF6B00] font-bold">{emp?.employee_code || '-'}</span>
-                                <span>•</span>
-                                <span>{emp?.role_title || '-'}</span>
+                              <div className="flex items-center gap-2.5">
+                                {emp?.avatar_url ? (
+                                  <img
+                                    src={emp.avatar_url}
+                                    alt={emp.full_name}
+                                    className="w-8 h-8 rounded-full object-cover border border-borderline shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF6B00] font-black text-xs flex items-center justify-center shrink-0">
+                                    {(emp?.full_name || 'K').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-bold text-heading">{emp?.full_name || 'Karyawan'}</div>
+                                  <div className="text-[11px] text-mutedtext flex items-center gap-1 mt-0.5">
+                                    <span className="font-mono text-[#FF6B00] font-bold">{emp?.employee_code || '-'}</span>
+                                    <span>•</span>
+                                    <span>{emp?.role_title || '-'}</span>
+                                  </div>
+                                </div>
                               </div>
                             </td>
                             <td className="py-3.5 px-4">
@@ -601,10 +843,10 @@ export default function AdminAttendancePage() {
                               </div>
                             </td>
                             <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                              {log.clock_in ? new Date(log.clock_in).toLocaleTimeString('id-ID') : '-'}
+                              {log.clock_in ? `${formatAttendanceTime(log.clock_in)} WITA` : '-'}
                             </td>
                             <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                              {log.clock_out ? new Date(log.clock_out).toLocaleTimeString('id-ID') : '-'}
+                              {log.clock_out ? `${formatAttendanceTime(log.clock_out)} WITA` : '-'}
                             </td>
                             <td className="py-3.5 px-4">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${badge.bg} ${badge.text}`}>
@@ -881,8 +1123,23 @@ export default function AdminAttendancePage() {
                           <tr key={emp.id} className="hover:bg-slate-50/50">
                             <td className="py-3.5 px-4 font-mono font-bold text-[#FF6B00]">{emp.employee_code}</td>
                             <td className="py-3.5 px-4">
-                              <div className="font-bold text-heading">{emp.full_name}</div>
-                              <div className="text-[11px] text-mutedtext font-mono">{emp.phone || '-'}</div>
+                              <div className="flex items-center gap-2.5">
+                                {emp.avatar_url ? (
+                                  <img
+                                    src={emp.avatar_url}
+                                    alt={emp.full_name}
+                                    className="w-8 h-8 rounded-full object-cover border border-borderline shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF6B00] font-black text-xs flex items-center justify-center shrink-0">
+                                    {emp.full_name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-bold text-heading">{emp.full_name}</div>
+                                  <div className="text-[11px] text-mutedtext font-mono">{emp.phone || '-'}</div>
+                                </div>
+                              </div>
                             </td>
                             <td className="py-3.5 px-4 font-semibold text-slate-700">{emp.role_title}</td>
                             <td className="py-3.5 px-4">

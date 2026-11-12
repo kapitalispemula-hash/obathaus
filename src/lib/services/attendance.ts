@@ -82,6 +82,8 @@ export function formatTimeDisplay(dateOrIso?: string | null): string {
   }
 }
 
+export const formatAttendanceTime = formatTimeDisplay;
+
 /**
  * Clears old legacy dummy storage keys and string-based demo IDs
  */
@@ -112,8 +114,47 @@ export function purgeLegacyDemoData(): void {
 const SHIFTS_KEY = 'obathaus_attendance_shifts_v1';
 const EMPLOYEES_KEY = 'obathaus_employee_profiles_v1';
 const ATTENDANCE_LOGS_KEY = 'obathaus_attendance_logs_v1';
+const ATTENDANCE_QUEUE_KEY = 'obathaus_offline_attendance_queue_v1';
 const OUTLETS_LOCATION_KEY = 'obathaus_outlets_gps_v1';
 const WAREHOUSES_LOCATION_KEY = 'obathaus_warehouses_gps_v1';
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function getWitaDateStr(date: Date = new Date()): string {
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
+}
+
+export function getWitaMinutesOfDay(date: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Makassar',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value || '0') % 24;
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value || '0');
+  return hour * 60 + minute;
+}
+
+function isNetworkFailure(err: any): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  const msg = String(err?.message || err || '').toLowerCase();
+  return (
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('network request failed') ||
+    msg.includes('load failed') ||
+    msg.includes('fetch')
+  );
+}
+
+function mergeAvatarFallback(emp: EmployeeProfile): EmployeeProfile {
+  if (typeof window === 'undefined') return emp;
+  const localAvatar = localStorage.getItem(`obathaus_employee_avatar_${emp.id}`);
+  if (!emp.avatar_url && localAvatar) {
+    return { ...emp, avatar_url: localAvatar };
+  }
+  return emp;
+}
 
 class AttendanceService {
   private getSupabase() {
@@ -219,8 +260,11 @@ class AttendanceService {
           .order('employee_code', { ascending: true });
 
         if (!error && data) {
-          localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(data));
-          return data as EmployeeProfile[];
+          const merged = (data as EmployeeProfile[]).map(mergeAvatarFallback);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(merged));
+          }
+          return merged;
         }
         if (error) console.error('Supabase getEmployees error:', error);
       } catch (err) {
@@ -228,57 +272,139 @@ class AttendanceService {
       }
     }
 
-    const saved = localStorage.getItem(EMPLOYEES_KEY);
-    if (saved !== null) {
-      try {
-        return JSON.parse(saved);
-      } catch {}
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(EMPLOYEES_KEY);
+      if (saved !== null) {
+        try {
+          return (JSON.parse(saved) as EmployeeProfile[]).map(mergeAvatarFallback);
+        } catch {}
+      }
     }
     return INITIAL_EMPLOYEE_PROFILES;
   }
 
-  async saveEmployee(emp: Partial<EmployeeProfile> & { employee_code: string; full_name: string; assigned_location_id: string }): Promise<EmployeeProfile> {
+  async saveEmployee(
+    emp: Partial<EmployeeProfile> & { employee_code: string; full_name: string; assigned_location_id: string }
+  ): Promise<EmployeeProfile> {
     const isNew = !emp.id;
+    const nowIso = new Date().toISOString();
     const empData: EmployeeProfile = {
       id: emp.id || generateUUID(),
       employee_code: emp.employee_code.trim().toUpperCase(),
-      pin: emp.pin || '1234',
+      pin: (emp.pin || '1234').trim(),
       full_name: emp.full_name.trim(),
-      role_title: emp.role_title || 'Barista',
+      role_title: (emp.role_title || 'Barista').trim(),
       assigned_location_type: emp.assigned_location_type || 'outlet',
       assigned_location_id: emp.assigned_location_id,
-      phone: emp.phone || '',
+      phone: (emp.phone || '').trim(),
       avatar_url: emp.avatar_url || '',
       is_active: emp.is_active ?? true,
-      created_at: emp.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: emp.created_at || nowIso,
+      updated_at: nowIso,
+    };
+
+    // Preserve local avatar cache in sync with current intention
+    if (typeof window !== 'undefined') {
+      if (empData.avatar_url) {
+        localStorage.setItem(`obathaus_employee_avatar_${empData.id}`, empData.avatar_url);
+      } else {
+        localStorage.removeItem(`obathaus_employee_avatar_${empData.id}`);
+      }
+    }
+
+    const updateLocalEmployeeCache = (savedEmp: EmployeeProfile) => {
+      if (typeof window === 'undefined') return;
+      try {
+        const raw = localStorage.getItem(EMPLOYEES_KEY);
+        const list: EmployeeProfile[] = raw ? JSON.parse(raw) : [];
+        const exists = list.some((e) => e.id === savedEmp.id);
+        const updated = exists
+          ? list.map((e) => (e.id === savedEmp.id ? savedEmp : e))
+          : [...list, savedEmp];
+        localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(updated));
+      } catch {}
     };
 
     const supabase = this.getSupabase();
     if (supabase) {
-      try {
+      const dbPayload: Record<string, any> = {
+        id: empData.id,
+        employee_code: empData.employee_code,
+        pin: empData.pin,
+        full_name: empData.full_name,
+        role_title: empData.role_title,
+        assigned_location_type: empData.assigned_location_type,
+        assigned_location_id: UUID_REGEX.test(empData.assigned_location_id) ? empData.assigned_location_id : null,
+        phone: empData.phone,
+        avatar_url: empData.avatar_url || null,
+        is_active: empData.is_active,
+        updated_at: nowIso,
+      };
+      if (isNew) {
+        dbPayload.created_at = empData.created_at;
+      }
+
+      const executeWrite = async (payloadToWrite: Record<string, any>) => {
         if (isNew) {
-          const { data, error } = await supabase.from('employee_profiles').insert(empData).select().single();
-          if (!error && data) return data as EmployeeProfile;
-        } else {
-          const { data, error } = await supabase
+          return supabase.from('employee_profiles').insert(payloadToWrite).select().single();
+        }
+        return supabase
+          .from('employee_profiles')
+          .update(payloadToWrite)
+          .eq('id', empData.id)
+          .select()
+          .maybeSingle();
+      };
+
+      try {
+        let { data, error } = await executeWrite(dbPayload);
+
+        // If employee_profiles in cloud hasn't had avatar_url column migrated yet,
+        // retry saving the core fields (full_name, role_title, phone, pin) so they STILL sync to cloud!
+        if (error && (error.code === 'PGRST204' || error.message?.toLowerCase().includes('avatar_url'))) {
+          console.warn('Column avatar_url missing in Supabase employee_profiles yet; saving core profile fields without avatar_url.');
+          const { avatar_url: _omit, ...corePayload } = dbPayload;
+          const retryRes = await executeWrite(corePayload);
+          data = retryRes.data;
+          error = retryRes.error;
+        }
+
+        // If updating an employee ID that doesn't exist in cloud yet, upsert instead
+        if (!isNew && !error && !data) {
+          const upsertRes = await supabase
             .from('employee_profiles')
-            .update(empData)
-            .eq('id', empData.id)
+            .upsert({ ...dbPayload, created_at: empData.created_at })
             .select()
             .single();
-          if (!error && data) return data as EmployeeProfile;
+          if (!upsertRes.error && upsertRes.data) {
+            data = upsertRes.data;
+          } else if (upsertRes.error) {
+            error = upsertRes.error;
+          }
         }
-      } catch (err) {
-        console.warn('Supabase saveEmployee error, updating locally:', err);
+
+        if (error) {
+          if (!isNetworkFailure(error)) {
+            throw new Error(`Gagal menyimpan profil karyawan ke database: ${error.message}`);
+          }
+          console.warn('Network error during saveEmployee, falling back to local cache:', error);
+        } else if (data) {
+          const savedRecord: EmployeeProfile = {
+            ...(data as EmployeeProfile),
+            avatar_url: (data as EmployeeProfile).avatar_url ?? empData.avatar_url,
+          };
+          updateLocalEmployeeCache(savedRecord);
+          return savedRecord;
+        }
+      } catch (err: any) {
+        if (!isNetworkFailure(err)) {
+          throw err;
+        }
+        console.warn('Supabase saveEmployee offline fallback:', err);
       }
     }
 
-    const current = await this.getEmployees();
-    const updated = isNew
-      ? [...current, empData]
-      : current.map((e) => (e.id === empData.id ? empData : e));
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(updated));
+    updateLocalEmployeeCache(empData);
     return empData;
   }
 
@@ -411,11 +537,61 @@ class AttendanceService {
   // --------------------------------------------------------------------------
 
   getTodayDateStr(): string {
-    // Current date in Indonesian timezone (WITA / Asia/Makassar)
-    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
+    return getWitaDateStr();
+  }
+
+  private enqueueOfflineAttendance(log: AttendanceLog): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(ATTENDANCE_QUEUE_KEY);
+      const queue: AttendanceLog[] = raw ? JSON.parse(raw) : [];
+      const filtered = queue.filter((q) => q.id !== log.id);
+      filtered.push(log);
+      localStorage.setItem(ATTENDANCE_QUEUE_KEY, JSON.stringify(filtered));
+    } catch {}
+  }
+
+  async syncPendingAttendance(): Promise<number> {
+    if (typeof window === 'undefined' || !navigator.onLine) return 0;
+    const supabase = this.getSupabase();
+    if (!supabase) return 0;
+    try {
+      const raw = localStorage.getItem(ATTENDANCE_QUEUE_KEY);
+      if (!raw) return 0;
+      const queue: AttendanceLog[] = JSON.parse(raw);
+      if (!Array.isArray(queue) || queue.length === 0) return 0;
+
+      let synced = 0;
+      const remaining: AttendanceLog[] = [];
+      for (const log of queue) {
+        try {
+          const payload = {
+            ...log,
+            shift_id: log.shift_id && UUID_REGEX.test(log.shift_id) ? log.shift_id : null,
+          };
+          let { error } = await supabase.from('attendance_logs').upsert(payload);
+          if (error && payload.shift_id && error.code === '23503') {
+            const retry = await supabase.from('attendance_logs').upsert({ ...payload, shift_id: null });
+            error = retry.error;
+          }
+          if (!error) {
+            synced++;
+          } else {
+            remaining.push(log);
+          }
+        } catch {
+          remaining.push(log);
+        }
+      }
+      localStorage.setItem(ATTENDANCE_QUEUE_KEY, JSON.stringify(remaining));
+      return synced;
+    } catch {
+      return 0;
+    }
   }
 
   async getTodayAttendance(employeeId: string): Promise<AttendanceLog | null> {
+    await this.syncPendingAttendance();
     const today = this.getTodayDateStr();
     const supabase = this.getSupabase();
 
@@ -435,14 +611,13 @@ class AttendanceService {
           return log;
         }
 
-        // Secondary fallback: check by today's date range in case of timezone offset
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
+        // Secondary fallback: WITA day boundary check
+        const witaStartIso = `${today}T00:00:00+08:00`;
         const { data: rangeData } = await supabase
           .from('attendance_logs')
           .select('*')
           .eq('employee_id', employeeId)
-          .gte('created_at', startOfDay.toISOString())
+          .gte('created_at', witaStartIso)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -457,6 +632,7 @@ class AttendanceService {
     }
 
     // Fallback: check local storage cache safely without wiping
+    if (typeof window === 'undefined') return null;
     const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
     const logs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
     return (
@@ -502,11 +678,11 @@ class AttendanceService {
       }
     }
 
-    // Resolve Shift & Punctuality
+    // Resolve Shift & Punctuality in WITA timezone (Asia/Makassar)
     const shifts = await this.getShifts();
     const activeShifts = shifts.filter((s) => s.is_active);
     const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinutes = getWitaMinutesOfDay(now);
 
     let matchedShift: AttendanceShift | null = null;
     let minDiff = Infinity;
@@ -532,7 +708,6 @@ class AttendanceService {
       }
     }
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const newLogId = generateUUID();
     const nowIso = now.toISOString();
 
@@ -540,7 +715,7 @@ class AttendanceService {
       id: newLogId,
       employee_id: employeeId,
       date: this.getTodayDateStr(),
-      shift_id: matchedShift?.id && uuidRegex.test(matchedShift.id) ? matchedShift.id : null,
+      shift_id: matchedShift?.id && UUID_REGEX.test(matchedShift.id) ? matchedShift.id : null,
       clock_in: nowIso,
       clock_out: null,
       clock_in_lat: lat,
@@ -555,18 +730,42 @@ class AttendanceService {
     const supabase = this.getSupabase();
     if (supabase) {
       try {
-        const { data, error } = await supabase.from('attendance_logs').insert(newLog).select().single();
+        let { data, error } = await supabase.from('attendance_logs').insert(newLog).select().single();
+        if (error && newLog.shift_id && error.code === '23503') {
+          const retry = await supabase
+            .from('attendance_logs')
+            .insert({ ...newLog, shift_id: null })
+            .select()
+            .single();
+          data = retry.data;
+          error = retry.error;
+        }
         if (!error && data) {
           await this.saveLocalLog(data as AttendanceLog);
           return { success: true, log: data as AttendanceLog, distance };
         }
-        if (error) console.error('Supabase clockIn insert error:', error);
-      } catch (err) {
-        console.warn('Supabase clockIn error, saving locally:', err);
+        if (error) {
+          console.error('Supabase clockIn insert error:', error);
+          if (!isNetworkFailure(error)) {
+            return {
+              success: false,
+              error: `Gagal menyimpan absen masuk ke server: ${error.message}`,
+            };
+          }
+        }
+      } catch (err: any) {
+        if (!isNetworkFailure(err)) {
+          return {
+            success: false,
+            error: `Gagal menyimpan absen masuk: ${err?.message || err}`,
+          };
+        }
+        console.warn('Supabase clockIn network error, queuing offline:', err);
       }
     }
 
     await this.saveLocalLog(newLog);
+    this.enqueueOfflineAttendance(newLog);
     return { success: true, log: newLog, distance };
   }
 
@@ -596,14 +795,28 @@ class AttendanceService {
           await this.saveLocalLog(data as AttendanceLog);
           return { success: true, log: data as AttendanceLog };
         }
-        if (error) console.warn('Supabase clockOut error:', error);
-      } catch (err) {
-        console.warn('Supabase clockOut error, updating locally:', err);
+        if (error) {
+          console.warn('Supabase clockOut error:', error);
+          if (!isNetworkFailure(error)) {
+            return {
+              success: false,
+              error: `Gagal menyimpan absen pulang ke server: ${error.message}`,
+            };
+          }
+        }
+      } catch (err: any) {
+        if (!isNetworkFailure(err)) {
+          return {
+            success: false,
+            error: `Gagal menyimpan absen pulang: ${err?.message || err}`,
+          };
+        }
+        console.warn('Supabase clockOut offline, updating locally:', err);
       }
     }
 
-    // Local fallback check
-    const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
+    // Offline fallback check
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(ATTENDANCE_LOGS_KEY) : null;
     const logs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
     let target = logs.find((l) => l.id === logId);
     if (!target) {
@@ -622,12 +835,15 @@ class AttendanceService {
 
     if (supabase) {
       try {
-        await supabase.from('attendance_logs').upsert(updated);
-      } catch (e) {
-        console.warn('Supabase sync after clockout error:', e);
-      }
+        const { data, error } = await supabase.from('attendance_logs').upsert(updated).select().single();
+        if (!error && data) {
+          await this.saveLocalLog(data as AttendanceLog);
+          return { success: true, log: data as AttendanceLog };
+        }
+      } catch {}
     }
 
+    this.enqueueOfflineAttendance(updated);
     return { success: true, log: updated };
   }
 
@@ -659,7 +875,7 @@ class AttendanceService {
       clock_in_distance_meters: null,
       status: type,
       notes: notes.trim(),
-      created_at: nowIso,
+      created_at: existing?.created_at || nowIso,
       updated_at: nowIso,
     };
 
@@ -671,16 +887,30 @@ class AttendanceService {
           await this.saveLocalLog(data as AttendanceLog);
           return { success: true, log: data as AttendanceLog };
         }
-      } catch (err) {
-        console.warn('Supabase reportAbsence error:', err);
+        if (error && !isNetworkFailure(error)) {
+          return {
+            success: false,
+            error: `Gagal menyimpan laporan ketidakhadiran ke server: ${error.message}`,
+          };
+        }
+      } catch (err: any) {
+        if (!isNetworkFailure(err)) {
+          return {
+            success: false,
+            error: `Gagal menyimpan laporan ketidakhadiran: ${err?.message || err}`,
+          };
+        }
+        console.warn('Supabase reportAbsence offline:', err);
       }
     }
 
     await this.saveLocalLog(newLog);
+    this.enqueueOfflineAttendance(newLog);
     return { success: true, log: newLog };
   }
 
   private async saveLocalLog(log: AttendanceLog): Promise<void> {
+    if (typeof window === 'undefined') return;
     const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
     const logs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
     const idx = logs.findIndex((l) => l.id === log.id);
@@ -694,10 +924,15 @@ class AttendanceService {
     endDate?: string;
     employeeId?: string;
   }): Promise<AttendanceLog[]> {
+    await this.syncPendingAttendance();
     const supabase = this.getSupabase();
     if (supabase) {
       try {
-        let q = supabase.from('attendance_logs').select('*').order('date', { ascending: false });
+        let q = supabase
+          .from('attendance_logs')
+          .select('*')
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
         if (filter?.date) q = q.eq('date', filter.date);
         if (filter?.startDate) q = q.gte('date', filter.startDate);
         if (filter?.endDate) q = q.lte('date', filter.endDate);
@@ -705,28 +940,39 @@ class AttendanceService {
         const { data, error } = await q;
 
         if (!error && data) {
-          // Merge safely with any unsynced local logs
-          const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
-          const localLogs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
+          // Only merge UNSYNCED offline queue items (don't resurrect deleted/stale cache entries!)
+          let queuedLogs: AttendanceLog[] = [];
+          if (typeof window !== 'undefined') {
+            try {
+              const rawQ = localStorage.getItem(ATTENDANCE_QUEUE_KEY);
+              if (rawQ) queuedLogs = JSON.parse(rawQ);
+            } catch {}
+          }
           const map = new Map<string, AttendanceLog>();
-          localLogs.forEach((l) => map.set(l.id, l));
+          queuedLogs.forEach((l) => map.set(l.id, l));
           data.forEach((l) => map.set(l.id, l as AttendanceLog));
           const merged = Array.from(map.values()).sort(
             (a, b) => new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime()
           );
-          localStorage.setItem(ATTENDANCE_LOGS_KEY, JSON.stringify(merged));
+
+          if (!filter?.date && !filter?.startDate && !filter?.endDate && !filter?.employeeId && typeof window !== 'undefined') {
+            localStorage.setItem(ATTENDANCE_LOGS_KEY, JSON.stringify(merged));
+          }
 
           let result = merged;
           if (filter?.employeeId) result = result.filter((l) => l.employee_id === filter.employeeId);
           if (filter?.date) result = result.filter((l) => l.date === filter.date);
+          if (filter?.startDate) result = result.filter((l) => l.date >= filter.startDate!);
+          if (filter?.endDate) result = result.filter((l) => l.date <= filter.endDate!);
           return result;
         }
+        if (error) console.warn('Supabase getAllAttendanceLogs error:', error);
       } catch (err) {
         console.warn('Fallback to local logs:', err);
       }
     }
 
-    const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(ATTENDANCE_LOGS_KEY) : null;
     let list: AttendanceLog[] = saved ? JSON.parse(saved) : [];
 
     if (filter?.date) list = list.filter((l) => l.date === filter.date);
@@ -739,3 +985,9 @@ class AttendanceService {
 }
 
 export const attendanceService = new AttendanceService();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    attendanceService.syncPendingAttendance();
+  });
+}

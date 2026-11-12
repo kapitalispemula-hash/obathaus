@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { useOutlet } from '@/lib/outlet-context';
 import {
   FinancialSummary,
@@ -49,12 +50,11 @@ export default function AdminReportsPage() {
     'today' | 'yesterday' | '7days' | '30days' | 'this_month' | 'this_year' | 'custom'
   >('custom');
   const [customStart, setCustomStart] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return d.toISOString().slice(0, 10);
+    const d = new Date(Date.now() - 29 * 86400000);
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
   });
   const [customEnd, setCustomEnd] = useState(() => {
-    return new Date().toISOString().slice(0, 10);
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
   });
   const [selectedOutletId, setSelectedOutletId] = useState<string>('all');
 
@@ -90,7 +90,7 @@ export default function AdminReportsPage() {
         dbService.getShifts({
           outletId: selectedOutletId !== 'all' ? selectedOutletId : undefined,
           startDate: customStart || undefined,
-          endDate: customEnd ? `${customEnd}T23:59:59` : undefined,
+          endDate: customEnd ? `${customEnd}T23:59:59+08:00` : undefined,
         }),
         dbService.getStoreSettings(),
       ]);
@@ -109,6 +109,34 @@ export default function AdminReportsPage() {
 
   useEffect(() => {
     loadAllReports();
+
+    const handleSynced = () => {
+      void loadAllReports();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_offline_queue_synced', handleSynced);
+    }
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel(`admin-reports-${period}-${selectedOutletId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => void loadAllReports())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cashier_shifts' }, () => void loadAllReports())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'operating_expenses' }, () => void loadAllReports())
+        .subscribe();
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_offline_queue_synced', handleSynced);
+      }
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, [period, customStart, customEnd, selectedOutletId]);
 
   const summary = analytics?.summary;

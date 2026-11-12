@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { StockLedgerEntry, Outlet, RawMaterial, StockMovementType } from '@/types/database';
 import { formatRupiah } from '@/lib/format';
 import {
@@ -55,6 +56,22 @@ export default function AdminStockLedgerPage() {
 
   useEffect(() => {
     loadData();
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel('admin-stock-ledger')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'stock_ledger' }, () => void loadData())
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   const filteredEntries = ledgerEntries.filter((entry) => {
@@ -124,6 +141,13 @@ export default function AdminStockLedgerPage() {
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
             <RotateCcw className="w-3 h-3" />
             Retur Barang ke Gudang
+          </span>
+        );
+      case 'return_to_supplier':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+            <Truck className="w-3 h-3" />
+            Retur ke Supplier
           </span>
         );
       default:
@@ -272,6 +296,7 @@ export default function AdminStockLedgerPage() {
                 <option value="transit_to_outlet">Diterima di Cabang</option>
                 <option value="stock_opname_adjustment">Koreksi Opname Fisik</option>
                 <option value="return_to_warehouse">Retur ke Gudang</option>
+                <option value="return_to_supplier">Retur ke Supplier</option>
               </select>
             </div>
           </div>

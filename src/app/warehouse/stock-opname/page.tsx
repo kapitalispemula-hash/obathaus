@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { WarehouseLayout } from '@/components/layout/WarehouseLayout';
 import { dbService } from '@/lib/services/database';
-import { StockOpname, RawMaterial, WarehouseStock, StockOpnameItem } from '@/types/database';
+import { StockOpname, RawMaterial, WarehouseStock, StockOpnameItem, Warehouse } from '@/types/database';
 import { useAuth } from '@/lib/auth-context';
 import {
   ClipboardCheck,
@@ -33,6 +33,7 @@ export default function WarehouseStockOpnamePage() {
   const [opnames, setOpnames] = useState<StockOpname[]>(INITIAL_STOCK_OPNAMES);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [warehouseStocks, setWarehouseStocks] = useState<WarehouseStock[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending_approval' | 'approved' | 'rejected'>('all');
   const [loading, setLoading] = useState(true);
@@ -61,14 +62,16 @@ export default function WarehouseStockOpnamePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [opnList, matList, stockList] = await Promise.all([
+      const [opnList, matList, stockList, whList] = await Promise.all([
         dbService.getStockOpnames(),
         dbService.getRawMaterials(),
         dbService.getWarehouseStocks(),
+        dbService.getWarehouses(),
       ]);
       setOpnames(opnList);
       setMaterials(matList);
       setWarehouseStocks(stockList);
+      setWarehouses(whList);
     } catch (err) {
       console.error('Failed to load stock opname data:', err);
     } finally {
@@ -90,7 +93,7 @@ export default function WarehouseStockOpnamePage() {
         raw_material_name: m.name,
         sku: m.sku || m.code || '',
         unit_symbol: m.standard_unit?.symbol || 'pcs',
-        unit_id: m.standard_unit_id || 'unit-pcs',
+        unit_id: m.standard_unit_id || '',
         system_quantity: sysQty,
         physical_quantity: sysQty, // default to match
         item_notes: 'Sesuai fisik',
@@ -135,10 +138,10 @@ export default function WarehouseStockOpnamePage() {
 
     try {
       setIsSubmitting(true);
-      const itemsPayload: StockOpnameItem[] = opnameCountItems.map((itm, idx) => {
+      const itemsPayload: StockOpnameItem[] = opnameCountItems.map((itm) => {
         const diff = itm.physical_quantity - itm.system_quantity;
         return {
-          id: `opni-${Date.now()}-${idx}`,
+          id: crypto.randomUUID(),
           opname_id: '',
           raw_material_id: itm.raw_material_id,
           system_quantity: itm.system_quantity,
@@ -150,9 +153,9 @@ export default function WarehouseStockOpnamePage() {
       });
 
       const newOpname = await dbService.createStockOpname({
-        warehouse_id: 'e0000000-0000-0000-0000-000000000001',
+        warehouse_id: warehouses[0]?.id || '',
         notes: opnameNotes,
-        conducted_by: user?.id || 'b0000000-0000-0000-0000-000000000001',
+        conducted_by: user?.id || '',
         items: itemsPayload,
       });
 
@@ -171,7 +174,7 @@ export default function WarehouseStockOpnamePage() {
   const handleApproveOpname = async (opnId: string) => {
     try {
       setIsProcessingApproval(true);
-      await dbService.approveStockOpname(opnId, user?.id || 'a0000000-0000-0000-0000-000000000001');
+      await dbService.approveStockOpname(opnId, user?.id || '');
       setFeedback('Sesi opname telah disetujui Admin. Saldo stok fisik gudang telah otomatis disesuaikan.');
       setSelectedOpname(null);
       await loadData();
@@ -188,7 +191,7 @@ export default function WarehouseStockOpnamePage() {
 
     try {
       setIsProcessingApproval(true);
-      await dbService.rejectStockOpname(opnId, user?.id || 'a0000000-0000-0000-0000-000000000001', reason || 'Data fisik meragukan');
+      await dbService.rejectStockOpname(opnId, user?.id || '', reason || 'Data fisik meragukan');
       setFeedback('Sesi opname telah ditolak. Tidak ada saldo stok yang diubah.');
       setSelectedOpname(null);
       await loadData();

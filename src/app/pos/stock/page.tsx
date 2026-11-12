@@ -3,7 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { CashierLayout } from '@/components/layout/CashierLayout';
 import { dbService } from '@/lib/services/database';
-import { OutletStock, Dispatch, RawMaterial, Outlet } from '@/types/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
+import {
+  OutletStock,
+  Dispatch,
+  RawMaterial,
+  Outlet,
+  Warehouse,
+  WarehouseReturn,
+  WarehouseReturnItem,
+} from '@/types/database';
 import { useAuth } from '@/lib/auth-context';
 import { useOutlet } from '@/lib/outlet-context';
 import {
@@ -20,6 +29,8 @@ import {
   Check,
   Plus,
   X,
+  RotateCcw,
+  Trash2,
 } from 'lucide-react';
 
 export default function PosStockPage() {
@@ -31,7 +42,9 @@ export default function PosStockPage() {
 
   const [stocks, setStocks] = useState<OutletStock[]>([]);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
+  const [branchReturns, setBranchReturns] = useState<WarehouseReturn[]>([]);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [currentOutlet, setCurrentOutlet] = useState<Outlet | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -44,21 +57,30 @@ export default function PosStockPage() {
   const [orderNotes, setOrderNotes] = useState('Restock harian untuk menjaga batas aman');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
+  // Outlet Return to Warehouse Modal
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returnItems, setReturnItems] = useState<{ raw_material_id: string; quantity_returned: number }[]>([]);
+  const [returnReason, setReturnReason] = useState('Kemasan rusak / bocor saat diterima');
+  const [returnNotes, setReturnNotes] = useState('Dikembalikan ke Gudang Pusat untuk inspeksi fisik.');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const [stkList, dspList, matList, outList] = await Promise.all([
+      const [stkList, dspList, retList, matList, outList, whList] = await Promise.all([
         dbService.getOutletStocks(outletId),
         dbService.getDispatches(),
+        dbService.getWarehouseReturns(undefined, outletId),
         dbService.getRawMaterials(),
         dbService.getOutlets(),
+        dbService.getWarehouses(),
       ]);
 
       setStocks(stkList);
-      // Filter dispatches meant for this branch
-      const branchDispatches = dspList.filter((d) => d.to_outlet_id === outletId);
-      setDispatches(branchDispatches);
+      setDispatches(dspList.filter((d) => d.to_outlet_id === outletId));
+      setBranchReturns(retList);
       setMaterials(matList);
+      setWarehouses(whList);
       const out = outList.find((o) => o.id === outletId) || outList[0];
       setCurrentOutlet(out);
     } catch (err) {
@@ -70,17 +92,34 @@ export default function PosStockPage() {
 
   useEffect(() => {
     loadData();
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel(`pos-stock-${outletId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'outlet_stocks' }, () => void loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'dispatches' }, () => void loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouse_returns' }, () => void loadData())
+        .subscribe();
+    }
+
+    return () => {
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, [outletId]);
 
   const handleConfirmDelivery = async (dispatchId: string) => {
     if (receivingId) return;
     try {
       setReceivingId(dispatchId);
-      // Optimistically hide from pending immediately
       setDispatches((prev) => prev.map((d) => (d.id === dispatchId ? { ...d, status: 'delivered' } : d)));
       await dbService.confirmDispatchReceipt(
         dispatchId,
-        user?.id || '5171c509-cad6-4b8c-83d0-46c04e9e4c82',
+        user?.id || '',
         'Diterima dalam kondisi baik & lengkap oleh kasir'
       );
       setFeedback('Kiriman barang logistik berhasil diterima! Saldo stok bahan cabang otomatis bertambah.');
@@ -103,6 +142,63 @@ export default function PosStockPage() {
       ]);
     }
     setIsOrderModalOpen(true);
+  };
+
+  const openReturnModal = () => {
+    const stockedItem = stocks.find((s) => s.quantity > 0);
+    const defaultMatId = stockedItem?.raw_material_id || materials[0]?.id || '';
+    if (defaultMatId) {
+      setReturnItems([{ raw_material_id: defaultMatId, quantity_returned: 1 }]);
+    } else {
+      setReturnItems([]);
+    }
+    setReturnReason('Kemasan rusak / bocor saat diterima');
+    setReturnNotes('Dikembalikan ke Gudang Pusat untuk inspeksi fisik.');
+    setIsReturnModalOpen(true);
+  };
+
+  const handleSubmitReturn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (returnItems.length === 0) {
+      alert('Pilih minimal 1 bahan baku yang ingin diretur ke gudang.');
+      return;
+    }
+    for (const item of returnItems) {
+      if (item.quantity_returned <= 0) {
+        alert('Jumlah bahan baku retur harus lebih dari 0.');
+        return;
+      }
+    }
+
+    try {
+      setIsSubmittingReturn(true);
+      const targetWhId = warehouses[0]?.id || 'e0000000-0000-0000-0000-000000000001';
+      const itemsPayload: WarehouseReturnItem[] = returnItems.map((itm) => ({
+        id: crypto.randomUUID(),
+        return_id: '',
+        raw_material_id: itm.raw_material_id,
+        quantity_returned: Number(itm.quantity_returned),
+        quantity_accepted: 0,
+        action: 'discard',
+      }));
+
+      await dbService.createWarehouseReturn({
+        from_outlet_id: outletId,
+        to_warehouse_id: targetWhId,
+        reason: returnReason.trim() || 'Barang bermasalah / kadaluarsa',
+        notes: returnNotes.trim() || null,
+        created_by: user?.id,
+        items: itemsPayload,
+      });
+
+      setFeedback('Pengajuan retur barang ke Gudang Pusat berhasil dikirim! Stok cabang disesuaikan & Operator Gudang telah diberi notifikasi.');
+      setIsReturnModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      alert(`Gagal mengajukan retur: ${err.message || err}`);
+    } finally {
+      setIsSubmittingReturn(false);
+    }
   };
 
   const handleCreateOrder = async (e: React.FormEvent) => {
@@ -172,7 +268,14 @@ export default function PosStockPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={openReturnModal}
+              className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4 text-[#FF6B00]" />
+              <span>Retur ke Gudang</span>
+            </button>
             <button
               onClick={openOrderModal}
               className="flex items-center gap-2 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
@@ -370,6 +473,91 @@ export default function PosStockPage() {
           </div>
         </div>
 
+        {/* 2B. Riwayat Retur Barang dari Cabang ke Gudang Pusat */}
+        <div className="bg-white rounded-2xl border border-[#ECEEF1] shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-[#ECEEF1] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-[#FF6B00]" />
+              <h3 className="font-bold text-sm text-slate-900">
+                Riwayat Retur Barang ke Gudang Pusat ({branchReturns.length})
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={openReturnModal}
+              className="text-xs font-bold text-[#FF6B00] hover:underline cursor-pointer"
+            >
+              + Ajukan Retur Baru
+            </button>
+          </div>
+          {branchReturns.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-400">
+              Belum ada pengajuan retur barang dari cabang ini ke Gudang Pusat.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-[#ECEEF1] bg-slate-50/50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">No. Retur &amp; Tanggal</th>
+                    <th className="py-3 px-4">Bahan Diretur</th>
+                    <th className="py-3 px-4">Alasan Retur</th>
+                    <th className="py-3 px-4 text-right">Status Inspeksi Gudang</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#ECEEF1]">
+                  {branchReturns.map((ret) => (
+                    <tr key={ret.id} className="hover:bg-slate-50/60">
+                      <td className="py-3 px-4">
+                        <div className="font-mono font-bold text-slate-900">{ret.return_number}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {new Date(ret.return_date).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="space-y-0.5">
+                          {(ret.items || []).map((it) => (
+                            <div key={it.id} className="text-slate-700 font-medium">
+                              • {it.raw_material?.name || 'Bahan'} ({Number(it.quantity_returned).toLocaleString('id-ID')}{' '}
+                              {it.raw_material?.standard_unit?.symbol || ''})
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 max-w-xs">
+                        <div className="font-medium text-slate-800">{ret.reason}</div>
+                        {ret.notes && <div className="text-[11px] text-slate-400 truncate">{ret.notes}</div>}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {ret.status === 'pending_inspection' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <Clock className="w-3 h-3" />
+                            Menunggu Inspeksi
+                          </span>
+                        ) : ret.status === 'accepted' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle className="w-3 h-3" />
+                            Diterima &amp; Diproses
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            <AlertTriangle className="w-3 h-3" />
+                            Ditolak Gudang
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* 3. Modal Permintaan Bahan ke Gudang Pusat */}
         {isOrderModalOpen && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
@@ -464,6 +652,157 @@ export default function PosStockPage() {
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>{isSubmittingOrder ? 'Mengirim...' : 'Kirim Permintaan'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* 4. Modal Ajukan Retur Barang ke Gudang Pusat */}
+        {isReturnModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-[#FF6B00]">
+                    <RotateCcw className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900">Ajukan Retur Barang ke Gudang Pusat</h3>
+                    <p className="text-xs text-slate-500">
+                      Cabang: {currentOutlet?.name || 'Cabang'} • Saldo stok cabang otomatis disesuaikan
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsReturnModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitReturn} className="p-6 overflow-y-auto space-y-4 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Alasan Retur Barang <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    placeholder="Contoh: Kemasan bocor / bahan kadaluarsa / cacat pengiriman"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#FF6B00]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Catatan Kondisi Fisik / Pengiriman
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={returnNotes}
+                    onChange={(e) => setReturnNotes(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#FF6B00]"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-semibold text-slate-700 uppercase tracking-wider">
+                      Daftar Bahan yang Diretur
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (materials.length > 0) {
+                          setReturnItems([
+                            ...returnItems,
+                            { raw_material_id: materials[0].id, quantity_returned: 1 },
+                          ]);
+                        }
+                      }}
+                      className="text-xs font-bold text-[#FF6B00] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Tambah Item
+                    </button>
+                  </div>
+
+                  {returnItems.map((itm, idx) => {
+                    const mat = materials.find((m) => m.id === itm.raw_material_id);
+                    const stk = stocks.find((s) => s.raw_material_id === itm.raw_material_id);
+                    return (
+                      <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <select
+                          value={itm.raw_material_id}
+                          onChange={(e) => {
+                            const updated = [...returnItems];
+                            updated[idx] = { ...updated[idx], raw_material_id: e.target.value };
+                            setReturnItems(updated);
+                          }}
+                          className="flex-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-[#FF6B00]"
+                        >
+                          {materials.map((m) => {
+                            const s = stocks.find((st) => st.raw_material_id === m.id);
+                            return (
+                              <option key={m.id} value={m.id}>
+                                {m.name} (Stok: {(s?.quantity || 0).toLocaleString('id-ID')} {m.standard_unit?.symbol || ''})
+                              </option>
+                            );
+                          })}
+                        </select>
+
+                        <div className="w-28 flex items-center">
+                          <input
+                            type="number"
+                            min={0.1}
+                            step="any"
+                            value={itm.quantity_returned}
+                            onChange={(e) => {
+                              const updated = [...returnItems];
+                              updated[idx] = {
+                                ...updated[idx],
+                                quantity_returned: parseFloat(e.target.value) || 0,
+                              };
+                              setReturnItems(updated);
+                            }}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-right font-bold focus:ring-1 focus:ring-[#FF6B00]"
+                          />
+                          <span className="text-[11px] text-slate-500 ml-1.5 shrink-0">
+                            {mat?.standard_unit?.symbol || stk?.raw_material?.standard_unit?.symbol || 'g'}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setReturnItems(returnItems.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsReturnModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingReturn}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>{isSubmittingReturn ? 'Mengirim Retur...' : 'Kirim Pengajuan Retur'}</span>
                   </button>
                 </div>
               </form>

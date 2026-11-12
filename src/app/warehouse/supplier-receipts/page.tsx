@@ -58,7 +58,7 @@ export default function WarehouseSupplierReceiptsPage() {
         dbService.getRawMaterials(),
       ]);
       setReceipts(recList);
-      setApprovedPOs(poList.filter((p) => p.status === 'approved'));
+      setApprovedPOs(poList.filter((p) => p.status === 'approved' || p.status === 'partially_received'));
       setMaterials(matList);
     } catch (err) {
       console.error('Failed to load supplier receipts:', err);
@@ -137,16 +137,19 @@ export default function WarehouseSupplierReceiptsPage() {
         supplier_po_id: selectedPoId,
         delivery_order_number: deliveryOrderNum.trim(),
         notes: notes.trim() || null,
-        items: receiptItems.map((it, idx) => ({
-          id: `reci-${Date.now()}-${idx}`,
-          receipt_id: '',
-          po_item_id: it.po_item_id,
-          raw_material_id: it.raw_material_id,
-          quantity_received: Number(it.quantity_received),
-          unit_id: 'unit-gram',
-          batch_number: it.batch_number || null,
-          expiry_date: it.expiry_date || null,
-        })),
+        items: receiptItems.map((it) => {
+          const mat = materials.find((m) => m.id === it.raw_material_id);
+          return {
+            id: crypto.randomUUID(),
+            receipt_id: '',
+            po_item_id: it.po_item_id,
+            raw_material_id: it.raw_material_id,
+            quantity_received: Number(it.quantity_received),
+            unit_id: mat?.standard_unit_id || '',
+            batch_number: it.batch_number || null,
+            expiry_date: it.expiry_date || null,
+          };
+        }),
       });
 
       setIsModalOpen(false);

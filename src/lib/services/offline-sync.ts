@@ -2,14 +2,16 @@
 // Ensures zero transaction loss during outlet internet disconnects
 
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import { Transaction, TransactionItem } from '@/types/database';
+import { Transaction } from '@/types/database';
 
 const OFFLINE_QUEUE_KEY = 'obathaus_offline_transactions_queue';
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface QueuedOfflineTransaction {
   transaction: Transaction;
   queuedAt: string;
   attempts: number;
+  lastError?: string;
 }
 
 export function getOfflineQueue(): QueuedOfflineTransaction[] {
@@ -33,15 +35,22 @@ export function saveOfflineQueue(queue: QueuedOfflineTransaction[]): void {
   }
 }
 
-export function enqueueOfflineTransaction(transaction: Transaction): void {
+export function enqueueOfflineTransaction(transaction: Transaction, lastError?: string): void {
   const current = getOfflineQueue();
-  // Prevent duplicate queuing
-  if (current.some((q) => q.transaction.id === transaction.id)) return;
+  const idx = current.findIndex((q) => q.transaction.id === transaction.id);
+  if (idx >= 0) {
+    if (lastError) {
+      current[idx].lastError = lastError;
+      saveOfflineQueue(current);
+    }
+    return;
+  }
 
   current.push({
     transaction,
     queuedAt: new Date().toISOString(),
     attempts: 0,
+    lastError,
   });
   saveOfflineQueue(current);
   console.log(`[Offline Queue] Transaction #${transaction.invoice_number} enqueued for cloud sync.`);
@@ -72,13 +81,15 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
   for (const item of queue) {
     const { transaction } = item;
     try {
-      // 1. Insert transaction header (UPSERT to avoid double billing)
-      const { error: trxError } = await supabase.from('transactions').upsert({
+      const validShiftId =
+        transaction.shift_id && UUID_REGEX.test(transaction.shift_id) ? transaction.shift_id : null;
+
+      const basePayload = {
         id: transaction.id,
         invoice_number: transaction.invoice_number,
         cashier_id: transaction.cashier_id,
         outlet_id: transaction.outlet_id,
-        shift_id: transaction.shift_id,
+        shift_id: validShiftId,
         subtotal: transaction.subtotal,
         discount_total: transaction.discount_total,
         tax_total: transaction.tax_total,
@@ -92,11 +103,25 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
         idempotency_key: transaction.idempotency_key,
         notes: transaction.notes,
         created_at: transaction.created_at,
-      });
+      };
+
+      // 1. Upsert transaction header (retry with shift_id: null if shift FK doesn't exist in cloud)
+      let { error: trxError } = await supabase.from('transactions').upsert(basePayload);
+
+      if (
+        trxError &&
+        basePayload.shift_id &&
+        (trxError.code === '23503' || trxError.message?.toLowerCase().includes('shift_id'))
+      ) {
+        const retryRes = await supabase
+          .from('transactions')
+          .upsert({ ...basePayload, shift_id: null });
+        trxError = retryRes.error;
+      }
 
       if (trxError) throw trxError;
 
-      // 2. Insert transaction items
+      // 2. Upsert transaction items
       if (transaction.items && transaction.items.length > 0) {
         const itemsToInsert = transaction.items.map((it) => ({
           id: it.id,
@@ -118,9 +143,10 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
 
       synced++;
       console.log(`[Offline Queue] Transaction #${transaction.invoice_number} synced to Supabase successfully.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error(`[Offline Queue] Failed to sync transaction #${transaction.invoice_number}:`, err);
       item.attempts += 1;
+      item.lastError = err?.message || String(err);
       failed++;
       remainingQueue.push(item);
     }
@@ -129,10 +155,8 @@ export async function syncOfflineQueue(): Promise<{ synced: number; failed: numb
   saveOfflineQueue(remainingQueue);
   isSyncing = false;
 
-  if (synced > 0) {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('obathaus_offline_queue_synced', { detail: { synced } }));
-    }
+  if (synced > 0 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('obathaus_offline_queue_synced', { detail: { synced } }));
   }
 
   return { synced, failed };

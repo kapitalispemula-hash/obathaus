@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { WarehouseLayout } from '@/components/layout/WarehouseLayout';
 import { dbService } from '@/lib/services/database';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import {
   Dispatch,
   OutletOrder,
   SupplierReceipt,
   SupplierPO,
   WarehouseReturn,
+  SupplierReturn,
   Outlet,
   Supplier,
 } from '@/types/database';
@@ -40,7 +42,7 @@ type TransactionCategory = 'all' | 'outlet' | 'supplier';
 interface UnifiedTransaction {
   id: string;
   docNumber: string;
-  docType: 'dispatch' | 'outlet_order' | 'outlet_return' | 'supplier_receipt' | 'supplier_po';
+  docType: 'dispatch' | 'outlet_order' | 'outlet_return' | 'supplier_receipt' | 'supplier_po' | 'supplier_return';
   category: 'outlet' | 'supplier';
   date: string;
   partnerName: string;
@@ -72,6 +74,7 @@ export default function WarehouseTransactionsPage() {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [outletOrders, setOutletOrders] = useState<OutletOrder[]>([]);
   const [returns, setReturns] = useState<WarehouseReturn[]>([]);
+  const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([]);
   const [supplierReceipts, setSupplierReceipts] = useState<SupplierReceipt[]>([]);
   const [supplierPOs, setSupplierPOs] = useState<SupplierPO[]>([]);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -80,13 +83,14 @@ export default function WarehouseTransactionsPage() {
   // Modal Detail state
   const [selectedTransaction, setSelectedTransaction] = useState<UnifiedTransaction | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [
         dspList,
         ordList,
         retList,
+        supRetList,
         rcpList,
         poList,
         outList,
@@ -95,6 +99,7 @@ export default function WarehouseTransactionsPage() {
         dbService.getDispatches(),
         dbService.getOutletOrders(),
         dbService.getWarehouseReturns(),
+        dbService.getSupplierReturns(),
         dbService.getSupplierReceipts(),
         dbService.getSupplierPOs(),
         dbService.getOutlets(),
@@ -104,6 +109,7 @@ export default function WarehouseTransactionsPage() {
       setDispatches(dspList || []);
       setOutletOrders(ordList || []);
       setReturns(retList || []);
+      setSupplierReturns(supRetList || []);
       setSupplierReceipts(rcpList || []);
       setSupplierPOs(poList || []);
       setOutlets(outList || []);
@@ -113,11 +119,29 @@ export default function WarehouseTransactionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel('warehouse-transactions-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dispatches' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'outlet_orders' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouse_returns' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_receipts' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_pos' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supplier_returns' }, () => loadData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadData]);
 
   // Normalize all streams into a single unified list
   const unifiedTransactions = useMemo<UnifiedTransaction[]>(() => {
@@ -248,7 +272,9 @@ export default function WarehouseTransactionsPage() {
       const poBadgeMap: Record<string, { label: string; bg: string; text: string; border: string }> = {
         draft: { label: 'Draft Pengajuan', bg: 'bg-zinc-100', text: 'text-zinc-700', border: 'border-zinc-200' },
         approved: { label: 'Disetujui Admin', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+        partially_received: { label: 'Diterima Sebagian', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
         received: { label: 'Tuntas Diterima', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+        completed: { label: 'Selesai & Diterima', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
         cancelled: { label: 'Dibatalkan', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
       };
       const badge = poBadgeMap[p.status] || {
@@ -275,9 +301,45 @@ export default function WarehouseTransactionsPage() {
       });
     }
 
+    // 6. Supplier Returns (Retur dari Gudang Pusat -> Supplier)
+    for (const sr of supplierReturns) {
+      const supplier = suppliers.find((sp) => sp.id === sr.supplier_id);
+      const itemsList = sr.items || [];
+      const srBadgeMap: Record<string, { label: string; bg: string; text: string; border: string }> = {
+        submitted: { label: 'Siap Dikirim ke Supplier', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+        shipped_to_supplier: { label: 'Dikirim ke Supplier', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+        replaced: { label: 'Diganti Barang Baru', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+        refunded: { label: 'Refund Diterima', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+        rejected: { label: 'Ditolak Supplier', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+        cancelled: { label: 'Dibatalkan', bg: 'bg-zinc-100', text: 'text-zinc-600', border: 'border-zinc-200' },
+      };
+      const badge = srBadgeMap[sr.status] || {
+        label: sr.status,
+        bg: 'bg-zinc-50',
+        text: 'text-zinc-700',
+        border: 'border-zinc-200',
+      };
+      list.push({
+        id: `sret-${sr.id}`,
+        docNumber: sr.return_number,
+        docType: 'supplier_return',
+        category: 'supplier',
+        date: sr.return_date || sr.created_at,
+        partnerName: supplier ? supplier.name : 'Supplier Vendor',
+        partnerType: 'supplier',
+        partnerId: sr.supplier_id,
+        status: sr.status,
+        statusBadge: badge,
+        itemCount: itemsList.length,
+        itemsSummary: itemsList.map((i) => `${i.raw_material?.name || 'Bahan'} (${i.quantity_returned})`).join(', ') || 'Retur Supplier',
+        notes: `${sr.reason}${sr.notes ? ` • ${sr.notes}` : ''}`,
+        rawPayload: sr,
+      });
+    }
+
     // Sort descending by date (newest first)
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [dispatches, outletOrders, returns, supplierReceipts, supplierPOs, outlets, suppliers]);
+  }, [dispatches, outletOrders, returns, supplierReturns, supplierReceipts, supplierPOs, outlets, suppliers]);
 
   // Aggregate stats
   const totalOutletTransactions = unifiedTransactions.filter((t) => t.category === 'outlet').length;
@@ -371,6 +433,12 @@ export default function WarehouseTransactionsPage() {
           label: 'PO ke Supplier',
           icon: FileText,
           bg: 'bg-[#F4F4F5] text-[#18181B] border-[#E4E4E7]',
+        };
+      case 'supplier_return':
+        return {
+          label: 'Retur ke Supplier',
+          icon: RotateCcw,
+          bg: 'bg-rose-50 text-rose-700 border-rose-200',
         };
     }
   };
@@ -574,6 +642,7 @@ export default function WarehouseTransactionsPage() {
                   <>
                     <option value="supplier_receipt">📦 Penerimaan Barang (GRN)</option>
                     <option value="supplier_po">📝 PO ke Supplier</option>
+                    <option value="supplier_return">↩️ Retur ke Supplier</option>
                   </>
                 )}
               </select>
@@ -636,9 +705,14 @@ export default function WarehouseTransactionsPage() {
                 <option value="all">⚡ Semua Status</option>
                 <option value="delivered">Tiba di Cabang / Selesai</option>
                 <option value="in_transit">Dalam Perjalanan (In-Transit)</option>
-                <option value="received">Diterima Lengkap (GRN)</option>
-                <option value="submitted">Menunggu Disiapkan</option>
+                <option value="partially_received">Diterima Sebagian (PO)</option>
+                <option value="received">Diterima Lengkap (GRN / PO)</option>
+                <option value="completed">Selesai (PO)</option>
+                <option value="submitted">Diajukan / Menunggu</option>
                 <option value="approved">Disetujui Admin</option>
+                <option value="shipped_to_supplier">Dikirim ke Supplier</option>
+                <option value="replaced">Diganti Supplier</option>
+                <option value="refunded">Refund Supplier</option>
                 <option value="draft">Draft Pengajuan</option>
               </select>
             </div>

@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
+import { getOfflineQueue, syncOfflineQueue } from '@/lib/services/offline-sync';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { useOutlet } from '@/lib/outlet-context';
 import { Transaction, StoreSettings } from '@/types/database';
@@ -26,6 +28,8 @@ import {
   DollarSign,
   TrendingUp,
   CheckCircle2,
+  RefreshCw,
+  WifiOff,
 } from 'lucide-react';
 
 export default function AdminTransactionsPage() {
@@ -35,6 +39,8 @@ export default function AdminTransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [isSyncingOffline, setIsSyncingOffline] = useState(false);
 
   // Filters
   const [selectedOutlet, setSelectedOutlet] = useState<string>('all');
@@ -80,6 +86,8 @@ export default function AdminTransactionsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const pending = getOfflineQueue().length;
+      setOfflinePendingCount(pending);
       const [trxs, s] = await Promise.all([
         dbService.getTransactions({
           outletId: selectedOutlet !== 'all' ? selectedOutlet : undefined,
@@ -95,8 +103,47 @@ export default function AdminTransactionsPage() {
     }
   };
 
+  const handleManualSyncAndRefresh = async () => {
+    try {
+      setIsSyncingOffline(true);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await syncOfflineQueue();
+      }
+      await loadData();
+    } finally {
+      setIsSyncingOffline(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
+
+    const handleSynced = () => {
+      void loadData();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_offline_queue_synced', handleSynced);
+    }
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel(`admin-transactions-${selectedOutlet}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => void loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transaction_refunds' }, () => void loadData())
+        .subscribe();
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_offline_queue_synced', handleSynced);
+      }
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, [selectedOutlet]);
 
   const handleOpenVoid = (trx: Transaction) => {
@@ -242,7 +289,21 @@ export default function AdminTransactionsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {offlinePendingCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                <WifiOff className="w-3.5 h-3.5" />
+                {offlinePendingCount} Antrean Offline
+              </span>
+            )}
+            <button
+              onClick={handleManualSyncAndRefresh}
+              disabled={isSyncingOffline || loading}
+              className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-borderline rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-2xs disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingOffline || loading ? 'animate-spin' : ''}`} />
+              <span>Sinkronkan / Refresh</span>
+            </button>
             <button
               onClick={handleOpenClearAll}
               disabled={transactions.length === 0}

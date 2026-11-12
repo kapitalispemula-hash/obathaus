@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { CashierLayout } from '@/components/layout/CashierLayout';
 import { dbService } from '@/lib/services/database';
+import { getOfflineQueue, syncOfflineQueue } from '@/lib/services/offline-sync';
+import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { Transaction, StoreSettings } from '@/types/database';
 import { formatRupiah, formatDateTime } from '@/lib/format';
@@ -15,6 +17,8 @@ import {
   X,
   CreditCard,
   ShoppingBag,
+  RefreshCw,
+  WifiOff,
 } from 'lucide-react';
 
 export default function CashierHistoryPage() {
@@ -23,31 +27,73 @@ export default function CashierHistoryPage() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Modals
   const [selectedTrx, setSelectedTrx] = useState<Transaction | null>(null);
   const [receiptTrx, setReceiptTrx] = useState<Transaction | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        // Load transactions for this cashier (or active session) per PRD Section 2.2 & 9.2
-        const filter = user ? { cashierId: user.id } : undefined;
-        const [trxs, s] = await Promise.all([
-          dbService.getTransactions(filter),
-          dbService.getStoreSettings(),
-        ]);
-        setTransactions(trxs);
-        setSettings(s);
-      } catch (err) {
-        console.error('Failed to load cashier transactions:', err);
-      } finally {
-        setLoading(false);
-      }
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setOfflinePendingCount(getOfflineQueue().length);
+      // Load transactions for this cashier (or active session) per PRD Section 2.2 & 9.2
+      const filter = user ? { cashierId: user.id } : undefined;
+      const [trxs, s] = await Promise.all([
+        dbService.getTransactions(filter),
+        dbService.getStoreSettings(),
+      ]);
+      setTransactions(trxs);
+      setSettings(s);
+    } catch (err) {
+      console.error('Failed to load cashier transactions:', err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleManualSync = async () => {
+    try {
+      setIsSyncing(true);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await syncOfflineQueue();
+      }
+      await loadData();
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
     loadData();
+
+    const handleSynced = () => {
+      void loadData();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('obathaus_offline_queue_synced', handleSynced);
+    }
+
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      channel = supabase
+        .channel(`pos-history-${user?.id || 'guest'}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => void loadData())
+        .subscribe();
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('obathaus_offline_queue_synced', handleSynced);
+      }
+      if (channel && isSupabaseConfigured()) {
+        const supabase = createClient();
+        supabase.removeChannel(channel);
+      }
+    };
   }, [user]);
 
   const handleReprintReceipt = (trx: Transaction) => {
@@ -77,15 +123,32 @@ export default function CashierHistoryPage() {
             </p>
           </div>
 
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-mutedtext" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nomor invoice..."
-              className="w-full pl-10 pr-4 py-2 bg-white border border-borderline rounded-xl text-xs sm:text-sm text-heading placeholder:text-mutedtext focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00] shadow-xs"
-            />
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            {offlinePendingCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                <WifiOff className="w-3.5 h-3.5" />
+                {offlinePendingCount} Antrean Offline
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isSyncing || loading}
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-borderline rounded-xl text-xs font-bold text-heading flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing || loading ? 'animate-spin' : ''}`} />
+              <span>Sinkronkan</span>
+            </button>
+            <div className="relative flex-1 sm:w-64">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-mutedtext" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari nomor invoice..."
+                className="w-full pl-10 pr-4 py-2 bg-white border border-borderline rounded-xl text-xs sm:text-sm text-heading placeholder:text-mutedtext focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00] shadow-xs"
+              />
+            </div>
           </div>
         </div>
 

@@ -202,6 +202,8 @@ export interface CheckoutPayload {
 
 export interface FinancialSummary {
   periodLabel: string;
+  grossSales?: number;
+  discountTotal?: number;
   netRevenue: number;
   totalHpp: number;
   grossProfit: number;
@@ -784,7 +786,7 @@ export interface AttendanceShift {
 export interface EmployeeProfile {
   id: string;
   employee_code: string;
-  pin: string;
+  pin?: string;
   full_name: string;
   role_title: string;
   assigned_location_type: LocationType;

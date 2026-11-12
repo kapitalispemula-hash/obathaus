@@ -50,7 +50,7 @@ export default function AdminDashboardPage() {
       try {
         setLoading(true);
         const [data, trxs, allPOs] = await Promise.all([
-          dbService.getFinancialAnalytics(period, selectedOutletId),
+          dbService.getFinancialAnalytics(period, undefined, undefined, selectedOutletId),
           dbService.getTransactions({ limit: 6, outletId: selectedOutletId }),
           dbService.getSupplierPOs(),
         ]);

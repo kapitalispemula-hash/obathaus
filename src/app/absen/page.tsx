@@ -57,11 +57,25 @@ import {
 } from '@/types/database';
 
 const SAVED_EMP_ID_KEY = 'obathaus_active_employee_id';
+const SAVED_EMP_PROFILE_KEY = 'obathaus_active_employee_profile';
 const ONBOARDING_SEEN_KEY = 'obathaus_attendance_onboarding_seen';
 const BIOMETRIC_EMP_ID_KEY = 'obathaus_biometric_emp_id';
 const BIOMETRIC_EMP_NAME_KEY = 'obathaus_biometric_emp_name';
 const BIOMETRIC_EMP_CODE_KEY = 'obathaus_biometric_emp_code';
 const BIOMETRIC_CRED_ID_KEY = 'obathaus_biometric_cred_id';
+const BIOMETRIC_TOKEN_KEY = 'obathaus_biometric_token';
+
+function saveActiveEmployeeCache(emp: EmployeeProfile | null) {
+  if (typeof window === 'undefined') return;
+  if (!emp) {
+    localStorage.removeItem(SAVED_EMP_ID_KEY);
+    localStorage.removeItem(SAVED_EMP_PROFILE_KEY);
+    return;
+  }
+  const { pin: _omitted, ...safe } = emp;
+  localStorage.setItem(SAVED_EMP_ID_KEY, emp.id);
+  localStorage.setItem(SAVED_EMP_PROFILE_KEY, JSON.stringify(safe));
+}
 
 // Base64 WebAuthn buffer conversion helpers
 function bufferToBase64(buf: ArrayBuffer): string {
@@ -189,27 +203,82 @@ export default function MobileAttendancePage() {
     async function initSession() {
       try {
         purgeLegacyDemoData();
-        await attendanceService.syncPendingAttendance();
-        const emps = await attendanceService.getEmployees();
-        setAllEmployees(emps.filter((e) => e.is_active));
+        const supabaseReady = isSupabaseConfigured();
 
-        const savedEmpId = localStorage.getItem(SAVED_EMP_ID_KEY);
-        if (savedEmpId) {
-          const match = emps.find((e) => e.id === savedEmpId && e.is_active);
-          if (match) {
-            const savedAvatar = localStorage.getItem(`obathaus_employee_avatar_${match.id}`);
-            if (savedAvatar && !match.avatar_url) {
-              match.avatar_url = savedAvatar;
+        if (supabaseReady) {
+          const sessionEmp = await attendanceService.getSessionEmployee();
+          if (sessionEmp && sessionEmp.is_active) {
+            const avatarKey = `obathaus_employee_avatar_${sessionEmp.id}`;
+            const savedAvatar = localStorage.getItem(avatarKey);
+            let activeEmp = sessionEmp;
+
+            // Lazy-migrate legacy Base64 avatar (either in localStorage or inline DB text) to Supabase Storage
+            const legacyDataUrl =
+              sessionEmp.avatar_url?.startsWith('data:image/')
+                ? sessionEmp.avatar_url
+                : !sessionEmp.avatar_url && savedAvatar?.startsWith('data:image/')
+                  ? savedAvatar
+                  : null;
+
+            if (legacyDataUrl && typeof navigator !== 'undefined' && navigator.onLine) {
+              try {
+                const uploaded = await attendanceService.uploadEmployeeAvatar(legacyDataUrl);
+                activeEmp = uploaded.employee || { ...sessionEmp, avatar_url: uploaded.avatar_url };
+                localStorage.removeItem(avatarKey);
+              } catch {
+                if (!activeEmp.avatar_url && savedAvatar) {
+                  activeEmp = { ...activeEmp, avatar_url: savedAvatar };
+                }
+              }
+            } else if (sessionEmp.avatar_url && !sessionEmp.avatar_url.startsWith('data:')) {
+              localStorage.removeItem(avatarKey);
+            } else if (!sessionEmp.avatar_url && savedAvatar) {
+              activeEmp = { ...sessionEmp, avatar_url: savedAvatar };
             }
-            setCurrentEmployee(match);
+
+            setCurrentEmployee(activeEmp);
+            saveActiveEmployeeCache(activeEmp);
+            await attendanceService.syncPendingAttendance();
+          } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // Offline PWA fallback: keep active employee UI usable until network reconnects
+            const cachedRaw = localStorage.getItem(SAVED_EMP_PROFILE_KEY);
+            if (cachedRaw) {
+              try {
+                const cachedEmp = JSON.parse(cachedRaw) as EmployeeProfile;
+                if (cachedEmp && cachedEmp.id && cachedEmp.is_active) {
+                  setCurrentEmployee(cachedEmp);
+                }
+              } catch {}
+            }
+          } else {
+            saveActiveEmployeeCache(null);
+          }
+        } else {
+          await attendanceService.syncPendingAttendance();
+          const emps = await attendanceService.getEmployees();
+          setAllEmployees(emps.filter((e) => e.is_active));
+
+          const savedEmpId = localStorage.getItem(SAVED_EMP_ID_KEY);
+          if (savedEmpId) {
+            const match = emps.find((e) => e.id === savedEmpId && e.is_active);
+            if (match) {
+              const savedAvatar = localStorage.getItem(`obathaus_employee_avatar_${match.id}`);
+              if (savedAvatar && !match.avatar_url) {
+                match.avatar_url = savedAvatar;
+              }
+              setCurrentEmployee(match);
+            }
           }
         }
 
         // Load enrolled biometric device connection
         const bioEmpId = localStorage.getItem(BIOMETRIC_EMP_ID_KEY);
         const bioEmpName = localStorage.getItem(BIOMETRIC_EMP_NAME_KEY);
-        if (bioEmpId && bioEmpName) {
+        const hasBioToken = !supabaseReady || Boolean(localStorage.getItem(BIOMETRIC_TOKEN_KEY));
+        if (bioEmpId && bioEmpName && hasBioToken) {
           setEnrolledBiometricName(bioEmpName);
+        } else {
+          setEnrolledBiometricName(null);
         }
       } catch (err) {
         console.warn('Init session error:', err);
@@ -270,7 +339,8 @@ export default function MobileAttendancePage() {
 
     // Check if current employee has enrolled fingerprint on this device
     const bioEmpId = localStorage.getItem(BIOMETRIC_EMP_ID_KEY);
-    setIsBiometricEnrolled(bioEmpId === currentEmployeeId);
+    const hasBioToken = !isSupabaseConfigured() || Boolean(localStorage.getItem(BIOMETRIC_TOKEN_KEY));
+    setIsBiometricEnrolled(bioEmpId === currentEmployeeId && hasBioToken);
 
     async function loadEmployeeData(skipGpsRefresh = false) {
       if (!currentEmployee) return;
@@ -325,11 +395,10 @@ export default function MobileAttendancePage() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'employee_profiles', filter: `id=eq.${currentEmployeeId}` },
           async () => {
-            const emps = await attendanceService.getEmployees();
-            setAllEmployees(emps.filter((e) => e.is_active));
-            const updated = emps.find((e) => e.id === currentEmployeeId);
+            const updated = await attendanceService.getSessionEmployee();
             if (updated) {
               setCurrentEmployee(updated);
+              saveActiveEmployeeCache(updated);
             }
           }
         )
@@ -433,11 +502,12 @@ export default function MobileAttendancePage() {
 
       if (res.success && res.employee) {
         setCurrentEmployee(res.employee);
-        localStorage.setItem(SAVED_EMP_ID_KEY, res.employee.id);
+        saveActiveEmployeeCache(res.employee);
         localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
         setLoginCode('');
         setLoginPin('');
-      } else {
+        void attendanceService.syncPendingAttendance();
+      } else if (!isSupabaseConfigured()) {
         const match = allEmployees.find(
           (emp) => emp.employee_code.toUpperCase() === loginCode.trim().toUpperCase()
         );
@@ -446,6 +516,8 @@ export default function MobileAttendancePage() {
         } else {
           setLoginError(res.error || 'ID Karyawan tidak terdaftar dalam sistem.');
         }
+      } else {
+        setLoginError(res.error || 'ID Karyawan atau PIN tidak cocok.');
       }
     } finally {
       setIsLoggingIn(false);
@@ -467,6 +539,8 @@ export default function MobileAttendancePage() {
     const bioId = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_ID_KEY) : null;
     const bioCode = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_EMP_CODE_KEY) : null;
     const credIdBase64 = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_CRED_ID_KEY) : null;
+    const bioToken = typeof window !== 'undefined' ? localStorage.getItem(BIOMETRIC_TOKEN_KEY) : null;
+    const supabaseReady = isSupabaseConfigured();
 
     if (!bioId) {
       setLoginError(
@@ -475,24 +549,32 @@ export default function MobileAttendancePage() {
       return;
     }
 
-    // Ensure we have active employees loaded
-    let emps = allEmployees;
-    if (emps.length === 0) {
-      try {
-        emps = await attendanceService.getEmployees();
-        setAllEmployees(emps.filter((e) => e.is_active));
-      } catch (e) {
-        console.warn('Failed to fetch employees for biometric login:', e);
-      }
+    if (supabaseReady && !bioToken) {
+      setLoginError(
+        'Token keamanan sidik jari perlu diperbarui. Silakan masuk dengan ID & PIN terlebih dahulu, lalu hubungkan ulang sidik jari di menu Akun.'
+      );
+      return;
     }
 
-    const targetEmp =
-      emps.find((e) => e.id === bioId && e.is_active) ||
-      (bioCode ? emps.find((e) => e.employee_code.toUpperCase() === bioCode.toUpperCase() && e.is_active) : undefined);
+    let demoTargetEmp: EmployeeProfile | undefined;
+    if (!supabaseReady) {
+      let emps = allEmployees;
+      if (emps.length === 0) {
+        try {
+          emps = await attendanceService.getEmployees();
+          setAllEmployees(emps.filter((e) => e.is_active));
+        } catch (e) {
+          console.warn('Failed to fetch employees for biometric login:', e);
+        }
+      }
+      demoTargetEmp =
+        emps.find((e) => e.id === bioId && e.is_active) ||
+        (bioCode ? emps.find((e) => e.employee_code.toUpperCase() === bioCode.toUpperCase() && e.is_active) : undefined);
 
-    if (!targetEmp) {
-      setLoginError('Data karyawan sidik jari tidak ditemukan atau akun sedang tidak aktif.');
-      return;
+      if (!demoTargetEmp) {
+        setLoginError('Data karyawan sidik jari tidak ditemukan atau akun sedang tidak aktif.');
+        return;
+      }
     }
 
     if (typeof window === 'undefined' || !window.PublicKeyCredential) {
@@ -531,14 +613,28 @@ export default function MobileAttendancePage() {
         throw new Error('Verifikasi sidik jari dibatalkan.');
       }
 
-      // Verifikasi sidik jari fisik berhasil!
+      let loggedInEmp = demoTargetEmp;
+      if (supabaseReady) {
+        const res = await attendanceService.loginWithBiometricToken(bioToken!);
+        if (!res.success || !res.employee) {
+          throw new Error(res.error || 'Sesi sidik jari tidak valid. Silakan masuk dengan ID & PIN.');
+        }
+        loggedInEmp = res.employee;
+      }
+
+      if (!loggedInEmp) {
+        throw new Error('Data karyawan tidak ditemukan.');
+      }
+
+      // Verifikasi sidik jari fisik + token server berhasil!
       setBiometricSuccess(true);
       setTimeout(() => {
-        setCurrentEmployee(targetEmp);
-        localStorage.setItem(SAVED_EMP_ID_KEY, targetEmp.id);
+        setCurrentEmployee(loggedInEmp!);
+        saveActiveEmployeeCache(loggedInEmp!);
         localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
         setIsLoggingIn(false);
         setBiometricSuccess(false);
+        void attendanceService.syncPendingAttendance();
       }, 500);
     } catch (err: any) {
       setIsLoggingIn(false);
@@ -602,8 +698,16 @@ export default function MobileAttendancePage() {
         throw new Error('Perekaman sidik jari dibatalkan.');
       }
 
-      // Simpan Credential ID hardware dan data karyawan di HP
+      // Simpan Credential ID hardware + signed device token dari server
       const credIdBase64 = bufferToBase64(cred.rawId);
+      if (isSupabaseConfigured()) {
+        const bioToken = await attendanceService.createBiometricToken(credIdBase64);
+        if (!bioToken) {
+          throw new Error('Gagal mendaftarkan token sidik jari ke server. Silakan login ulang dengan PIN lalu coba kembali.');
+        }
+        localStorage.setItem(BIOMETRIC_TOKEN_KEY, bioToken);
+      }
+
       localStorage.setItem(BIOMETRIC_CRED_ID_KEY, credIdBase64);
       localStorage.setItem(BIOMETRIC_EMP_ID_KEY, currentEmployee.id);
       localStorage.setItem(BIOMETRIC_EMP_NAME_KEY, currentEmployee.full_name);
@@ -637,6 +741,7 @@ export default function MobileAttendancePage() {
     localStorage.removeItem(BIOMETRIC_EMP_NAME_KEY);
     localStorage.removeItem(BIOMETRIC_EMP_CODE_KEY);
     localStorage.removeItem(BIOMETRIC_CRED_ID_KEY);
+    localStorage.removeItem(BIOMETRIC_TOKEN_KEY);
     setIsBiometricEnrolled(false);
     setEnrolledBiometricName(null);
     setBiometricEnrollMsg({
@@ -675,7 +780,8 @@ export default function MobileAttendancePage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(SAVED_EMP_ID_KEY);
+    void attendanceService.logoutEmployee();
+    saveActiveEmployeeCache(null);
     setCurrentEmployee(null);
     setTodayLog(null);
     setUserGps(null);
@@ -778,11 +884,14 @@ export default function MobileAttendancePage() {
     }
 
     try {
-      const updated = await attendanceService.saveEmployee({
-        ...currentEmployee,
-        pin: newPin.trim(),
-      });
+      const updated = isSupabaseConfigured()
+        ? await attendanceService.updateOwnProfile({ pin: newPin.trim() })
+        : await attendanceService.saveEmployee({
+            ...currentEmployee,
+            pin: newPin.trim(),
+          });
       setCurrentEmployee(updated);
+      saveActiveEmployeeCache(updated);
       setPinChangeMsg('PIN berhasil diperbarui!');
       setTimeout(() => {
         setIsPinModalOpen(false);
@@ -851,29 +960,50 @@ export default function MobileAttendancePage() {
     setIsSavingProfile(true);
     setEditProfileMsg(null);
     try {
-      const updatedProfile: EmployeeProfile = {
-        ...currentEmployee,
-        full_name: editName.trim(),
-        role_title: editRole.trim() || 'Barista',
-        phone: editPhone.trim(),
-        avatar_url: editAvatarUrl || '',
-        updated_at: new Date().toISOString(),
-      };
+      const avatarKey = `obathaus_employee_avatar_${currentEmployee.id}`;
+      let saved: EmployeeProfile;
 
-      const saved = await attendanceService.saveEmployee(updatedProfile);
-      const effectiveAvatar = saved.avatar_url ?? (editAvatarUrl || '');
-      if (effectiveAvatar) {
-        localStorage.setItem(`obathaus_employee_avatar_${currentEmployee.id}`, effectiveAvatar);
+      if (isSupabaseConfigured()) {
+        let nextAvatarUrl = editAvatarUrl;
+        if (editAvatarUrl && editAvatarUrl.startsWith('data:image/')) {
+          const uploaded = await attendanceService.uploadEmployeeAvatar(editAvatarUrl);
+          nextAvatarUrl = uploaded.avatar_url;
+        } else if (!editAvatarUrl && currentEmployee.avatar_url) {
+          await attendanceService.deleteEmployeeAvatar();
+          nextAvatarUrl = null;
+        }
+
+        saved = await attendanceService.updateOwnProfile({
+          full_name: editName.trim(),
+          role_title: editRole.trim() || 'Barista',
+          phone: editPhone.trim(),
+          avatar_url: nextAvatarUrl || null,
+        });
+        localStorage.removeItem(avatarKey);
       } else {
-        localStorage.removeItem(`obathaus_employee_avatar_${currentEmployee.id}`);
+        const updatedProfile: EmployeeProfile = {
+          ...currentEmployee,
+          full_name: editName.trim(),
+          role_title: editRole.trim() || 'Barista',
+          phone: editPhone.trim(),
+          avatar_url: editAvatarUrl || '',
+          updated_at: new Date().toISOString(),
+        };
+        saved = await attendanceService.saveEmployee(updatedProfile);
+        if (saved.avatar_url) {
+          localStorage.setItem(avatarKey, saved.avatar_url);
+        } else {
+          localStorage.removeItem(avatarKey);
+        }
       }
 
       const finalProfile: EmployeeProfile = {
         ...saved,
-        avatar_url: effectiveAvatar,
+        avatar_url: saved.avatar_url ?? '',
       };
 
       setCurrentEmployee(finalProfile);
+      saveActiveEmployeeCache(finalProfile);
       setAllEmployees((prev) => prev.map((e) => (e.id === finalProfile.id ? finalProfile : e)));
       setEditProfileMsg({ type: 'success', text: 'Profil berhasil diperbarui dan disinkronkan!' });
 

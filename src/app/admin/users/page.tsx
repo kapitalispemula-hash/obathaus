@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
 import { INITIAL_PROFILES } from '@/lib/mock-data';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { Profile, UserRole, Outlet, Warehouse } from '@/types/database';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '@/lib/auth-context';
@@ -26,7 +27,9 @@ import {
 
 export default function AdminUsersPage() {
   const { user: currentUser } = useAuth();
-  const [profiles, setProfiles] = useState<Profile[]>(INITIAL_PROFILES);
+  const [profiles, setProfiles] = useState<Profile[]>(() =>
+    isSupabaseConfigured() ? [] : INITIAL_PROFILES
+  );
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -96,7 +99,7 @@ export default function AdminUsersPage() {
     setFormName(p.full_name);
     setFormUsername(p.username || p.email.split('@')[0] || '');
     setFormEmail(p.email);
-    setFormPassword(p.password || '');
+    setFormPassword('');
     setShowPassword(false);
     setFormRole(p.role);
     setFormOutletId(p.primary_outlet_id || outlets[0]?.id || '');

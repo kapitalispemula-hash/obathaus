@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { INITIAL_STORE_SETTINGS } from '@/lib/mock-data';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
@@ -874,31 +875,33 @@ export default function AdminSettingsPage() {
           </div>
         </form>
 
-        {/* 4. Demo Data Management Card (PRD DEMO-001 - DEMO-005) */}
-        <div className="p-6 rounded-2xl bg-white border border-borderline shadow-xs space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-canvas border border-borderline text-heading">
-                <RotateCcw className="w-3 h-3 text-[#FF6B00]" />
-                <span>Demo Data Engine</span>
+        {/* 4. Demo Data Management Card (Only active in offline/demo mode or when NEXT_PUBLIC_ENABLE_DEMO_TOOLS=true) */}
+        {(!isSupabaseConfigured() || process.env.NEXT_PUBLIC_ENABLE_DEMO_TOOLS === 'true') && (
+          <div className="p-6 rounded-2xl bg-white border border-borderline shadow-xs space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-canvas border border-borderline text-heading">
+                  <RotateCcw className="w-3 h-3 text-[#FF6B00]" />
+                  <span>Demo Data Engine</span>
+                </div>
+                <h3 className="text-base font-bold text-heading">
+                  Kembalikan Data Demo ke Kondisi Awal (Reset)
+                </h3>
+                <p className="text-xs text-mutedtext leading-relaxed max-w-2xl">
+                  Fitur ini akan mengembalikan data sistem ke kondisi demonstrasi yang bersih: 8 kategori lengkap, 36 menu produk dengan foto, 30 hari riwayat transaksi realistis, dan pengeluaran operasional simulasi.
+                </p>
               </div>
-              <h3 className="text-base font-bold text-heading">
-                Kembalikan Data Demo ke Kondisi Awal (Reset)
-              </h3>
-              <p className="text-xs text-mutedtext leading-relaxed max-w-2xl">
-                Fitur ini akan mengembalikan data sistem ke kondisi demonstrasi yang bersih: 8 kategori lengkap, 36 menu produk dengan foto, 30 hari riwayat transaksi realistis, dan pengeluaran operasional simulasi.
-              </p>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => setIsResetModalOpen(true)}
-              className="px-4 py-2 bg-heading hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
-            >
-              Reset Data Demo
-            </button>
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(true)}
+                className="px-4 py-2 bg-heading hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
+              >
+                Reset Data Demo
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Reset Confirmation Modal */}

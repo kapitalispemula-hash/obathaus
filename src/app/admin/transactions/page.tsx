@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { dbService } from '@/lib/services/database';
-import { getOfflineQueue, syncOfflineQueue } from '@/lib/services/offline-sync';
+import { getPendingOfflineSyncCount, syncOfflineQueue } from '@/lib/services/offline-sync';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { useOutlet } from '@/lib/outlet-context';
@@ -86,7 +86,7 @@ export default function AdminTransactionsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const pending = getOfflineQueue().length;
+      const pending = getPendingOfflineSyncCount();
       setOfflinePendingCount(pending);
       const [trxs, s] = await Promise.all([
         dbService.getTransactions({
@@ -121,8 +121,12 @@ export default function AdminTransactionsPage() {
     const handleSynced = () => {
       void loadData();
     };
+    const handleQueueChanged = () => {
+      setOfflinePendingCount(getPendingOfflineSyncCount());
+    };
     if (typeof window !== 'undefined') {
       window.addEventListener('obathaus_offline_queue_synced', handleSynced);
+      window.addEventListener('obathaus_offline_queue_changed', handleQueueChanged);
     }
 
     let channel: any = null;
@@ -138,6 +142,7 @@ export default function AdminTransactionsPage() {
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('obathaus_offline_queue_synced', handleSynced);
+        window.removeEventListener('obathaus_offline_queue_changed', handleQueueChanged);
       }
       if (channel && isSupabaseConfigured()) {
         const supabase = createClient();
@@ -304,15 +309,17 @@ export default function AdminTransactionsPage() {
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncingOffline || loading ? 'animate-spin' : ''}`} />
               <span>Sinkronkan / Refresh</span>
             </button>
-            <button
-              onClick={handleOpenClearAll}
-              disabled={transactions.length === 0}
-              className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed border border-red-200 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
-              title="Hapus seluruh riwayat transaksi (Khusus Admin)"
-            >
-              <Trash2 className="w-4 h-4 text-red-600" />
-              <span>Hapus Semua Riwayat</span>
-            </button>
+            {(!isSupabaseConfigured() || process.env.NEXT_PUBLIC_ENABLE_DEMO_TOOLS === 'true') && (
+              <button
+                onClick={handleOpenClearAll}
+                disabled={transactions.length === 0}
+                className="px-3.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed border border-red-200 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-2xs"
+                title="Hapus seluruh riwayat transaksi (Khusus Admin)"
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+                <span>Hapus Semua Riwayat</span>
+              </button>
+            )}
           </div>
         </div>
 

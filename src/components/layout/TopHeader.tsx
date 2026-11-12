@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -8,11 +8,14 @@ import {
   ShieldCheck,
   UtensilsCrossed,
   Store,
+  WifiOff,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
 import { useOutlet } from '@/lib/outlet-context';
 import { NotificationPopover } from '@/components/layout/NotificationPopover';
+import { getPendingOfflineSyncCount, syncOfflineQueue } from '@/lib/services/offline-sync';
 
 interface TopHeaderProps {
   searchQuery?: string;
@@ -29,6 +32,46 @@ export function TopHeader({
   const { role } = useAuth();
   const { settings } = useCart();
   const { activeOutlet, availableOutlets, isAdmin, isAllOutletsSelected, setActiveOutletId } = useOutlet();
+
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncingNow, setIsSyncingNow] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const refreshSyncState = () => {
+      setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+      setPendingSyncCount(getPendingOfflineSyncCount());
+    };
+
+    refreshSyncState();
+
+    window.addEventListener('online', refreshSyncState);
+    window.addEventListener('offline', refreshSyncState);
+    window.addEventListener('obathaus_offline_queue_changed', refreshSyncState);
+    window.addEventListener('obathaus_offline_queue_synced', refreshSyncState);
+    window.addEventListener('storage', refreshSyncState);
+
+    return () => {
+      window.removeEventListener('online', refreshSyncState);
+      window.removeEventListener('offline', refreshSyncState);
+      window.removeEventListener('obathaus_offline_queue_changed', refreshSyncState);
+      window.removeEventListener('obathaus_offline_queue_synced', refreshSyncState);
+      window.removeEventListener('storage', refreshSyncState);
+    };
+  }, []);
+
+  const handleHeaderSync = async () => {
+    if (!isOnline || isSyncingNow) return;
+    try {
+      setIsSyncingNow(true);
+      await syncOfflineQueue();
+    } finally {
+      setPendingSyncCount(getPendingOfflineSyncCount());
+      setIsSyncingNow(false);
+    }
+  };
 
   const isCashierPanel = pathname.startsWith('/pos');
   const isAdminPanel = pathname.startsWith('/admin');
@@ -141,6 +184,43 @@ export function TopHeader({
               <span className="hidden sm:inline">Buka POS</span>
             </button>
           )
+        )}
+
+        {/* Compact Offline / Pending Sync Pill */}
+        {(!isOnline || pendingSyncCount > 0) && (
+          <button
+            type="button"
+            onClick={handleHeaderSync}
+            disabled={!isOnline || isSyncingNow}
+            title={
+              !isOnline
+                ? `Mode Offline${pendingSyncCount > 0 ? ` — ${pendingSyncCount} antrean menunggu internet` : ''}`
+                : `${pendingSyncCount} data offline belum tersinkron. Klik untuk sinkronkan sekarang.`
+            }
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border shadow-2xs transition-colors shrink-0 ${
+              !isOnline
+                ? 'bg-rose-50 text-rose-700 border-rose-200 cursor-default'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 cursor-pointer'
+            }`}
+          >
+            {!isOnline ? (
+              <WifiOff className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isSyncingNow ? 'animate-spin' : ''}`} />
+            )}
+            <span className="hidden sm:inline">
+              {!isOnline
+                ? pendingSyncCount > 0
+                  ? `Offline (${pendingSyncCount})`
+                  : 'Offline'
+                : isSyncingNow
+                ? 'Menyinkron...'
+                : `${pendingSyncCount} Pending Sync`}
+            </span>
+            <span className="sm:hidden tabular-nums">
+              {pendingSyncCount > 0 ? pendingSyncCount : 'OFF'}
+            </span>
+          </button>
         )}
 
         {/* Real-time Interactive Notification Popover (Fully Functional) */}

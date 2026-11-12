@@ -2,7 +2,14 @@
 // CAFE POS — POINT OF SALE & FINANCIAL ANALYTICS
 
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
-import { enqueueOfflineTransaction, getOfflineQueue, syncOfflineQueue } from '@/lib/services/offline-sync';
+import {
+  enqueueOfflineTransaction,
+  enqueueOfflineShiftOp,
+  getOfflineQueue,
+  getOfflineShiftQueue,
+  syncOfflineQueue,
+  OfflineStockDeduction,
+} from '@/lib/services/offline-sync';
 import {
   Category,
   Product,
@@ -173,6 +180,11 @@ function setStorageItem<T>(key: string, value: T): void {
   }
 }
 
+function stripProfilePassword(p: Profile): Profile {
+  const { password: _omitted, ...safe } = p;
+  return safe as Profile;
+}
+
 let isStorageSynced = false;
 const PRODUCTION_CLEAN_FLAG = 'obathaus_prod_purge_hasan_v3';
 
@@ -233,12 +245,18 @@ function syncFromStorage(force = false) {
     const deletedProfileIds = new Set(getStorageItem<string[]>(STORAGE_KEYS.DELETED_PROFILE_IDS, []));
     const storedProfiles = getStorageItem<Profile[] | null>(STORAGE_KEYS.PROFILES, null);
     if (Array.isArray(storedProfiles) && storedProfiles.length > 0) {
-      const validStored = storedProfiles.filter((p) => p && p.id && !deletedProfileIds.has(p.id));
+      const validStored = storedProfiles
+        .filter((p) => p && p.id && !deletedProfileIds.has(p.id))
+        .map((p) => (isSupabaseConfigured() ? stripProfilePassword(p) : p));
       const existingIds = new Set(validStored.map((p) => p.id));
-      const missingInitial = INITIAL_PROFILES.filter((p) => !existingIds.has(p.id) && !deletedProfileIds.has(p.id));
+      const missingInitial = INITIAL_PROFILES
+        .filter((p) => !existingIds.has(p.id) && !deletedProfileIds.has(p.id))
+        .map((p) => (isSupabaseConfigured() ? stripProfilePassword(p) : p));
       localProfiles = [...validStored, ...missingInitial];
     } else {
-      localProfiles = INITIAL_PROFILES.filter((p) => !deletedProfileIds.has(p.id));
+      localProfiles = INITIAL_PROFILES
+        .filter((p) => !deletedProfileIds.has(p.id))
+        .map((p) => (isSupabaseConfigured() ? stripProfilePassword(p) : p));
     }
 
     const storedTransactions = getStorageItem<Transaction[] | null>(STORAGE_KEYS.TRANSACTIONS, null);
@@ -460,7 +478,13 @@ export const dbService = {
         let query = supabase.from('categories').select('*').order('sort_order', { ascending: true });
         if (onlyActive) query = query.eq('is_active', true);
         const { data, error } = await query;
-        if (!error && data) return data as Category[];
+        if (!error && data) {
+          if (!onlyActive) {
+            localCategories = data as Category[];
+            setStorageItem(STORAGE_KEYS.CATEGORIES, localCategories);
+          }
+          return data as Category[];
+        }
       } catch (e) {
         console.warn('Falling back to local categories:', e);
       }
@@ -481,8 +505,16 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('categories').insert(newCat).select().single();
-        if (!error && data) return data as Category;
-      } catch (e) {
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal membuat kategori di database: ${error.message}`);
+        }
+        if (!error && data) {
+          localCategories = [...localCategories.filter((c) => c.id !== data.id), data as Category];
+          setStorageItem(STORAGE_KEYS.CATEGORIES, localCategories);
+          return data as Category;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local createCategory:', e);
       }
     }
@@ -501,8 +533,16 @@ export const dbService = {
           .eq('id', id)
           .select()
           .single();
-        if (!error && data) return data as Category;
-      } catch (e) {
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal memperbarui kategori di database: ${error.message}`);
+        }
+        if (!error && data) {
+          localCategories = localCategories.map((c) => (c.id === id ? (data as Category) : c));
+          setStorageItem(STORAGE_KEYS.CATEGORIES, localCategories);
+          return data as Category;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local updateCategory:', e);
       }
     }
@@ -514,8 +554,9 @@ export const dbService = {
   },
 
   async deleteCategory(id: string): Promise<boolean> {
-    // Check if category is used by products
-    const hasProducts = localProducts.some((p) => p.category_id === id);
+    // Check against live products list (cloud + local fallback) so category in use cannot be deleted
+    const allProducts = await this.getProducts();
+    const hasProducts = allProducts.some((p) => p.category_id === id);
     if (hasProducts) {
       throw new Error('Kategori tidak dapat dihapus karena masih memiliki produk terkait. Pindahkan atau nonaktifkan produk terlebih dahulu.');
     }
@@ -523,6 +564,9 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { error } = await supabase.from('categories').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus kategori dari database: ${error.message}`);
+        }
         if (!error) {
           const deletedCatIds = getStorageItem<string[]>(STORAGE_KEYS.DELETED_CATEGORY_IDS, []);
           if (!deletedCatIds.includes(id)) {
@@ -532,7 +576,8 @@ export const dbService = {
           setStorageItem(STORAGE_KEYS.CATEGORIES, localCategories);
           return true;
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local deleteCategory:', e);
       }
     }
@@ -558,7 +603,13 @@ export const dbService = {
         if (filter?.categoryId) query = query.eq('category_id', filter.categoryId);
         if (filter?.search) query = query.ilike('name', `%${filter.search}%`);
         const { data, error } = await query;
-        if (!error && data) return data as Product[];
+        if (!error && data) {
+          if (!filter?.onlyActive && !filter?.categoryId && !filter?.search) {
+            localProducts = data as Product[];
+            setStorageItem(STORAGE_KEYS.PRODUCTS, localProducts);
+          }
+          return data as Product[];
+        }
       } catch (e) {
         console.warn('Falling back to local getProducts:', e);
       }
@@ -592,7 +643,12 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('products').insert(newProd).select('*, category:categories(*)').single();
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menyimpan produk ke database: ${error.message}`);
+        }
         if (!error && data) {
+          localProducts = [...localProducts.filter((p) => p.id !== data.id), data as Product];
+          setStorageItem(STORAGE_KEYS.PRODUCTS, localProducts);
           void this.recordAuditLog({
             user_id: getActorIdFromBrowser(),
             action: 'create_product',
@@ -603,7 +659,8 @@ export const dbService = {
           });
           return data as Product;
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local createProduct:', e);
       }
     }
@@ -636,7 +693,12 @@ export const dbService = {
           .eq('id', id)
           .select('*, category:categories(*)')
           .single();
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal memperbarui produk di database: ${error.message}`);
+        }
         if (!error && data) {
+          localProducts = localProducts.map((p) => (p.id === id ? (data as Product) : p));
+          setStorageItem(STORAGE_KEYS.PRODUCTS, localProducts);
           void this.recordAuditLog({
             user_id: getActorIdFromBrowser(),
             action: 'update_product',
@@ -647,7 +709,8 @@ export const dbService = {
           });
           return data as Product;
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local updateProduct:', e);
       }
     }
@@ -756,10 +819,11 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { error } = await supabase.from('products').delete().eq('id', id);
-        if (error) {
-          console.warn('Supabase deleteProduct error:', error);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus produk dari database: ${error.message}`);
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local deleteProduct:', e);
       }
     }
@@ -911,13 +975,29 @@ export const dbService = {
       changeAmount = 0;
     }
 
-    // 8. Generate Invoice Number safely with Outlet Custom Prefix
-    localInvoiceCounter++;
-    setStorageItem(STORAGE_KEYS.INVOICE_COUNTER, localInvoiceCounter);
+    // 8. Generate Invoice Number safely with server-side atomic sequence (fallback to local counter offline)
     const now = new Date();
     const dateStr = getWitaDateStr(now).replace(/-/g, '');
     const invoicePrefix = targetOutlet?.invoice_prefix || settings.invoice_prefix || 'INV';
-    const invoiceNumber = `${invoicePrefix}-${dateStr}-${String(localInvoiceCounter).padStart(4, '0')}`;
+    let invoiceNumber: string | null = null;
+
+    if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const supabase = createClient();
+        const { data: rpcInv, error: rpcInvErr } = await supabase.rpc('next_invoice_number', {
+          p_prefix: invoicePrefix,
+        });
+        if (!rpcInvErr && typeof rpcInv === 'string' && rpcInv.trim() !== '') {
+          invoiceNumber = rpcInv.trim();
+        }
+      } catch {}
+    }
+
+    if (!invoiceNumber) {
+      localInvoiceCounter++;
+      setStorageItem(STORAGE_KEYS.INVOICE_COUNTER, localInvoiceCounter);
+      invoiceNumber = `${invoicePrefix}-${dateStr}-${String(localInvoiceCounter).padStart(4, '0')}`;
+    }
     const transactionId = crypto.randomUUID();
 
     // Seed running balances for accurate double-entry calculation across multi-item checkout
@@ -926,16 +1006,7 @@ export const dbService = {
       runningBalances[s.raw_material_id] = Number(s.quantity || 0);
     }
 
-    const stockDeductions: {
-      raw_material_id: string;
-      neededQty: number;
-      balBefore: number;
-      balAfter: number;
-      unitSymbol: string;
-      unitCost: number;
-      productName: string;
-      qtySold: number;
-    }[] = [];
+    const stockDeductions: OfflineStockDeduction[] = [];
 
     let totalTransactionCogs = 0;
 
@@ -1056,7 +1127,8 @@ export const dbService = {
     localTransactions.unshift(newTransaction);
     setStorageItem(STORAGE_KEYS.TRANSACTIONS, localTransactions);
 
-    // REAL-TIME SUPABASE CLOUD COMMIT WITH OFFLINE QUEUE FALLBACK
+    // REAL-TIME SUPABASE CLOUD COMMIT WITH FULL OFFLINE QUEUE FALLBACK (TRX + STOCKS + LEDGER + SHIFT)
+    let cloudCommitSucceeded = false;
     if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         const supabase = createClient();
@@ -1083,23 +1155,33 @@ export const dbService = {
 
         let { error: trxErr } = await supabase.from('transactions').insert(insertPayload);
 
-        // Retry with unique suffix on invoice_number collision across browsers
+        // Retry with server sequence or unique suffix on invoice_number collision across browsers
         if (trxErr && trxErr.code === '23505' && trxErr.message?.includes('invoice_number')) {
-          const uniqueInv = `${invoicePrefix}-${dateStr}-${String(localInvoiceCounter).padStart(4, '0')}-${Math.floor(100 + Math.random() * 900)}`;
+          const { data: rpcInv } = await supabase.rpc('next_invoice_number', { p_prefix: invoicePrefix });
+          const uniqueInv =
+            typeof rpcInv === 'string' && rpcInv.trim() !== ''
+              ? rpcInv.trim()
+              : `${invoicePrefix}-${dateStr}-${String(localInvoiceCounter || 1).padStart(4, '0')}-${Math.floor(100 + Math.random() * 900)}`;
           newTransaction.invoice_number = uniqueInv;
           insertPayload = { ...insertPayload, invoice_number: uniqueInv };
           const retryInv = await supabase.from('transactions').insert(insertPayload);
           trxErr = retryInv.error;
         }
 
-        // Retry with shift_id: null if shift FK doesn't exist in cloud
+        // If shift hasn't synced yet from offline shift queue, flush offline shifts first before falling back to null
         if (trxErr && insertPayload.shift_id && (trxErr.code === '23503' || trxErr.message?.toLowerCase().includes('shift_id'))) {
-          insertPayload = { ...insertPayload, shift_id: null };
-          const retryShift = await supabase.from('transactions').insert(insertPayload);
-          trxErr = retryShift.error;
+          await syncOfflineQueue();
+          const retryAfterShiftSync = await supabase.from('transactions').insert(insertPayload);
+          trxErr = retryAfterShiftSync.error;
+          if (trxErr && (trxErr.code === '23503' || trxErr.message?.toLowerCase().includes('shift_id'))) {
+            insertPayload = { ...insertPayload, shift_id: null };
+            const retryShift = await supabase.from('transactions').insert(insertPayload);
+            trxErr = retryShift.error;
+          }
         }
 
         if (!trxErr) {
+          cloudCommitSucceeded = true;
           const dbItems = items.map((it) => ({
             id: it.id,
             transaction_id: newTransaction.id,
@@ -1115,16 +1197,23 @@ export const dbService = {
           }));
           await supabase.from('transaction_items').insert(dbItems);
 
-          if (activeShift && isUuid(activeShift.id)) {
-            await supabase
-              .from('cashier_shifts')
-              .update({
-                total_cash_sales: activeShift.total_cash_sales,
-                total_non_cash_sales: activeShift.total_non_cash_sales,
-                closing_cash_expected: activeShift.closing_cash_expected,
-                updated_at: now.toISOString(),
-              })
-              .eq('id', activeShift.id);
+          if (insertPayload.shift_id && isUuid(insertPayload.shift_id)) {
+            const { error: shiftRpcErr } = await supabase.rpc('increment_shift_sales_atomic', {
+              p_shift_id: insertPayload.shift_id,
+              p_payment_method: newTransaction.payment_method,
+              p_amount: newTransaction.grand_total,
+            });
+            if (shiftRpcErr) {
+              await supabase
+                .from('cashier_shifts')
+                .update({
+                  total_cash_sales: activeShift?.total_cash_sales || 0,
+                  total_non_cash_sales: activeShift?.total_non_cash_sales || 0,
+                  closing_cash_expected: activeShift?.closing_cash_expected || 0,
+                  updated_at: now.toISOString(),
+                })
+                .eq('id', insertPayload.shift_id);
+            }
           }
 
           void this.recordAuditLog({
@@ -1141,22 +1230,75 @@ export const dbService = {
             },
           });
         } else {
-          console.warn('Supabase transaction insert failed, queued for offline sync:', trxErr);
-          enqueueOfflineTransaction(newTransaction, trxErr.message);
+          console.warn('Supabase transaction insert failed, queued with full stock/shift payload for offline sync:', trxErr);
+          enqueueOfflineTransaction(newTransaction, trxErr.message, {
+            outletName: targetOutlet?.name,
+            stockDeductions,
+          });
         }
       } catch (err: any) {
-        console.warn('Network issue during checkout, queued for offline sync:', err);
-        enqueueOfflineTransaction(newTransaction, err?.message || String(err));
+        console.warn('Network issue during checkout, queued with full stock/shift payload for offline sync:', err);
+        enqueueOfflineTransaction(newTransaction, err?.message || String(err), {
+          outletName: targetOutlet?.name,
+          stockDeductions,
+        });
       }
     } else {
-      enqueueOfflineTransaction(newTransaction);
+      enqueueOfflineTransaction(newTransaction, undefined, {
+        outletName: targetOutlet?.name,
+        stockDeductions,
+      });
     }
 
-    // Persist recipe stock deductions + double-entry ledger to Supabase & localStorage
-    for (const ded of stockDeductions) {
-      try {
-        await this.updateOutletStock(targetOutletId, ded.raw_material_id, -ded.neededQty);
-        await this.recordStockMovement({
+    // Persist recipe stock deductions + double-entry ledger:
+    // - If cloud checkout succeeded -> commit to Supabase atomically + localStorage
+    // - If queued offline -> update local cache only so offline-sync.ts commits cloud stock & ledger on reconnect without double-deduction
+    if (cloudCommitSucceeded) {
+      for (const ded of stockDeductions) {
+        try {
+          await this.updateOutletStock(targetOutletId, ded.raw_material_id, -ded.neededQty);
+          await this.recordStockMovement({
+            location_type: 'outlet',
+            location_id: targetOutletId,
+            location_name: targetOutlet?.name || 'Outlet Cabang',
+            raw_material_id: ded.raw_material_id,
+            movement_type: 'pos_consumption',
+            quantity_change: -ded.neededQty,
+            balance_before: ded.balBefore,
+            balance_after: ded.balAfter,
+            unit_symbol: ded.unitSymbol,
+            unit_cost: ded.unitCost,
+            total_cost: ded.neededQty * ded.unitCost,
+            reference_document_type: 'pos_transaction',
+            reference_document_id: newTransaction.id,
+            reference_document_number: newTransaction.invoice_number,
+            notes: `Pemakaian resep: ${ded.productName} (${ded.qtySold}x)`,
+            created_by: cashier.id,
+          });
+        } catch (stockErr) {
+          console.warn('Non-fatal stock deduction warning during checkout:', stockErr);
+        }
+      }
+    } else if (stockDeductions.length > 0) {
+      const currentStk = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+      const nextStk = [...currentStk];
+      const currentLedger = getStorageItem<StockLedgerEntry[]>(STORAGE_KEYS.STOCK_LEDGER, localStockLedger);
+      const nextLedger = [...currentLedger];
+
+      for (const ded of stockDeductions) {
+        const sIdx = nextStk.findIndex(
+          (s) => s.outlet_id === targetOutletId && s.raw_material_id === ded.raw_material_id
+        );
+        if (sIdx !== -1) {
+          nextStk[sIdx] = {
+            ...nextStk[sIdx],
+            quantity: Math.max(0, Number(nextStk[sIdx].quantity) - ded.neededQty),
+            updated_at: now.toISOString(),
+          };
+        }
+        nextLedger.unshift({
+          id: crypto.randomUUID(),
+          transaction_time: now.toISOString(),
           location_type: 'outlet',
           location_id: targetOutletId,
           location_name: targetOutlet?.name || 'Outlet Cabang',
@@ -1171,12 +1313,14 @@ export const dbService = {
           reference_document_type: 'pos_transaction',
           reference_document_id: newTransaction.id,
           reference_document_number: newTransaction.invoice_number,
-          notes: `Pemakaian resep: ${ded.productName} (${ded.qtySold}x)`,
+          notes: `Pemakaian resep (Pending Sync): ${ded.productName} (${ded.qtySold}x)`,
           created_by: cashier.id,
         });
-      } catch (stockErr) {
-        console.warn('Non-fatal stock deduction warning during checkout:', stockErr);
       }
+      localOutletStocks = nextStk;
+      setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+      localStockLedger = nextLedger;
+      setStorageItem(STORAGE_KEYS.STOCK_LEDGER, localStockLedger);
     }
 
     return newTransaction;
@@ -1472,9 +1616,28 @@ export const dbService = {
     const trx = await this.getTransactionById(transactionId);
     if (!trx) throw new Error('Transaksi tidak ditemukan.');
     if (trx.status === 'voided') throw new Error('Transaksi void tidak dapat di-refund.');
-    if (trx.status === 'refunded') throw new Error('Transaksi ini sudah di-refund sebelumnya.');
+    if (trx.status === 'refunded') throw new Error('Transaksi ini sudah di-refund penuh sebelumnya.');
 
-    let refundAmount = Number(trx.grand_total || 0);
+    let alreadyRefunded = 0;
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: existingRefs } = await supabase
+          .from('transaction_refunds')
+          .select('refund_amount')
+          .eq('transaction_id', trx.id);
+        if (existingRefs) {
+          alreadyRefunded = existingRefs.reduce((acc, r: any) => acc + (Number(r.refund_amount) || 0), 0);
+        }
+      } catch {}
+    }
+
+    const remainingRefundable = Math.max(0, Number(trx.grand_total || 0) - alreadyRefunded);
+    if (remainingRefundable <= 0) {
+      throw new Error('Seluruh nilai transaksi ini sudah di-refund.');
+    }
+
+    let refundAmount = remainingRefundable;
     let refundHpp = Number(trx.total_cogs || 0);
     const itemsToRecord: { transaction_item_id: string; quantity: number; refund_subtotal: number; refund_hpp: number }[] = [];
 
@@ -1497,6 +1660,7 @@ export const dbService = {
           });
         }
       }
+      refundAmount = Math.min(refundAmount, remainingRefundable);
     } else if (trx.items) {
       for (const orig of trx.items) {
         itemsToRecord.push({
@@ -1508,19 +1672,22 @@ export const dbService = {
       }
     }
 
-    if (refundAmount <= 0) refundAmount = Number(trx.grand_total || 0);
+    if (refundAmount <= 0) refundAmount = remainingRefundable;
+    const isFullyRefunded = refundType === 'full' || (alreadyRefunded + refundAmount) >= Number(trx.grand_total || 0);
     const refundId = crypto.randomUUID();
     const now = new Date().toISOString();
 
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const { error: updErr } = await supabase
-          .from('transactions')
-          .update({ status: 'refunded' })
-          .eq('id', trx.id);
-        if (updErr && !isNetworkFailure(updErr)) {
-          throw new Error(`Gagal update status refund di database: ${updErr.message}`);
+        if (isFullyRefunded) {
+          const { error: updErr } = await supabase
+            .from('transactions')
+            .update({ status: 'refunded' })
+            .eq('id', trx.id);
+          if (updErr && !isNetworkFailure(updErr)) {
+            throw new Error(`Gagal update status refund di database: ${updErr.message}`);
+          }
         }
 
         const { error: refErr } = await supabase.from('transaction_refunds').insert({
@@ -1533,9 +1700,12 @@ export const dbService = {
           refunded_by: adminId,
           created_at: now,
         });
+        if (refErr && !isNetworkFailure(refErr)) {
+          throw new Error(`Gagal mencatat data refund di database: ${refErr.message}`);
+        }
 
         if (!refErr && itemsToRecord.length > 0) {
-          await supabase.from('transaction_refund_items').insert(
+          const { error: refItemsErr } = await supabase.from('transaction_refund_items').insert(
             itemsToRecord.map((ri) => ({
               id: crypto.randomUUID(),
               refund_id: refundId,
@@ -1546,13 +1716,18 @@ export const dbService = {
               created_at: now,
             }))
           );
+          if (refItemsErr && !isNetworkFailure(refItemsErr)) {
+            console.warn('Supabase transaction_refund_items insert warning:', refItemsErr);
+          }
         }
       } catch (e: any) {
         if (!isNetworkFailure(e)) throw e;
       }
     }
 
-    trx.status = 'refunded';
+    if (isFullyRefunded) {
+      trx.status = 'refunded';
+    }
     const idx = localTransactions.findIndex((t) => t.id === trx.id);
     if (idx !== -1) localTransactions[idx] = trx;
     setStorageItem(STORAGE_KEYS.TRANSACTIONS, localTransactions);
@@ -1598,7 +1773,7 @@ export const dbService = {
       entity_type: 'transaction',
       entity_id: trx.id,
       details: `Admin memproses refund (${refundType}) transaksi ${trx.invoice_number} senilai Rp ${refundAmount.toLocaleString('id-ID')}. Alasan: ${reason}`,
-      new_values: { status: 'refunded', refund_type: refundType, refund_amount: refundAmount, reason },
+      new_values: { status: trx.status, refund_type: refundType, refund_amount: refundAmount, reason },
     });
 
     return { ...trx };
@@ -1721,8 +1896,17 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('expense_categories').insert([newCat]);
-      } catch (e) {
+        const { data, error } = await supabase.from('expense_categories').insert([newCat]).select().single();
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal membuat kategori pengeluaran di database: ${error.message}`);
+        }
+        if (!error && data) {
+          localExpenseCategories.push(data as ExpenseCategory);
+          setStorageItem(STORAGE_KEYS.EXPENSE_CATEGORIES, localExpenseCategories);
+          return data as ExpenseCategory;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Fallback to local for createExpenseCategory:', e);
       }
     }
@@ -1739,26 +1923,17 @@ export const dbService = {
   }): Promise<OperatingExpense[]> {
     if (isSupabaseConfigured()) {
       try {
-        const supabase = createClient();
-        let query = supabase.from('operating_expenses').select('*');
+        const params = new URLSearchParams();
+        if (filter?.outletId && filter.outletId !== 'all') params.set('outletId', filter.outletId);
+        if (filter?.categoryId && filter.categoryId !== 'all') params.set('categoryId', filter.categoryId);
+        if (filter?.startDate) params.set('startDate', filter.startDate);
+        if (filter?.endDate) params.set('endDate', filter.endDate);
+        const qs = params.toString();
 
-        if (filter?.outletId && filter.outletId !== 'all') {
-          query = query.eq('outlet_id', filter.outletId);
-        }
-        if (filter?.categoryId && filter.categoryId !== 'all') {
-          query = query.eq('category_id', filter.categoryId);
-        }
-        if (filter?.startDate) {
-          query = query.gte('expense_date', filter.startDate);
-        }
-        if (filter?.endDate) {
-          query = query.lte('expense_date', filter.endDate);
-        }
-
-        query = query.order('expense_date', { ascending: false }).order('created_at', { ascending: false });
-
-        const { data, error } = await query;
-        if (!error && data) {
+        const res = await fetch(`/api/expenses${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+        if (res.ok) {
+          const payload = await res.json();
+          const data = Array.isArray(payload?.expenses) ? payload.expenses : [];
           const [categories, outlets, profiles] = await Promise.all([
             this.getExpenseCategories(),
             this.getOutlets(),
@@ -1781,11 +1956,12 @@ export const dbService = {
             creator: profiles.find((p) => p.id === exp.created_by),
           }));
 
-          localOperatingExpenses = hydrated;
-          setStorageItem(STORAGE_KEYS.EXPENSES, localOperatingExpenses);
+          if (!qs) {
+            localOperatingExpenses = hydrated;
+            setStorageItem(STORAGE_KEYS.EXPENSES, localOperatingExpenses);
+          }
           return hydrated;
         }
-        if (error) console.warn('Supabase getOperatingExpenses error:', error);
       } catch (e) {
         console.warn('Falling back to local getOperatingExpenses:', e);
       }
@@ -1820,7 +1996,7 @@ export const dbService = {
     if (expense.amount <= 0) throw new Error('Nominal pengeluaran harus lebih besar dari 0.');
     const newExpId = crypto.randomUUID();
     const now = new Date().toISOString();
-    const newExp: OperatingExpense = {
+    let newExp: OperatingExpense = {
       ...expense,
       id: newExpId,
       created_at: now,
@@ -1828,49 +2004,23 @@ export const dbService = {
     };
 
     if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        await this.getExpenseCategories(); // Ensure default categories exist
-
-        const insertPayload: any = {
-          id: newExp.id,
-          category_id: newExp.category_id,
-          outlet_id: newExp.outlet_id || null,
-          title: newExp.title,
-          amount: newExp.amount,
-          expense_date: newExp.expense_date,
-          description: newExp.description || null,
-          created_at: newExp.created_at,
-          updated_at: newExp.updated_at,
-        };
-
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (newExp.created_by && uuidRegex.test(newExp.created_by)) {
-          insertPayload.created_by = newExp.created_by;
-        } else {
-          insertPayload.created_by = null;
+      await this.getExpenseCategories();
+      const res = await fetch('/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newExp),
+      }).catch((e) => {
+        if (isNetworkFailure(e)) return null;
+        throw e;
+      });
+      if (res) {
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.error || 'Gagal mencatat biaya operasional ke server.');
         }
-
-        let { data, error } = await supabase
-          .from('operating_expenses')
-          .insert([insertPayload])
-          .select()
-          .single();
-
-        if (error && error.message?.includes('foreign key constraint') && insertPayload.created_by) {
-          // Retry with created_by = null if profiles foreign key fails
-          insertPayload.created_by = null;
-          const retry = await supabase.from('operating_expenses').insert([insertPayload]).select().single();
-          data = retry.data;
-          error = retry.error;
+        if (body?.expense) {
+          newExp = { ...newExp, ...body.expense, amount: Number(body.expense.amount) };
         }
-
-        if (error) {
-          console.error('Supabase createOperatingExpense error:', error);
-          throw error;
-        }
-      } catch (e) {
-        console.warn('Falling back to local for createOperatingExpense:', e);
       }
     }
 
@@ -1884,7 +2034,6 @@ export const dbService = {
     const outlets = await this.getOutlets();
     const outlet = outlets.find((o) => o.id === newExp.outlet_id);
 
-    // Otomatis kirim notifikasi ke Admin saat pengeluaran baru dicatat oleh outlet/kasir
     try {
       await this.createNotification({
         recipient_role: 'admin',
@@ -1925,22 +2074,19 @@ export const dbService = {
     }
 
     if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const payload: any = {
-          updated_at: new Date().toISOString(),
-        };
-        if (updates.category_id !== undefined) payload.category_id = updates.category_id;
-        if (updates.outlet_id !== undefined) payload.outlet_id = updates.outlet_id || null;
-        if (updates.title !== undefined) payload.title = updates.title;
-        if (updates.amount !== undefined) payload.amount = updates.amount;
-        if (updates.expense_date !== undefined) payload.expense_date = updates.expense_date;
-        if (updates.description !== undefined) payload.description = updates.description || null;
-
-        const { error } = await supabase.from('operating_expenses').update(payload).eq('id', id);
-        if (error) console.error('Supabase updateOperatingExpense error:', error);
-      } catch (e) {
-        console.warn('Falling back to local for updateOperatingExpense:', e);
+      const res = await fetch('/api/expenses', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, updates }),
+      }).catch((e) => {
+        if (isNetworkFailure(e)) return null;
+        throw e;
+      });
+      if (res) {
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.error || 'Gagal memperbarui biaya operasional di server.');
+        }
       }
     }
 
@@ -1979,12 +2125,17 @@ export const dbService = {
   async deleteOperatingExpense(id: string): Promise<boolean> {
     const existing = localOperatingExpenses.find((e) => e.id === id);
     if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { error } = await supabase.from('operating_expenses').delete().eq('id', id);
-        if (error) console.error('Supabase deleteOperatingExpense error:', error);
-      } catch (e) {
-        console.warn('Falling back to local for deleteOperatingExpense:', e);
+      const res = await fetch(`/api/expenses?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }).catch((e) => {
+        if (isNetworkFailure(e)) return null;
+        throw e;
+      });
+      if (res) {
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.error || 'Gagal menghapus biaya operasional dari server.');
+        }
       }
     }
 
@@ -2079,44 +2230,157 @@ export const dbService = {
     const startIso = getWitaIsoFromDateStr(startDateStr, false);
     const endIso = getWitaIsoFromDateStr(endDateStr, true);
 
-    // 1. Fetch live completed transactions across all/selected outlets (Voided & Refunded strictly excluded)
-    const validTransactions = await this.getTransactions({
+    // 1. Fetch non-voided transactions and partial refund records in range
+    const rawTransactions = await this.getTransactions({
       outletId: outletId && outletId !== 'all' ? outletId : undefined,
-      status: 'completed',
       startDate: startIso,
       endDate: endIso,
     });
+    const nonVoidTransactions = rawTransactions.filter((t) => t.status !== 'voided');
 
-    // 2. Net Revenue: SUM(subtotal - discount_total)
-    const netRevenue = validTransactions.reduce((acc, t) => acc + (t.subtotal - t.discount_total), 0);
+    const refundsByTrxId = new Map<
+      string,
+      {
+        refund_type: 'full' | 'partial';
+        refund_amount: number;
+        refund_hpp: number;
+        items: { transaction_item_id: string; quantity: number; refund_subtotal: number; refund_hpp: number }[];
+      }[]
+    >();
 
-    // 3. Total HPP from immutable snapshots: SUM(quantity * unit_hpp)
+    if (isSupabaseConfigured() && nonVoidTransactions.length > 0) {
+      try {
+        const supabase = createClient();
+        const trxIds = nonVoidTransactions.map((t) => t.id).filter(isUuid);
+        if (trxIds.length > 0) {
+          const { data: refundRows } = await supabase
+            .from('transaction_refunds')
+            .select('transaction_id, refund_type, refund_amount, refund_hpp, items:transaction_refund_items(transaction_item_id, quantity, refund_subtotal, refund_hpp)')
+            .in('transaction_id', trxIds);
+
+          if (refundRows) {
+            for (const r of refundRows as any[]) {
+              const list = refundsByTrxId.get(r.transaction_id) || [];
+              list.push({
+                refund_type: r.refund_type,
+                refund_amount: Number(r.refund_amount || 0),
+                refund_hpp: Number(r.refund_hpp || 0),
+                items: (r.items || []).map((ri: any) => ({
+                  transaction_item_id: ri.transaction_item_id,
+                  quantity: Number(ri.quantity || 0),
+                  refund_subtotal: Number(ri.refund_subtotal || 0),
+                  refund_hpp: Number(ri.refund_hpp || 0),
+                })),
+              });
+              refundsByTrxId.set(r.transaction_id, list);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load partial refunds for analytics:', e);
+      }
+    }
+
+    const validTransactions = nonVoidTransactions.filter((t) => {
+      if (t.status === 'completed') return true;
+      if (t.status === 'refunded') {
+        const refs = refundsByTrxId.get(t.id) || [];
+        const totalRefunded = refs.reduce((acc, r) => acc + r.refund_amount, 0);
+        const onlyPartial = refs.length > 0 && refs.every((r) => r.refund_type === 'partial');
+        return onlyPartial && totalRefunded < Number(t.grand_total || 0);
+      }
+      return false;
+    });
+
+    // 2. Net Revenue, Gross Sales, Discounts, HPP, Payment Breakdown & Daily Trend (with Partial Refund adjustments)
+    let grossSales = 0;
+    let discountTotal = 0;
+    let netRevenue = 0;
     let totalHpp = 0;
     let itemsSold = 0;
     const productStatsMap: Record<
       string,
       { name: string; qty: number; revenue: number; hpp: number }
     > = {};
+    const paymentMap: Record<string, { count: number; total: number }> = {
+      cash: { count: 0, total: 0 },
+      qris: { count: 0, total: 0 },
+      debit: { count: 0, total: 0 },
+      transfer: { count: 0, total: 0 },
+    };
+    const dayMap: Record<string, { revenue: number; hpp: number; expenses: number }> = {};
 
     validTransactions.forEach((trx) => {
-      (trx.items || []).forEach((item) => {
-        const itemHpp = item.quantity * item.unit_hpp;
-        const itemNetRevenue = item.subtotal - item.discount_allocated;
-        totalHpp += itemHpp;
-        itemsSold += item.quantity;
+      const refs = refundsByTrxId.get(trx.id) || [];
+      const totalRefundAmount = refs.reduce((acc, r) => acc + r.refund_amount, 0);
+      const totalRefundHpp = refs.reduce((acc, r) => acc + r.refund_hpp, 0);
 
-        if (!productStatsMap[item.product_name]) {
-          productStatsMap[item.product_name] = {
-            name: item.product_name,
-            qty: 0,
-            revenue: 0,
-            hpp: 0,
-          };
+      const refundedItemMap = new Map<string, { qty: number; subtotal: number; hpp: number }>();
+      let hasItemBreakdown = false;
+      for (const r of refs) {
+        for (const ri of r.items) {
+          hasItemBreakdown = true;
+          const prev = refundedItemMap.get(ri.transaction_item_id) || { qty: 0, subtotal: 0, hpp: 0 };
+          refundedItemMap.set(ri.transaction_item_id, {
+            qty: prev.qty + ri.quantity,
+            subtotal: prev.subtotal + ri.refund_subtotal,
+            hpp: prev.hpp + ri.refund_hpp,
+          });
         }
-        productStatsMap[item.product_name].qty += item.quantity;
-        productStatsMap[item.product_name].revenue += itemNetRevenue;
-        productStatsMap[item.product_name].hpp += itemHpp;
+      }
+
+      const rawNet = Math.max(0, Number(trx.subtotal || 0) - Number(trx.discount_total || 0));
+      let trxRefundedNet = 0;
+      let trxHpp = 0;
+
+      (trx.items || []).forEach((item) => {
+        const refInfo = refundedItemMap.get(item.id);
+        const refQty = refInfo ? Math.min(item.quantity, refInfo.qty) : 0;
+        const effQty = Math.max(0, item.quantity - refQty);
+        const origItemNet = Math.max(0, Number(item.subtotal || 0) - Number(item.discount_allocated || 0));
+        const itemNetRefund = item.quantity > 0 ? Math.round((origItemNet / item.quantity) * refQty) : 0;
+        const effItemNet = Math.max(0, origItemNet - itemNetRefund);
+        const effItemHpp = effQty * Number(item.unit_hpp || 0);
+
+        trxRefundedNet += itemNetRefund;
+        trxHpp += effItemHpp;
+        itemsSold += effQty;
+
+        if (effQty > 0 || effItemNet > 0) {
+          if (!productStatsMap[item.product_name]) {
+            productStatsMap[item.product_name] = {
+              name: item.product_name,
+              qty: 0,
+              revenue: 0,
+              hpp: 0,
+            };
+          }
+          productStatsMap[item.product_name].qty += effQty;
+          productStatsMap[item.product_name].revenue += effItemNet;
+          productStatsMap[item.product_name].hpp += effItemHpp;
+        }
       });
+
+      if (!hasItemBreakdown && totalRefundAmount > 0) {
+        trxRefundedNet = Math.min(rawNet, totalRefundAmount);
+        trxHpp = Math.max(0, trxHpp - totalRefundHpp);
+      }
+
+      const trxEffectiveNet = Math.max(0, rawNet - trxRefundedNet);
+      grossSales += Math.max(0, Number(trx.subtotal || 0) - trxRefundedNet);
+      discountTotal += Number(trx.discount_total || 0);
+      netRevenue += trxEffectiveNet;
+      totalHpp += trxHpp;
+
+      if (paymentMap[trx.payment_method]) {
+        paymentMap[trx.payment_method].count++;
+        paymentMap[trx.payment_method].total += Math.max(0, Number(trx.grand_total || 0) - totalRefundAmount);
+      }
+
+      const d = getWitaDateStr(new Date(trx.created_at));
+      if (!dayMap[d]) dayMap[d] = { revenue: 0, hpp: 0, expenses: 0 };
+      dayMap[d].revenue += trxEffectiveNet;
+      dayMap[d].hpp += trxHpp;
     });
 
     // 4. Gross Profit: Net Revenue - Total HPP
@@ -2158,34 +2422,13 @@ export const dbService = {
       .sort((a, b) => b.quantity_sold - a.quantity_sold);
 
     // 9. Payment Methods Breakdown
-    const paymentMap: Record<string, { count: number; total: number }> = {
-      cash: { count: 0, total: 0 },
-      qris: { count: 0, total: 0 },
-      debit: { count: 0, total: 0 },
-      transfer: { count: 0, total: 0 },
-    };
-    validTransactions.forEach((t) => {
-      if (paymentMap[t.payment_method]) {
-        paymentMap[t.payment_method].count++;
-        paymentMap[t.payment_method].total += t.grand_total;
-      }
-    });
     const paymentBreakdown = Object.entries(paymentMap).map(([method, data]) => ({
       method,
       count: data.count,
       total: data.total,
     }));
 
-    // 10. Daily Chart Trend (grouped by Asia/Makassar WITA calendar date)
-    const dayMap: Record<string, { revenue: number; hpp: number; expenses: number }> = {};
-    validTransactions.forEach((t) => {
-      const d = getWitaDateStr(new Date(t.created_at));
-      if (!dayMap[d]) dayMap[d] = { revenue: 0, hpp: 0, expenses: 0 };
-      dayMap[d].revenue += t.subtotal - t.discount_total;
-      (t.items || []).forEach((item) => {
-        dayMap[d].hpp += item.quantity * item.unit_hpp;
-      });
-    });
+    // 10. Daily Chart Trend expenses merge
     validExpenses.forEach((e) => {
       if (!dayMap[e.expense_date]) dayMap[e.expense_date] = { revenue: 0, hpp: 0, expenses: 0 };
       dayMap[e.expense_date].expenses += e.amount;
@@ -2212,6 +2455,8 @@ export const dbService = {
     return {
       summary: {
         periodLabel: period,
+        grossSales,
+        discountTotal,
         netRevenue,
         totalHpp,
         grossProfit,
@@ -2237,29 +2482,29 @@ export const dbService = {
     customEnd?: string
   ): Promise<OutletFinancialPerformance[]> {
     const outlets = await this.getOutlets();
-    const result: OutletFinancialPerformance[] = [];
-
-    for (const outlet of outlets) {
-      const data = await this.getFinancialAnalytics(period, customStart, customEnd, outlet.id);
-      result.push({
-        outlet_id: outlet.id,
-        outlet_name: outlet.name,
-        outlet_code: outlet.code,
-        transaction_count: data.summary.transactionCount,
-        items_sold: data.summary.itemsSold,
-        gross_sales: data.summary.netRevenue,
-        discount_total: 0,
-        net_revenue: data.summary.netRevenue,
-        total_cogs: data.summary.totalHpp,
-        gross_profit: data.summary.grossProfit,
-        gross_margin_percent: data.summary.netRevenue > 0
-          ? Number(((data.summary.grossProfit / data.summary.netRevenue) * 100).toFixed(1))
-          : 0,
-        operating_expenses: data.summary.operatingExpenses,
-        net_operating_profit: data.summary.netOperatingProfit,
-        net_margin_percent: data.summary.netProfitMargin,
-      });
-    }
+    const result = await Promise.all(
+      outlets.map(async (outlet) => {
+        const data = await this.getFinancialAnalytics(period, customStart, customEnd, outlet.id);
+        return {
+          outlet_id: outlet.id,
+          outlet_name: outlet.name,
+          outlet_code: outlet.code,
+          transaction_count: data.summary.transactionCount,
+          items_sold: data.summary.itemsSold,
+          gross_sales: data.summary.grossSales ?? data.summary.netRevenue,
+          discount_total: data.summary.discountTotal ?? 0,
+          net_revenue: data.summary.netRevenue,
+          total_cogs: data.summary.totalHpp,
+          gross_profit: data.summary.grossProfit,
+          gross_margin_percent: data.summary.netRevenue > 0
+            ? Number(((data.summary.grossProfit / data.summary.netRevenue) * 100).toFixed(1))
+            : 0,
+          operating_expenses: data.summary.operatingExpenses,
+          net_operating_profit: data.summary.netOperatingProfit,
+          net_margin_percent: data.summary.netProfitMargin,
+        };
+      })
+    );
 
     return result.sort((a, b) => b.net_revenue - a.net_revenue);
   },
@@ -2347,19 +2592,22 @@ export const dbService = {
   async getProfiles(): Promise<Profile[]> {
     if (isSupabaseConfigured()) {
       try {
-        const supabase = createClient();
-        const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
-        if (!error && data && data.length > 0) {
-          const outlets = await this.getOutlets();
-          const warehouses = await this.getWarehouses();
-          const mapped = data.map((p) => ({
+        const res = await fetch('/api/users', { cache: 'no-store' });
+        if (res.ok) {
+          const payload = await res.json();
+          const data = Array.isArray(payload?.profiles) ? payload.profiles : [];
+          const [outlets, warehouses] = await Promise.all([this.getOutlets(), this.getWarehouses()]);
+          const mapped = data.map((p: any) => ({
             ...p,
             outlet: outlets.find((o) => o.id === p.primary_outlet_id),
             warehouse: warehouses.find((w) => w.id === p.primary_warehouse_id),
           }));
-          localProfiles = mapped;
-          setStorageItem(STORAGE_KEYS.PROFILES, mapped);
-          return mapped;
+          localProfiles = mapped.map((p: Profile) => {
+            const { password: _omitted, ...safe } = p;
+            return safe as Profile;
+          });
+          setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
+          return localProfiles;
         }
       } catch (e) {
         console.warn('Falling back to local getProfiles:', e);
@@ -2369,11 +2617,14 @@ export const dbService = {
     syncFromStorage();
     const outlets = await this.getOutlets();
     const warehouses = await this.getWarehouses();
-    return localProfiles.map((p) => ({
-      ...p,
-      outlet: outlets.find((o) => o.id === p.primary_outlet_id),
-      warehouse: warehouses.find((w) => w.id === p.primary_warehouse_id),
-    }));
+    return localProfiles.map((p) => {
+      const base = isSupabaseConfigured() ? stripProfilePassword(p) : p;
+      return {
+        ...base,
+        outlet: outlets.find((o) => o.id === p.primary_outlet_id),
+        warehouse: warehouses.find((w) => w.id === p.primary_warehouse_id),
+      };
+    });
   },
 
   async createCashier(
@@ -2385,6 +2636,38 @@ export const dbService = {
     primaryOutletId?: string | null,
     primaryWarehouseId?: string | null
   ): Promise<Profile> {
+    if (isSupabaseConfigured()) {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          full_name: fullName,
+          password: password?.trim() || '',
+          role,
+          username,
+          primary_outlet_id: primaryOutletId || null,
+          primary_warehouse_id: primaryWarehouseId || null,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.profile) {
+        throw new Error(payload?.error || 'Gagal menambahkan akun pengguna.');
+      }
+      const created = payload.profile as Profile;
+      localProfiles = [...localProfiles.filter((p) => p.id !== created.id), created];
+      setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
+      void this.recordAuditLog({
+        user_id: getActorIdFromBrowser(),
+        action: 'create_profile',
+        entity_type: 'profile',
+        entity_id: created.id,
+        details: `Menambahkan akun staf "${created.full_name}" (role: ${created.role})`,
+        new_values: { email: created.email, role: created.role },
+      });
+      return created;
+    }
+
     syncFromStorage();
     const cleanEmail = email.toLowerCase().trim();
     const cleanUsername = (username || cleanEmail.split('@')[0] || fullName.split(' ')[0]).toLowerCase().trim();
@@ -2411,29 +2694,6 @@ export const dbService = {
       updated_at: new Date().toISOString(),
     };
 
-    if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase.from('profiles').insert([newProfile]).select().single();
-        if (!error && data) {
-          localProfiles.push(data);
-          setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
-          void this.recordAuditLog({
-            user_id: getActorIdFromBrowser(),
-            action: 'create_profile',
-            entity_type: 'profile',
-            entity_id: data.id,
-            details: `Menambahkan akun staf "${data.full_name}" (role: ${data.role})`,
-            new_values: { email: data.email, role: data.role },
-          });
-          return data;
-        }
-        if (error) console.warn('Supabase createCashier error:', error);
-      } catch (e) {
-        console.warn('Falling back to local createCashier:', e);
-      }
-    }
-
     localProfiles.push(newProfile);
     setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
     void this.recordAuditLog({
@@ -2448,36 +2708,37 @@ export const dbService = {
   },
 
   async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile> {
-    syncFromStorage();
+    const { password: _omittedPwd, ...safeAuditUpdates } = updates;
     if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from('profiles')
-          .update({ ...updates, updated_at: new Date().toISOString() })
-          .eq('id', id)
-          .select()
-          .single();
-        if (!error && data) {
-          const idx = localProfiles.findIndex((p) => p.id === id);
-          if (idx !== -1) localProfiles[idx] = { ...localProfiles[idx], ...data };
-          setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
-          void this.recordAuditLog({
-            user_id: getActorIdFromBrowser() || id,
-            action: 'update_profile',
-            entity_type: 'profile',
-            entity_id: id,
-            details: `Memperbarui akun staf "${data.full_name}" (${Object.keys(updates).join(', ')})`,
-            new_values: updates,
-          });
-          return data;
-        }
-        if (error) console.warn('Supabase updateProfile error:', error);
-      } catch (e) {
-        console.warn('Falling back to local updateProfile:', e);
+      const res = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, updates }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.profile) {
+        throw new Error(payload?.error || 'Gagal memperbarui akun pengguna.');
       }
+      const updated = payload.profile as Profile;
+      const idx = localProfiles.findIndex((p) => p.id === id);
+      if (idx !== -1) {
+        localProfiles[idx] = { ...localProfiles[idx], ...updated };
+      } else {
+        localProfiles.push(updated);
+      }
+      setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
+      void this.recordAuditLog({
+        user_id: getActorIdFromBrowser() || id,
+        action: 'update_profile',
+        entity_type: 'profile',
+        entity_id: id,
+        details: `Memperbarui akun staf "${updated.full_name}" (${Object.keys(updates).join(', ')})`,
+        new_values: safeAuditUpdates,
+      });
+      return updated;
     }
 
+    syncFromStorage();
     const idx = localProfiles.findIndex((p) => p.id === id);
     if (idx === -1) throw new Error('Pengguna tidak ditemukan.');
     localProfiles[idx] = {
@@ -2492,12 +2753,33 @@ export const dbService = {
       entity_type: 'profile',
       entity_id: id,
       details: `Memperbarui akun staf "${localProfiles[idx].full_name}" (${Object.keys(updates).join(', ')})`,
-      new_values: updates,
+      new_values: safeAuditUpdates,
     });
     return localProfiles[idx];
   },
 
   async deleteProfile(id: string, currentUserId?: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      const target = localProfiles.find((p) => p.id === id);
+      const res = await fetch(`/api/users?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Gagal menghapus akun pengguna.');
+      }
+      localProfiles = localProfiles.filter((p) => p.id !== id);
+      setStorageItem(STORAGE_KEYS.PROFILES, localProfiles);
+      void this.recordAuditLog({
+        user_id: currentUserId || getActorIdFromBrowser(),
+        action: 'delete_profile',
+        entity_type: 'profile',
+        entity_id: id,
+        details: `Menghapus akun staf "${target?.full_name || id}"`,
+      });
+      return true;
+    }
+
     syncFromStorage();
     if (currentUserId && id === currentUserId) {
       throw new Error('Anda tidak dapat menghapus akun yang sedang Anda gunakan saat ini.');
@@ -2505,21 +2787,10 @@ export const dbService = {
     const target = localProfiles.find((p) => p.id === id);
     if (!target) throw new Error('Akun pengguna tidak ditemukan.');
 
-    // Protect system from having 0 admin accounts
     if (target.role === 'admin') {
       const remainingAdmins = localProfiles.filter((p) => p.role === 'admin' && p.id !== id);
       if (remainingAdmins.length === 0) {
         throw new Error('Tidak dapat menghapus akun ini karena sistem membutuhkan minimal 1 akun Administrator aktif.');
-      }
-    }
-
-    if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { error } = await supabase.from('profiles').delete().eq('id', id);
-        if (error) console.warn('Supabase deleteProfile error:', error);
-      } catch (e) {
-        console.warn('Falling back to local deleteProfile:', e);
       }
     }
 
@@ -2547,7 +2818,11 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('outlets').select('*').order('code');
-        if (!error && data && data.length > 0) return data;
+        if (!error && data && data.length > 0) {
+          localOutlets = data as Outlet[];
+          setStorageItem(STORAGE_KEYS.OUTLETS, localOutlets);
+          return data;
+        }
       } catch (e) {
         console.warn('Falling back to local getOutlets:', e);
       }
@@ -2568,7 +2843,7 @@ export const dbService = {
 
   async createOutlet(payload: Partial<Outlet>): Promise<Outlet> {
     const newOutlet: Outlet = {
-      id: payload.id || `out-${Date.now()}`,
+      id: payload.id || crypto.randomUUID(),
       code: payload.code || `OUT-${Math.floor(Math.random() * 900 + 100)}`,
       name: payload.name || 'Cabang Baru',
       address: payload.address || null,
@@ -2585,8 +2860,17 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('outlets').insert([newOutlet]).select().single();
-        if (!error && data) return data;
-      } catch (e) {
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal membuat cabang outlet di database: ${error.message}`);
+        }
+        if (!error && data) {
+          const current = getStorageItem<Outlet[]>(STORAGE_KEYS.OUTLETS, localOutlets);
+          localOutlets = [...current.filter((o) => o.id !== data.id), data as Outlet];
+          setStorageItem(STORAGE_KEYS.OUTLETS, localOutlets);
+          return data;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local createOutlet:', e);
       }
     }
@@ -2603,8 +2887,17 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('outlets').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id).select().single();
-        if (!error && data) return data;
-      } catch (e) {
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal memperbarui cabang outlet di database: ${error.message}`);
+        }
+        if (!error && data) {
+          const current = getStorageItem<Outlet[]>(STORAGE_KEYS.OUTLETS, localOutlets);
+          localOutlets = current.map((o) => (o.id === id ? (data as Outlet) : o));
+          setStorageItem(STORAGE_KEYS.OUTLETS, localOutlets);
+          return data;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local updateOutlet:', e);
       }
     }
@@ -2619,6 +2912,18 @@ export const dbService = {
   },
 
   async deleteOutlet(id: string): Promise<boolean> {
+    if (isSupabaseConfigured() && isUuid(id)) {
+      try {
+        const supabase = createClient();
+        const { error } = await supabase.from('outlets').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus outlet di database: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+        console.warn('Falling back to local deleteOutlet:', e);
+      }
+    }
     const current = getStorageItem<Outlet[]>(STORAGE_KEYS.OUTLETS, localOutlets);
     const updated = current.filter((o) => o.id !== id);
     localOutlets = updated;
@@ -2646,8 +2951,34 @@ export const dbService = {
   },
 
   async updateWarehouse(id: string, payload: Partial<Warehouse>): Promise<Warehouse> {
+    const updatedAt = new Date().toISOString();
+    if (isSupabaseConfigured() && isUuid(id)) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('warehouses')
+          .update({ ...payload, updated_at: updatedAt })
+          .eq('id', id)
+          .select()
+          .single();
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal memperbarui gudang di database: ${error.message}`);
+        }
+        if (!error && data) {
+          const current = getStorageItem<Warehouse[]>(STORAGE_KEYS.WAREHOUSES, localWarehouses);
+          localWarehouses = current.some((w) => w.id === id)
+            ? current.map((w) => (w.id === id ? (data as Warehouse) : w))
+            : [...current, data as Warehouse];
+          setStorageItem(STORAGE_KEYS.WAREHOUSES, localWarehouses);
+          return data as Warehouse;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+        console.warn('Falling back to local updateWarehouse:', e);
+      }
+    }
     const current = getStorageItem<Warehouse[]>(STORAGE_KEYS.WAREHOUSES, localWarehouses);
-    const updated = current.map((w) => (w.id === id ? { ...w, ...payload, updated_at: new Date().toISOString() } : w));
+    const updated = current.map((w) => (w.id === id ? { ...w, ...payload, updated_at: updatedAt } : w));
     localWarehouses = updated;
     setStorageItem(STORAGE_KEYS.WAREHOUSES, updated);
     const target = updated.find((w) => w.id === id);
@@ -2919,8 +3250,12 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('units').insert(newUnit).select().single();
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal membuat satuan di database: ${error.message}`);
+        }
         if (!error && data) return data as Unit;
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local createUnit:', e);
       }
     }
@@ -2942,8 +3277,12 @@ export const dbService = {
           .eq('id', id)
           .select()
           .single();
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal memperbarui satuan di database: ${error.message}`);
+        }
         if (!error && data) return data as Unit;
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local updateUnit:', e);
       }
     }
@@ -2961,8 +3300,12 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('units').delete().eq('id', id);
-      } catch (e) {
+        const { error } = await supabase.from('units').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus satuan dari database: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local deleteUnit:', e);
       }
     }
@@ -3009,8 +3352,12 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('unit_conversions').insert(newConv).select().single();
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal membuat konversi satuan di database: ${error.message}`);
+        }
         if (!error && data) return data as UnitConversion;
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local createUnitConversion:', e);
       }
     }
@@ -3026,8 +3373,12 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('unit_conversions').delete().eq('id', id);
-      } catch (e) {
+        const { error } = await supabase.from('unit_conversions').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus konversi satuan di database: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local deleteUnitConversion:', e);
       }
     }
@@ -3047,7 +3398,11 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('suppliers').select('*').order('name');
-        if (!error && data) return data as Supplier[];
+        if (!error && data) {
+          localSuppliers = data as Supplier[];
+          setStorageItem(STORAGE_KEYS.SUPPLIERS, localSuppliers);
+          return data as Supplier[];
+        }
         if (error) console.warn('Supabase getSuppliers error:', error);
       } catch (e) {
         console.warn('Falling back to local getSuppliers:', e);
@@ -3089,9 +3444,17 @@ export const dbService = {
       try {
         const supabase = createClient();
         const { data, error } = await supabase.from('suppliers').insert(newSup).select().single();
-        if (!error && data) return data as Supplier;
-        if (error) console.warn('Supabase createSupplier error:', error);
-      } catch (e) {
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menyimpan supplier di database: ${error.message}`);
+        }
+        if (!error && data) {
+          const current = getStorageItem<Supplier[]>(STORAGE_KEYS.SUPPLIERS, localSuppliers);
+          localSuppliers = [...current.filter((s) => s.id !== data.id), data as Supplier];
+          setStorageItem(STORAGE_KEYS.SUPPLIERS, localSuppliers);
+          return data as Supplier;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local createSupplier:', e);
       }
     }
@@ -3113,8 +3476,17 @@ export const dbService = {
           .eq('id', id)
           .select()
           .single();
-        if (!error && data) return data as Supplier;
-      } catch (e) {
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal memperbarui supplier di database: ${error.message}`);
+        }
+        if (!error && data) {
+          const current = getStorageItem<Supplier[]>(STORAGE_KEYS.SUPPLIERS, localSuppliers);
+          localSuppliers = current.map((s) => (s.id === id ? (data as Supplier) : s));
+          setStorageItem(STORAGE_KEYS.SUPPLIERS, localSuppliers);
+          return data as Supplier;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local updateSupplier:', e);
       }
     }
@@ -3132,8 +3504,12 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('suppliers').delete().eq('id', id);
-      } catch (e) {
+        const { error } = await supabase.from('suppliers').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus supplier dari database: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local deleteSupplier:', e);
       }
     }
@@ -3208,10 +3584,11 @@ export const dbService = {
           });
           return data as OutletMenu;
         }
-        if (error) {
-          console.warn('Supabase setOutletMenuPrice error:', error);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal mengubah harga menu cabang: ${error.message}`);
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local setOutletMenuPrice:', e);
       }
     }
@@ -3351,30 +3728,82 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const { data: existing } = await supabase
+        const { data: rpcQty, error: rpcErr } = await supabase.rpc('adjust_warehouse_stock_atomic', {
+          p_warehouse_id: warehouseId,
+          p_raw_material_id: rawMaterialId,
+          p_delta: deltaQty,
+        });
+
+        const rpcMissing =
+          rpcErr &&
+          (rpcErr.code === 'PGRST202' ||
+            rpcErr.code === '42883' ||
+            String(rpcErr.message || '').toLowerCase().includes('could not find the function'));
+
+        if (!rpcErr && rpcQty !== null && rpcQty !== undefined) {
+          const updatedQty = Number(rpcQty);
+          const current = getStorageItem<WarehouseStock[]>(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
+          const hasRow = current.some((s) => s.warehouse_id === warehouseId && s.raw_material_id === rawMaterialId);
+          localWarehouseStocks = hasRow
+            ? current.map((s) =>
+                s.warehouse_id === warehouseId && s.raw_material_id === rawMaterialId
+                  ? { ...s, quantity: updatedQty, updated_at: new Date().toISOString() }
+                  : s
+              )
+            : [
+                ...current,
+                {
+                  id: `ws-${Date.now()}`,
+                  warehouse_id: warehouseId,
+                  raw_material_id: rawMaterialId,
+                  quantity: updatedQty,
+                  updated_at: new Date().toISOString(),
+                },
+              ];
+          setStorageItem(STORAGE_KEYS.WH_STOCKS, localWarehouseStocks);
+          return updatedQty;
+        }
+
+        if (rpcErr && !rpcMissing && !isNetworkFailure(rpcErr)) {
+          throw new Error(`Gagal memperbarui stok gudang secara atomik: ${rpcErr.message}`);
+        }
+
+        const { data: existing, error: selErr } = await supabase
           .from('warehouse_stocks')
           .select('*')
           .eq('warehouse_id', warehouseId)
           .eq('raw_material_id', rawMaterialId)
-          .single();
+          .maybeSingle();
+
+        if (selErr && !isNetworkFailure(selErr)) {
+          throw new Error(`Gagal membaca stok gudang: ${selErr.message}`);
+        }
 
         const currentQty = existing ? Number(existing.quantity) : 0;
         const newQty = Math.max(0, currentQty + deltaQty);
+        const nowIso = new Date().toISOString();
 
         if (existing) {
-          await supabase
+          const { error: updErr } = await supabase
             .from('warehouse_stocks')
-            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .update({ quantity: newQty, updated_at: nowIso })
             .eq('id', existing.id);
+          if (updErr && !isNetworkFailure(updErr)) {
+            throw new Error(`Gagal memperbarui stok gudang: ${updErr.message}`);
+          }
         } else {
-          await supabase.from('warehouse_stocks').insert({
+          const { error: insErr } = await supabase.from('warehouse_stocks').insert({
             warehouse_id: warehouseId,
             raw_material_id: rawMaterialId,
             quantity: newQty,
-            updated_at: new Date().toISOString(),
+            updated_at: nowIso,
           });
+          if (insErr && !isNetworkFailure(insErr)) {
+            throw new Error(`Gagal menambah stok gudang: ${insErr.message}`);
+          }
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local updateWarehouseStock:', e);
       }
     }
@@ -5598,23 +6027,65 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const { data: existing } = await supabase
+        const { data: rpcRows, error: rpcErr } = await supabase.rpc('adjust_outlet_stock_atomic', {
+          p_outlet_id: outletId,
+          p_raw_material_id: rawMaterialId,
+          p_delta: deltaQuantity,
+        });
+
+        const rpcMissing =
+          rpcErr &&
+          (rpcErr.code === 'PGRST202' ||
+            rpcErr.code === '42883' ||
+            String(rpcErr.message || '').toLowerCase().includes('could not find the function'));
+
+        if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length > 0) {
+          const row = rpcRows[0] as any;
+          const updated: OutletStock = {
+            id: row.id,
+            outlet_id: row.outlet_id,
+            raw_material_id: row.raw_material_id,
+            quantity: Number(row.quantity) || 0,
+            minimum_stock: Number(row.minimum_stock) || 500,
+            updated_at: row.updated_at || now,
+          };
+          const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+          const hasRow = current.some((s) => s.id === updated.id || (s.outlet_id === outletId && s.raw_material_id === rawMaterialId));
+          localOutletStocks = hasRow
+            ? current.map((s) => (s.id === updated.id || (s.outlet_id === outletId && s.raw_material_id === rawMaterialId) ? { ...s, ...updated } : s))
+            : [updated, ...current];
+          setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+          return updated;
+        }
+
+        if (rpcErr && !rpcMissing && !isNetworkFailure(rpcErr)) {
+          throw new Error(`Gagal memperbarui stok cabang secara atomik: ${rpcErr.message}`);
+        }
+
+        const { data: existing, error: selErr } = await supabase
           .from('outlet_stocks')
           .select('*')
           .eq('outlet_id', outletId)
           .eq('raw_material_id', rawMaterialId)
           .maybeSingle();
 
+        if (selErr && !isNetworkFailure(selErr)) {
+          throw new Error(`Gagal membaca stok cabang: ${selErr.message}`);
+        }
+
         const currentQty = existing ? Number(existing.quantity) : 0;
         const newQty = Math.max(0, currentQty + deltaQuantity);
 
         if (existing) {
-          const { data } = await supabase
+          const { data, error: updErr } = await supabase
             .from('outlet_stocks')
             .update({ quantity: newQty, updated_at: now })
             .eq('id', existing.id)
             .select('*, outlet:outlets(*), raw_material:raw_materials(*)')
             .single();
+          if (updErr && !isNetworkFailure(updErr)) {
+            throw new Error(`Gagal memperbarui stok cabang: ${updErr.message}`);
+          }
           if (data) {
             const updated = { ...(data as OutletStock), quantity: Number(data.quantity) || 0 };
             const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
@@ -5626,7 +6097,7 @@ export const dbService = {
             return updated;
           }
         } else {
-          const { data } = await supabase
+          const { data, error: insErr } = await supabase
             .from('outlet_stocks')
             .insert({
               outlet_id: outletId,
@@ -5636,6 +6107,9 @@ export const dbService = {
             })
             .select('*, outlet:outlets(*), raw_material:raw_materials(*)')
             .single();
+          if (insErr && !isNetworkFailure(insErr)) {
+            throw new Error(`Gagal mencatat stok cabang: ${insErr.message}`);
+          }
           if (data) {
             const inserted = { ...(data as OutletStock), quantity: Number(data.quantity) || 0 };
             const current = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
@@ -5644,7 +6118,8 @@ export const dbService = {
             return inserted;
           }
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
         console.warn('Falling back to local updateOutletStock:', e);
       }
     }
@@ -6028,7 +6503,8 @@ export const dbService = {
       (await resolveValidProfileId(payload.cashier_id, 'cashier')) ||
       'a0000000-0000-0000-0000-000000000001';
 
-    if (isSupabaseConfigured()) {
+    const isBrowserOnline = typeof navigator === 'undefined' || navigator.onLine;
+    if (isSupabaseConfigured() && isBrowserOnline) {
       try {
         const supabase = createClient();
         const { data: existingRemote, error: checkErr } = await supabase
@@ -6052,7 +6528,7 @@ export const dbService = {
     const existingLocal = current.find(
       (s) => s.status === 'active' && s.cashier_id === validCashierId && s.outlet_id === validOutletId
     );
-    if (existingLocal && !isSupabaseConfigured()) {
+    if (existingLocal && (!isSupabaseConfigured() || !isBrowserOnline)) {
       throw new Error('Anda sudah memiliki sesi shift aktif di cabang ini. Tutup shift terlebih dahulu sebelum membuka shift baru.');
     }
 
@@ -6080,30 +6556,60 @@ export const dbService = {
     };
 
     if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { error } = await supabase.from('cashier_shifts').insert({
+      const shiftOpPayload = {
+        id: newShift.id,
+        shift_number: newShift.shift_number,
+        outlet_id: newShift.outlet_id,
+        cashier_id: newShift.cashier_id,
+        status: 'active' as const,
+        opening_cash: newShift.opening_cash,
+        opened_at: newShift.opened_at,
+        notes: newShift.notes || null,
+        created_at: newShift.created_at,
+        updated_at: newShift.updated_at,
+      };
+
+      if (!isBrowserOnline) {
+        enqueueOfflineShiftOp({
+          kind: 'open_shift',
           id: newShift.id,
-          shift_number: newShift.shift_number,
-          outlet_id: newShift.outlet_id,
-          cashier_id: newShift.cashier_id,
-          status: newShift.status,
-          opening_cash: newShift.opening_cash,
-          opened_at: newShift.opened_at,
-          total_cash_sales: 0,
-          total_non_cash_sales: 0,
-          total_cash_in: 0,
-          total_cash_out: 0,
-          closing_cash_expected: newShift.opening_cash,
-          notes: newShift.notes,
-          created_at: newShift.created_at,
-          updated_at: newShift.updated_at,
+          shiftPayload: shiftOpPayload,
         });
-        if (error && !isNetworkFailure(error)) {
-          throw new Error(`Gagal membuka shift ke cloud: ${error.message}`);
+      } else {
+        try {
+          const supabase = createClient();
+          const { error } = await supabase.from('cashier_shifts').insert({
+            ...shiftOpPayload,
+            total_cash_sales: 0,
+            total_non_cash_sales: 0,
+            total_cash_in: 0,
+            total_cash_out: 0,
+            closing_cash_expected: newShift.opening_cash,
+          });
+          if (error) {
+            if (isNetworkFailure(error)) {
+              enqueueOfflineShiftOp({
+                kind: 'open_shift',
+                id: newShift.id,
+                shiftPayload: shiftOpPayload,
+                lastError: error.message,
+              });
+            } else {
+              throw new Error(`Gagal membuka shift ke cloud: ${error.message}`);
+            }
+          }
+        } catch (e: any) {
+          if (isNetworkFailure(e)) {
+            enqueueOfflineShiftOp({
+              kind: 'open_shift',
+              id: newShift.id,
+              shiftPayload: shiftOpPayload,
+              lastError: e?.message || String(e),
+            });
+          } else {
+            throw e;
+          }
         }
-      } catch (e: any) {
-        if (!isNetworkFailure(e)) throw e;
       }
     }
 
@@ -6131,8 +6637,13 @@ export const dbService = {
   },
 
   async closeShift(shiftId: string, closingCashActual: number, notes?: string): Promise<CashierShift> {
+    const isBrowserOnline = typeof navigator === 'undefined' || navigator.onLine;
+    if (isSupabaseConfigured() && isBrowserOnline && (getOfflineQueue().length > 0 || getOfflineShiftQueue().length > 0)) {
+      await syncOfflineQueue();
+    }
+
     let target: CashierShift | null = null;
-    if (isSupabaseConfigured() && isUuid(shiftId)) {
+    if (isSupabaseConfigured() && isBrowserOnline && isUuid(shiftId)) {
       try {
         const supabase = createClient();
         const { data, error } = await supabase
@@ -6173,25 +6684,46 @@ export const dbService = {
     const nextNotes = notes ? (target.notes ? `${target.notes} | ${notes}` : notes) : target.notes;
 
     if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { error } = await supabase
-          .from('cashier_shifts')
-          .update({
-            status: 'closed',
-            closed_at: now,
-            closing_cash_actual: Number(closingCashActual),
-            closing_cash_expected: expected,
-            cash_difference: diff,
-            notes: nextNotes || null,
-            updated_at: now,
-          })
-          .eq('id', shiftId);
-        if (error && !isNetworkFailure(error)) {
-          throw new Error(`Gagal menutup shift di cloud: ${error.message}`);
+      const closeOp = {
+        kind: 'close_shift' as const,
+        id: `close-${shiftId}-${now}`,
+        shift_id: shiftId,
+        closing_cash_actual: Number(closingCashActual),
+        closed_at: now,
+        notes: nextNotes || null,
+      };
+
+      if (!isBrowserOnline) {
+        enqueueOfflineShiftOp(closeOp);
+      } else {
+        try {
+          const supabase = createClient();
+          const { error } = await supabase
+            .from('cashier_shifts')
+            .update({
+              status: 'closed',
+              closed_at: now,
+              closing_cash_actual: Number(closingCashActual),
+              closing_cash_expected: expected,
+              cash_difference: diff,
+              notes: nextNotes || null,
+              updated_at: now,
+            })
+            .eq('id', shiftId);
+          if (error) {
+            if (isNetworkFailure(error)) {
+              enqueueOfflineShiftOp({ ...closeOp, lastError: error.message });
+            } else {
+              throw new Error(`Gagal menutup shift di cloud: ${error.message}`);
+            }
+          }
+        } catch (e: any) {
+          if (isNetworkFailure(e)) {
+            enqueueOfflineShiftOp({ ...closeOp, lastError: e?.message || String(e) });
+          } else {
+            throw e;
+          }
         }
-      } catch (e: any) {
-        if (!isNetworkFailure(e)) throw e;
       }
     }
 
@@ -6277,35 +6809,90 @@ export const dbService = {
       nextCashOut;
 
     if (isSupabaseConfigured()) {
-      try {
-        const supabase = createClient();
-        const { error: mvErr } = await supabase.from('shift_cash_movements').insert({
-          id: newMovement.id,
-          shift_id: newMovement.shift_id,
-          type: newMovement.type,
-          amount: newMovement.amount,
-          reason: newMovement.reason,
-          created_by: newMovement.created_by,
-          created_at: newMovement.created_at,
-        });
-        if (mvErr && !isNetworkFailure(mvErr)) {
-          throw new Error(`Gagal menyimpan mutasi kas ke cloud: ${mvErr.message}`);
-        }
+      const movementPayload = {
+        id: newMovement.id,
+        shift_id: newMovement.shift_id,
+        type: newMovement.type,
+        amount: newMovement.amount,
+        reason: newMovement.reason,
+        created_by: newMovement.created_by,
+        created_at: newMovement.created_at,
+      };
+      const isBrowserOnline = typeof navigator === 'undefined' || navigator.onLine;
 
-        const { error: shiftUpdateErr } = await supabase
-          .from('cashier_shifts')
-          .update({
-            total_cash_in: nextCashIn,
-            total_cash_out: nextCashOut,
-            closing_cash_expected: nextExpected,
-            updated_at: now,
-          })
-          .eq('id', payload.shift_id);
-        if (shiftUpdateErr && !isNetworkFailure(shiftUpdateErr)) {
-          throw new Error(`Gagal memperbarui saldo kas shift di cloud: ${shiftUpdateErr.message}`);
+      if (!isBrowserOnline) {
+        enqueueOfflineShiftOp({
+          kind: 'cash_movement',
+          id: newMovement.id,
+          movementPayload,
+        });
+      } else {
+        try {
+          const supabase = createClient();
+          let { error: mvErr } = await supabase.from('shift_cash_movements').insert(movementPayload);
+
+          // If shift was opened offline and hasn't flushed yet, sync shift queue then retry once
+          if (mvErr && mvErr.code === '23503') {
+            await syncOfflineQueue();
+            const retry = await supabase.from('shift_cash_movements').insert(movementPayload);
+            mvErr = retry.error;
+          }
+
+          if (mvErr) {
+            if (isNetworkFailure(mvErr)) {
+              enqueueOfflineShiftOp({
+                kind: 'cash_movement',
+                id: newMovement.id,
+                movementPayload,
+                lastError: mvErr.message,
+              });
+            } else {
+              throw new Error(`Gagal menyimpan mutasi kas ke cloud: ${mvErr.message}`);
+            }
+          } else {
+            const { error: rpcErr } = await supabase.rpc('increment_shift_cash_movement_atomic', {
+              p_shift_id: payload.shift_id,
+              p_type: payload.type,
+              p_amount: movementAmount,
+            });
+
+            if (rpcErr) {
+              const rpcMsg = String(rpcErr.message || '').toLowerCase();
+              const isRpcMissing =
+                rpcErr.code === 'PGRST202' ||
+                rpcErr.code === '42883' ||
+                rpcMsg.includes('could not find the function');
+
+              if (isRpcMissing) {
+                const { error: shiftUpdateErr } = await supabase
+                  .from('cashier_shifts')
+                  .update({
+                    total_cash_in: nextCashIn,
+                    total_cash_out: nextCashOut,
+                    closing_cash_expected: nextExpected,
+                    updated_at: now,
+                  })
+                  .eq('id', payload.shift_id);
+                if (shiftUpdateErr && !isNetworkFailure(shiftUpdateErr)) {
+                  throw new Error(`Gagal memperbarui saldo kas shift di cloud: ${shiftUpdateErr.message}`);
+                }
+              } else if (!isNetworkFailure(rpcErr)) {
+                throw new Error(`Gagal memperbarui saldo kas shift di cloud: ${rpcErr.message}`);
+              }
+            }
+          }
+        } catch (e: any) {
+          if (isNetworkFailure(e)) {
+            enqueueOfflineShiftOp({
+              kind: 'cash_movement',
+              id: newMovement.id,
+              movementPayload,
+              lastError: e?.message || String(e),
+            });
+          } else {
+            throw e;
+          }
         }
-      } catch (e: any) {
-        if (!isNetworkFailure(e)) throw e;
       }
     }
 
@@ -6529,19 +7116,14 @@ export const dbService = {
 
     if (isSupabaseConfigured()) {
       try {
-        const supabase = createClient();
-        let query = supabase
-          .from('audit_logs')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(filters?.limit || 300);
+        const params = new URLSearchParams();
+        if (filters?.action && filters.action !== 'all') params.set('action', filters.action);
+        params.set('limit', String(filters?.limit || 300));
 
-        if (filters?.action && filters.action !== 'all') {
-          query = query.eq('action', filters.action);
-        }
-
-        const { data, error } = await query;
-        if (!error && data) {
+        const res = await fetch(`/api/audit-logs?${params.toString()}`, { cache: 'no-store' });
+        if (res.ok) {
+          const payload = await res.json();
+          const data = Array.isArray(payload?.logs) ? payload.logs : [];
           const normalized = (data as any[]).map((row) => {
             const payloadObj = row.payload && typeof row.payload === 'object' ? row.payload : null;
             const entityType = row.entity_type || row.entity_name || 'system';
@@ -6573,9 +7155,10 @@ export const dbService = {
             setStorageItem(STORAGE_KEYS.AUDIT_LOGS, localAuditLogs);
           }
 
-          list = filters?.entityType && filters.entityType !== 'all'
-            ? normalized.filter((a) => a.entity_type === filters.entityType)
-            : normalized;
+          list =
+            filters?.entityType && filters.entityType !== 'all'
+              ? normalized.filter((a) => a.entity_type === filters.entityType)
+              : normalized;
         }
       } catch (e) {
         console.warn('Falling back to local getAuditLogs:', e);
@@ -6615,58 +7198,22 @@ export const dbService = {
 
     if (isSupabaseConfigured()) {
       try {
-        const supabase = createClient();
-        const unifiedRow = {
-          id: newLog.id,
-          user_id: validUserId,
-          action: newLog.action,
-          entity_type: newLog.entity_type,
-          entity_name: newLog.entity_type,
-          entity_id: newLog.entity_id || null,
-          details: newLog.details || '',
-          payload: {
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: newLog.id,
+            action: newLog.action,
+            entity_type: newLog.entity_type,
+            entity_id: newLog.entity_id || null,
             details: newLog.details || '',
             old_values: newLog.old_values || null,
             new_values: newLog.new_values || null,
-          },
-          old_values: newLog.old_values || null,
-          new_values: newLog.new_values || null,
-          ip_address: newLog.ip_address || null,
-          user_agent: userAgent,
-          created_at: newLog.created_at,
-        };
-
-        const { error: unifiedErr } = await supabase.from('audit_logs').insert(unifiedRow);
-        if (unifiedErr && !isNetworkFailure(unifiedErr)) {
-          // Pre-migration fallback 1: 20261102_04 shape (entity_type, details, user_agent)
-          const { error: v2Err } = await supabase.from('audit_logs').insert({
-            id: newLog.id,
-            user_id: validUserId,
-            action: newLog.action,
-            entity_type: newLog.entity_type,
-            entity_id: newLog.entity_id || 'system',
-            details: newLog.details || newLog.action,
             ip_address: newLog.ip_address || null,
             user_agent: userAgent,
             created_at: newLog.created_at,
-          });
-          if (v2Err && !isNetworkFailure(v2Err)) {
-            // Pre-migration fallback 2: 20261101_01 shape (entity_name, payload)
-            await supabase.from('audit_logs').insert({
-              id: newLog.id,
-              user_id: validUserId,
-              action: newLog.action,
-              entity_name: newLog.entity_type,
-              entity_id: newLog.entity_id || null,
-              payload: {
-                details: newLog.details || '',
-                old_values: newLog.old_values || null,
-                new_values: newLog.new_values || null,
-              },
-              created_at: newLog.created_at,
-            });
-          }
-        }
+          }),
+        });
       } catch (e) {
         console.warn('Falling back to local recordAuditLog:', e);
       }

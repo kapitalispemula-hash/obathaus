@@ -422,7 +422,7 @@ export default function AdminAttendancePage() {
     setEmpRole(emp.role_title);
     setEmpLocType(emp.assigned_location_type);
     setEmpLocId(emp.assigned_location_id);
-    setEmpPin(emp.pin);
+    setEmpPin('');
     setEmpPhone(emp.phone || '');
     setEmpIsActive(emp.is_active);
     setIsEmpModalOpen(true);
@@ -444,7 +444,7 @@ export default function AdminAttendancePage() {
         role_title: empRole,
         assigned_location_type: empLocType,
         assigned_location_id: empLocId,
-        pin: empPin.trim() || '1234',
+        pin: editingEmp ? (empPin.trim() || undefined) : (empPin.trim() || '1234'),
         phone: empPhone.trim(),
         avatar_url: editingEmp?.avatar_url || null,
         is_active: empIsActive,
@@ -1257,7 +1257,7 @@ export default function AdminAttendancePage() {
                               </span>
                             </td>
                             <td className="py-3.5 px-4 font-mono text-slate-500">
-                              •••• <span className="text-[10px]">({emp.pin})</span>
+                              •••• <span className="text-[10px] text-emerald-600 font-sans font-bold">Tersandi</span>
                             </td>
                             <td className="py-3.5 px-4">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${emp.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
@@ -1577,14 +1577,16 @@ export default function AdminAttendancePage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-heading mb-1">PIN Absen (4-Angka) *</label>
+                    <label className="block text-xs font-bold text-heading mb-1">
+                      PIN Absen (4-6 Angka) {editingEmp ? '(Opsional)' : '*'}
+                    </label>
                     <input
                       type="text"
                       maxLength={6}
                       value={empPin}
                       onChange={(e) => setEmpPin(e.target.value)}
-                      placeholder="1234"
-                      required
+                      placeholder={editingEmp ? 'Kosongkan jika tetap PIN lama' : '1234'}
+                      required={!editingEmp}
                       className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
                     />
                   </div>

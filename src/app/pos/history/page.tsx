@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { CashierLayout } from '@/components/layout/CashierLayout';
 import { dbService } from '@/lib/services/database';
-import { getOfflineQueue, syncOfflineQueue } from '@/lib/services/offline-sync';
+import { getPendingOfflineSyncCount, syncOfflineQueue } from '@/lib/services/offline-sync';
 import { isSupabaseConfigured, createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth-context';
 import { Transaction, StoreSettings } from '@/types/database';
@@ -38,7 +38,7 @@ export default function CashierHistoryPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      setOfflinePendingCount(getOfflineQueue().length);
+      setOfflinePendingCount(getPendingOfflineSyncCount());
       // Load transactions for this cashier (or active session) per PRD Section 2.2 & 9.2
       const filter = user ? { cashierId: user.id } : undefined;
       const [trxs, s] = await Promise.all([
@@ -72,8 +72,12 @@ export default function CashierHistoryPage() {
     const handleSynced = () => {
       void loadData();
     };
+    const handleQueueChanged = () => {
+      setOfflinePendingCount(getPendingOfflineSyncCount());
+    };
     if (typeof window !== 'undefined') {
       window.addEventListener('obathaus_offline_queue_synced', handleSynced);
+      window.addEventListener('obathaus_offline_queue_changed', handleQueueChanged);
     }
 
     let channel: any = null;
@@ -88,6 +92,7 @@ export default function CashierHistoryPage() {
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('obathaus_offline_queue_synced', handleSynced);
+        window.removeEventListener('obathaus_offline_queue_changed', handleQueueChanged);
       }
       if (channel && isSupabaseConfigured()) {
         const supabase = createClient();

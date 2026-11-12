@@ -148,12 +148,26 @@ function isNetworkFailure(err: any): boolean {
 }
 
 function mergeAvatarFallback(emp: EmployeeProfile): EmployeeProfile {
-  if (typeof window === 'undefined') return emp;
-  const localAvatar = localStorage.getItem(`obathaus_employee_avatar_${emp.id}`);
-  if (!emp.avatar_url && localAvatar) {
-    return { ...emp, avatar_url: localAvatar };
+  const { pin: _omitted, ...rest } = emp;
+  const cleanEmp = (isSupabaseConfigured() ? rest : emp) as EmployeeProfile;
+  if (typeof window === 'undefined') return cleanEmp;
+  const avatarKey = `obathaus_employee_avatar_${emp.id}`;
+  // Clean up legacy localStorage Base64 cache once a hosted Storage URL exists
+  if (cleanEmp.avatar_url && !cleanEmp.avatar_url.startsWith('data:')) {
+    localStorage.removeItem(avatarKey);
+    return cleanEmp;
   }
-  return emp;
+  const localAvatar = localStorage.getItem(avatarKey);
+  if (!cleanEmp.avatar_url && localAvatar) {
+    return { ...cleanEmp, avatar_url: localAvatar };
+  }
+  return cleanEmp;
+}
+
+function sanitizeEmployeeForCache(emp: EmployeeProfile): EmployeeProfile {
+  if (!isSupabaseConfigured()) return emp;
+  const { pin: _omitted, ...safe } = emp;
+  return safe as EmployeeProfile;
 }
 
 class AttendanceService {
@@ -208,7 +222,14 @@ class AttendanceService {
       try {
         if (isNew) {
           const { data, error } = await supabase.from('attendance_shifts').insert(shiftData).select().single();
-          if (!error && data) return data as AttendanceShift;
+          if (error && !isNetworkFailure(error)) {
+            throw new Error(`Gagal membuat shift absensi di database: ${error.message}`);
+          }
+          if (!error && data) {
+            const cur = await this.getShifts();
+            localStorage.setItem(SHIFTS_KEY, JSON.stringify(cur));
+            return data as AttendanceShift;
+          }
         } else {
           const { data, error } = await supabase
             .from('attendance_shifts')
@@ -216,10 +237,18 @@ class AttendanceService {
             .eq('id', shiftData.id)
             .select()
             .single();
-          if (!error && data) return data as AttendanceShift;
+          if (error && !isNetworkFailure(error)) {
+            throw new Error(`Gagal memperbarui shift absensi di database: ${error.message}`);
+          }
+          if (!error && data) {
+            const cur = await this.getShifts();
+            localStorage.setItem(SHIFTS_KEY, JSON.stringify(cur));
+            return data as AttendanceShift;
+          }
         }
-      } catch (err) {
-        console.warn('Supabase saveShift error, updating locally:', err);
+      } catch (err: any) {
+        if (!isNetworkFailure(err)) throw err;
+        console.warn('Supabase saveShift network error, updating locally:', err);
       }
     }
 
@@ -235,9 +264,13 @@ class AttendanceService {
     const supabase = this.getSupabase();
     if (supabase) {
       try {
-        await supabase.from('attendance_shifts').delete().eq('id', id);
-      } catch (err) {
-        console.warn('Supabase deleteShift error:', err);
+        const { error } = await supabase.from('attendance_shifts').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus shift absensi dari database: ${error.message}`);
+        }
+      } catch (err: any) {
+        if (!isNetworkFailure(err)) throw err;
+        console.warn('Supabase deleteShift network error:', err);
       }
     }
     const saved = localStorage.getItem(SHIFTS_KEY);
@@ -251,22 +284,18 @@ class AttendanceService {
   // --------------------------------------------------------------------------
 
   async getEmployees(): Promise<EmployeeProfile[]> {
-    const supabase = this.getSupabase();
-    if (supabase) {
+    if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase
-          .from('employee_profiles')
-          .select('*')
-          .order('employee_code', { ascending: true });
-
-        if (!error && data) {
+        const res = await fetch('/api/attendance/employees', { cache: 'no-store' });
+        if (res.ok) {
+          const payload = await res.json();
+          const data = Array.isArray(payload?.employees) ? payload.employees : [];
           const merged = (data as EmployeeProfile[]).map(mergeAvatarFallback);
           if (typeof window !== 'undefined') {
-            localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(merged));
+            localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(merged.map(sanitizeEmployeeForCache)));
           }
           return merged;
         }
-        if (error) console.error('Supabase getEmployees error:', error);
       } catch (err) {
         console.warn('Fallback to local employees cache:', err);
       }
@@ -280,7 +309,9 @@ class AttendanceService {
         } catch {}
       }
     }
-    return INITIAL_EMPLOYEE_PROFILES;
+    return isSupabaseConfigured()
+      ? []
+      : INITIAL_EMPLOYEE_PROFILES;
   }
 
   async saveEmployee(
@@ -291,7 +322,7 @@ class AttendanceService {
     const empData: EmployeeProfile = {
       id: emp.id || generateUUID(),
       employee_code: emp.employee_code.trim().toUpperCase(),
-      pin: (emp.pin || '1234').trim(),
+      ...(emp.pin?.trim() ? { pin: emp.pin.trim() } : isNew ? { pin: '1234' } : {}),
       full_name: emp.full_name.trim(),
       role_title: (emp.role_title || 'Barista').trim(),
       assigned_location_type: emp.assigned_location_type || 'outlet',
@@ -303,99 +334,59 @@ class AttendanceService {
       updated_at: nowIso,
     };
 
-    // Preserve local avatar cache in sync with current intention
     if (typeof window !== 'undefined') {
-      if (empData.avatar_url) {
-        localStorage.setItem(`obathaus_employee_avatar_${empData.id}`, empData.avatar_url);
-      } else {
-        localStorage.removeItem(`obathaus_employee_avatar_${empData.id}`);
+      const avatarKey = `obathaus_employee_avatar_${empData.id}`;
+      if (!isSupabaseConfigured()) {
+        if (empData.avatar_url) {
+          localStorage.setItem(avatarKey, empData.avatar_url);
+        } else {
+          localStorage.removeItem(avatarKey);
+        }
+      } else if (empData.avatar_url && !empData.avatar_url.startsWith('data:')) {
+        localStorage.removeItem(avatarKey);
       }
     }
 
     const updateLocalEmployeeCache = (savedEmp: EmployeeProfile) => {
       if (typeof window === 'undefined') return;
       try {
+        const cleanSaved = sanitizeEmployeeForCache(savedEmp);
         const raw = localStorage.getItem(EMPLOYEES_KEY);
         const list: EmployeeProfile[] = raw ? JSON.parse(raw) : [];
-        const exists = list.some((e) => e.id === savedEmp.id);
+        const exists = list.some((e) => e.id === cleanSaved.id);
         const updated = exists
-          ? list.map((e) => (e.id === savedEmp.id ? savedEmp : e))
-          : [...list, savedEmp];
+          ? list.map((e) => (e.id === cleanSaved.id ? cleanSaved : e))
+          : [...list, cleanSaved];
         localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(updated));
       } catch {}
     };
 
-    const supabase = this.getSupabase();
-    if (supabase) {
-      const dbPayload: Record<string, any> = {
-        id: empData.id,
-        employee_code: empData.employee_code,
-        pin: empData.pin,
-        full_name: empData.full_name,
-        role_title: empData.role_title,
-        assigned_location_type: empData.assigned_location_type,
-        assigned_location_id: UUID_REGEX.test(empData.assigned_location_id) ? empData.assigned_location_id : null,
-        phone: empData.phone,
-        avatar_url: empData.avatar_url || null,
-        is_active: empData.is_active,
-        updated_at: nowIso,
-      };
-      if (isNew) {
-        dbPayload.created_at = empData.created_at;
-      }
-
-      const executeWrite = async (payloadToWrite: Record<string, any>) => {
-        if (isNew) {
-          return supabase.from('employee_profiles').insert(payloadToWrite).select().single();
-        }
-        return supabase
-          .from('employee_profiles')
-          .update(payloadToWrite)
-          .eq('id', empData.id)
-          .select()
-          .maybeSingle();
-      };
-
+    if (isSupabaseConfigured()) {
       try {
-        let { data, error } = await executeWrite(dbPayload);
-
-        // If employee_profiles in cloud hasn't had avatar_url column migrated yet,
-        // retry saving the core fields (full_name, role_title, phone, pin) so they STILL sync to cloud!
-        if (error && (error.code === 'PGRST204' || error.message?.toLowerCase().includes('avatar_url'))) {
-          console.warn('Column avatar_url missing in Supabase employee_profiles yet; saving core profile fields without avatar_url.');
-          const { avatar_url: _omit, ...corePayload } = dbPayload;
-          const retryRes = await executeWrite(corePayload);
-          data = retryRes.data;
-          error = retryRes.error;
+        const res = await fetch('/api/attendance/employees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: isNew ? undefined : empData.id,
+            employee_code: empData.employee_code,
+            pin: emp.pin?.trim() || undefined,
+            full_name: empData.full_name,
+            role_title: empData.role_title,
+            assigned_location_type: empData.assigned_location_type,
+            assigned_location_id: empData.assigned_location_id,
+            phone: empData.phone,
+            avatar_url: empData.avatar_url || null,
+            is_active: empData.is_active,
+            created_at: empData.created_at,
+          }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload?.employee) {
+          throw new Error(payload?.error || 'Gagal menyimpan profil karyawan ke database.');
         }
-
-        // If updating an employee ID that doesn't exist in cloud yet, upsert instead
-        if (!isNew && !error && !data) {
-          const upsertRes = await supabase
-            .from('employee_profiles')
-            .upsert({ ...dbPayload, created_at: empData.created_at })
-            .select()
-            .single();
-          if (!upsertRes.error && upsertRes.data) {
-            data = upsertRes.data;
-          } else if (upsertRes.error) {
-            error = upsertRes.error;
-          }
-        }
-
-        if (error) {
-          if (!isNetworkFailure(error)) {
-            throw new Error(`Gagal menyimpan profil karyawan ke database: ${error.message}`);
-          }
-          console.warn('Network error during saveEmployee, falling back to local cache:', error);
-        } else if (data) {
-          const savedRecord: EmployeeProfile = {
-            ...(data as EmployeeProfile),
-            avatar_url: (data as EmployeeProfile).avatar_url ?? empData.avatar_url,
-          };
-          updateLocalEmployeeCache(savedRecord);
-          return savedRecord;
-        }
+        const savedRecord = mergeAvatarFallback(payload.employee as EmployeeProfile);
+        updateLocalEmployeeCache(savedRecord);
+        return savedRecord;
       } catch (err: any) {
         if (!isNetworkFailure(err)) {
           throw err;
@@ -405,66 +396,208 @@ class AttendanceService {
     }
 
     updateLocalEmployeeCache(empData);
-    return empData;
+    return sanitizeEmployeeForCache(empData);
   }
 
   async deleteEmployee(id: string): Promise<{ success: boolean; error?: string }> {
-    const supabase = this.getSupabase();
-    if (supabase) {
+    if (isSupabaseConfigured()) {
       try {
-        // 1. Delete associated logs first to prevent foreign key constraint violations
-        await supabase.from('attendance_logs').delete().eq('employee_id', id);
-
-        // 2. Delete employee from Supabase
-        const { error } = await supabase.from('employee_profiles').delete().eq('id', id);
-        if (error) {
-          console.error('Supabase deleteEmployee error:', error);
-          // Try deleting by employee_code if id was a code (EMP-01, etc.)
-          await supabase.from('employee_profiles').delete().eq('employee_code', id);
+        const res = await fetch(`/api/attendance/employees?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return {
+            success: false,
+            error: payload?.error || 'Gagal menghapus karyawan dari database.',
+          };
         }
       } catch (err: any) {
-        console.warn('Supabase deleteEmployee exception:', err);
+        if (!isNetworkFailure(err)) {
+          return { success: false, error: err?.message || 'Gagal menghapus karyawan.' };
+        }
+        console.warn('Supabase deleteEmployee network exception:', err);
       }
     }
 
-    // 3. Update local cache immediately
-    const saved = localStorage.getItem(EMPLOYEES_KEY);
-    const list: EmployeeProfile[] = saved ? JSON.parse(saved) : [];
-    const updated = list.filter((e) => e.id !== id && e.employee_code !== id);
-    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(EMPLOYEES_KEY);
+      const list: EmployeeProfile[] = saved ? JSON.parse(saved) : [];
+      const updated = list.filter((e) => e.id !== id && e.employee_code !== id);
+      localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(updated));
 
-    // 4. Clear active session if this employee was currently selected
-    const savedActiveEmpId = localStorage.getItem('obathaus_active_employee_id');
-    if (savedActiveEmpId === id) {
-      localStorage.removeItem('obathaus_active_employee_id');
+      const savedActiveEmpId = localStorage.getItem('obathaus_active_employee_id');
+      if (savedActiveEmpId === id) {
+        localStorage.removeItem('obathaus_active_employee_id');
+      }
     }
 
     return { success: true };
   }
 
   /**
-   * Fast authentication by Employee ID and 4-digit PIN directly against Supabase
+   * Server-verified authentication by Employee ID and PIN (or biometric device token)
    */
   async loginEmployee(employeeCode: string, pin: string): Promise<{ success: boolean; employee?: EmployeeProfile; error?: string }> {
     const cleanCode = employeeCode.trim().toUpperCase();
     const cleanPin = pin.trim();
 
-    const employees = await this.getEmployees();
-    const found = employees.find((e) => e.employee_code.toUpperCase() === cleanCode);
-
-    if (!found) {
-      return { success: false, error: 'ID Karyawan tidak terdaftar dalam sistem.' };
+    if (isSupabaseConfigured()) {
+      try {
+        const res = await fetch('/api/attendance/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employee_code: cleanCode, pin: cleanPin }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.success || !data?.employee) {
+          return { success: false, error: data?.error || 'ID Karyawan atau PIN tidak sesuai.' };
+        }
+        return { success: true, employee: mergeAvatarFallback(data.employee as EmployeeProfile) };
+      } catch (err: any) {
+        return {
+          success: false,
+          error: isNetworkFailure(err)
+            ? 'Koneksi internet diperlukan untuk verifikasi login pertama kali.'
+            : err?.message || 'Gagal menghubungi server absensi.',
+        };
+      }
     }
 
-    if (!found.is_active) {
-      return { success: false, error: 'Akun karyawan ini sedang nonaktif.' };
-    }
-
-    if (found.pin !== cleanPin) {
-      return { success: false, error: 'PIN yang dimasukkan salah.' };
-    }
-
+    const found = INITIAL_EMPLOYEE_PROFILES.find((e) => e.employee_code.toUpperCase() === cleanCode);
+    if (!found) return { success: false, error: 'ID Karyawan tidak terdaftar dalam sistem.' };
+    if (!found.is_active) return { success: false, error: 'Akun karyawan ini sedang nonaktif.' };
+    if (found.pin !== cleanPin) return { success: false, error: 'PIN yang dimasukkan salah.' };
     return { success: true, employee: found };
+  }
+
+  async getSessionEmployee(): Promise<EmployeeProfile | null> {
+    if (!isSupabaseConfigured()) return null;
+    try {
+      const res = await fetch('/api/attendance/me', { cache: 'no-store' });
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => ({}));
+      return data?.employee ? mergeAvatarFallback(data.employee as EmployeeProfile) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async logoutEmployee(): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    await fetch('/api/attendance/logout', { method: 'POST' }).catch(() => {});
+  }
+
+  async updateOwnProfile(updates: {
+    full_name?: string;
+    role_title?: string;
+    phone?: string;
+    avatar_url?: string | null;
+    pin?: string;
+  }): Promise<EmployeeProfile> {
+    if (isSupabaseConfigured()) {
+      const res = await fetch('/api/attendance/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.employee) {
+        throw new Error(data?.error || 'Gagal memperbarui profil karyawan.');
+      }
+      return mergeAvatarFallback(data.employee as EmployeeProfile);
+    }
+    throw new Error('Mode demo tidak mendukung pembaruan sesi server.');
+  }
+
+  async uploadEmployeeAvatar(
+    input: File | string,
+    employeeId?: string
+  ): Promise<{ avatar_url: string; employee?: EmployeeProfile }> {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase belum dikonfigurasi.');
+    }
+
+    let res: Response;
+    if (typeof input === 'string') {
+      res = await fetch('/api/attendance/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: input, employeeId }),
+      });
+    } else {
+      const formData = new FormData();
+      formData.append('file', input);
+      if (employeeId) formData.append('employeeId', employeeId);
+      res = await fetch('/api/attendance/avatar', {
+        method: 'POST',
+        body: formData,
+      });
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.avatar_url) {
+      throw new Error(data?.error || 'Gagal mengunggah foto avatar ke Supabase Storage.');
+    }
+
+    if (typeof window !== 'undefined' && data?.employee?.id) {
+      localStorage.removeItem(`obathaus_employee_avatar_${data.employee.id}`);
+    }
+
+    return {
+      avatar_url: String(data.avatar_url),
+      employee: data?.employee ? mergeAvatarFallback(data.employee as EmployeeProfile) : undefined,
+    };
+  }
+
+  async deleteEmployeeAvatar(employeeId?: string): Promise<EmployeeProfile | null> {
+    if (!isSupabaseConfigured()) return null;
+    const qs = employeeId ? `?employeeId=${encodeURIComponent(employeeId)}` : '';
+    const res = await fetch(`/api/attendance/avatar${qs}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || 'Gagal menghapus foto avatar.');
+    }
+    if (typeof window !== 'undefined' && data?.employee?.id) {
+      localStorage.removeItem(`obathaus_employee_avatar_${data.employee.id}`);
+    }
+    return data?.employee ? mergeAvatarFallback(data.employee as EmployeeProfile) : null;
+  }
+
+  async createBiometricToken(credId: string): Promise<string | null> {
+    if (!isSupabaseConfigured()) return null;
+    try {
+      const res = await fetch('/api/attendance/biometric-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credId }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => ({}));
+      return typeof data?.biometricToken === 'string' ? data.biometricToken : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async loginWithBiometricToken(biometricToken: string): Promise<{ success: boolean; employee?: EmployeeProfile; error?: string }> {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Supabase belum dikonfigurasi.' };
+    }
+    try {
+      const res = await fetch('/api/attendance/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ biometric_token: biometricToken }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success || !data?.employee) {
+        return { success: false, error: data?.error || 'Verifikasi biometrik ditolak oleh server.' };
+      }
+      return { success: true, employee: mergeAvatarFallback(data.employee as EmployeeProfile) };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Gagal menghubungi server absensi.' };
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -513,9 +646,13 @@ class AttendanceService {
     if (supabase) {
       try {
         const table = type === 'warehouse' ? 'warehouses' : 'outlets';
-        await supabase.from(table).update({ latitude: lat, longitude: lng, radius_meters: radius }).eq('id', id);
-      } catch (err) {
-        console.warn('Supabase updateLocationCoordinates error:', err);
+        const { error } = await supabase.from(table).update({ latitude: lat, longitude: lng, radius_meters: radius }).eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal memperbarui koordinat lokasi: ${error.message}`);
+        }
+      } catch (err: any) {
+        if (!isNetworkFailure(err)) throw err;
+        console.warn('Supabase updateLocationCoordinates offline warning:', err);
       }
     }
 
@@ -553,8 +690,7 @@ class AttendanceService {
 
   async syncPendingAttendance(): Promise<number> {
     if (typeof window === 'undefined' || !navigator.onLine) return 0;
-    const supabase = this.getSupabase();
-    if (!supabase) return 0;
+    if (!isSupabaseConfigured()) return 0;
     try {
       const raw = localStorage.getItem(ATTENDANCE_QUEUE_KEY);
       if (!raw) return 0;
@@ -569,12 +705,12 @@ class AttendanceService {
             ...log,
             shift_id: log.shift_id && UUID_REGEX.test(log.shift_id) ? log.shift_id : null,
           };
-          let { error } = await supabase.from('attendance_logs').upsert(payload);
-          if (error && payload.shift_id && error.code === '23503') {
-            const retry = await supabase.from('attendance_logs').upsert({ ...payload, shift_id: null });
-            error = retry.error;
-          }
-          if (!error) {
+          const res = await fetch('/api/attendance/logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'upsert', log: payload }),
+          });
+          if (res.ok) {
             synced++;
           } else {
             remaining.push(log);
@@ -593,45 +729,40 @@ class AttendanceService {
   async getTodayAttendance(employeeId: string): Promise<AttendanceLog | null> {
     await this.syncPendingAttendance();
     const today = this.getTodayDateStr();
-    const supabase = this.getSupabase();
 
-    if (supabase) {
+    if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase
-          .from('attendance_logs')
-          .select('*')
-          .eq('employee_id', employeeId)
-          .eq('date', today)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (!error && data && data.length > 0) {
-          const log = data[0] as AttendanceLog;
-          await this.saveLocalLog(log);
-          return log;
+        const res = await fetch(
+          `/api/attendance/logs?employeeId=${encodeURIComponent(employeeId)}&date=${encodeURIComponent(today)}&limit=1`,
+          { cache: 'no-store' }
+        );
+        if (res.ok) {
+          const payload = await res.json();
+          if (Array.isArray(payload?.logs) && payload.logs.length > 0) {
+            const log = payload.logs[0] as AttendanceLog;
+            await this.saveLocalLog(log);
+            return log;
+          }
         }
 
-        // Secondary fallback: WITA day boundary check
         const witaStartIso = `${today}T00:00:00+08:00`;
-        const { data: rangeData } = await supabase
-          .from('attendance_logs')
-          .select('*')
-          .eq('employee_id', employeeId)
-          .gte('created_at', witaStartIso)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (rangeData && rangeData.length > 0) {
-          const log = rangeData[0] as AttendanceLog;
-          await this.saveLocalLog(log);
-          return log;
+        const resRange = await fetch(
+          `/api/attendance/logs?employeeId=${encodeURIComponent(employeeId)}&gteCreatedAt=${encodeURIComponent(witaStartIso)}&limit=1`,
+          { cache: 'no-store' }
+        );
+        if (resRange.ok) {
+          const payloadRange = await resRange.json();
+          if (Array.isArray(payloadRange?.logs) && payloadRange.logs.length > 0) {
+            const log = payloadRange.logs[0] as AttendanceLog;
+            await this.saveLocalLog(log);
+            return log;
+          }
         }
       } catch (err) {
         console.warn('Fallback to local today attendance:', err);
       }
     }
 
-    // Fallback: check local storage cache safely without wiping
     if (typeof window === 'undefined') return null;
     const saved = localStorage.getItem(ATTENDANCE_LOGS_KEY);
     const logs: AttendanceLog[] = saved ? JSON.parse(saved) : [];
@@ -664,10 +795,23 @@ class AttendanceService {
 
     // Resolve location
     const targetLoc = await this.getLocationTarget(emp.assigned_location_type, emp.assigned_location_id);
-    let distance = 0;
-    const maxRadius = targetLoc?.radius_meters || 100;
+    if (!targetLoc) {
+      return {
+        success: false,
+        error: 'Gagal memverifikasi titik lokasi absensi. Periksa koneksi internet atau konfigurasi lokasi cabang/gudang Anda.',
+      };
+    }
 
-    if (targetLoc && targetLoc.latitude !== null && targetLoc.longitude !== null && targetLoc.latitude !== 0) {
+    let distance = 0;
+    const maxRadius = targetLoc.radius_meters || 100;
+
+    if (targetLoc.latitude !== null && targetLoc.longitude !== null && targetLoc.latitude !== 0 && targetLoc.longitude !== 0) {
+      if (lat === 0 || lng === 0) {
+        return {
+          success: false,
+          error: 'Koordinat GPS perangkat tidak valid. Aktifkan izin lokasi lalu coba kembali.',
+        };
+      }
       distance = calculateDistanceMeters(lat, lng, targetLoc.latitude, targetLoc.longitude);
       if (distance > maxRadius) {
         return {
@@ -678,7 +822,7 @@ class AttendanceService {
       }
     }
 
-    // Resolve Shift & Punctuality in WITA timezone (Asia/Makassar)
+    // Resolve Shift & Punctuality in WITA timezone (Asia/Makassar), with midnight wrap-around support
     const shifts = await this.getShifts();
     const activeShifts = shifts.filter((s) => s.is_active);
     const now = new Date();
@@ -689,7 +833,8 @@ class AttendanceService {
     for (const sh of activeShifts) {
       const [shH, shM] = sh.start_time.split(':').map(Number);
       const shMinutes = shH * 60 + shM;
-      const diff = Math.abs(nowMinutes - shMinutes);
+      const rawDiff = Math.abs(nowMinutes - shMinutes);
+      const diff = Math.min(rawDiff, 1440 - rawDiff);
       if (diff < minDiff) {
         minDiff = diff;
         matchedShift = sh;
@@ -701,7 +846,9 @@ class AttendanceService {
     if (matchedShift) {
       const [shH, shM] = matchedShift.start_time.split(':').map(Number);
       const scheduledMinutes = shH * 60 + shM;
-      const lateMins = nowMinutes - scheduledMinutes;
+      let lateMins = nowMinutes - scheduledMinutes;
+      if (lateMins < -720) lateMins += 1440;
+      if (lateMins > 720) lateMins -= 1440;
       if (lateMins > (matchedShift.late_tolerance_minutes || 15)) {
         status = 'late';
         autoNote = autoNote ? `${autoNote} (Terlambat ${lateMins} menit)` : `Terlambat ${lateMins} menit`;
@@ -727,32 +874,22 @@ class AttendanceService {
       updated_at: nowIso,
     };
 
-    const supabase = this.getSupabase();
-    if (supabase) {
+    if (isSupabaseConfigured()) {
       try {
-        let { data, error } = await supabase.from('attendance_logs').insert(newLog).select().single();
-        if (error && newLog.shift_id && error.code === '23503') {
-          const retry = await supabase
-            .from('attendance_logs')
-            .insert({ ...newLog, shift_id: null })
-            .select()
-            .single();
-          data = retry.data;
-          error = retry.error;
+        const res = await fetch('/api/attendance/logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'insert', log: newLog }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload?.log) {
+          await this.saveLocalLog(payload.log as AttendanceLog);
+          return { success: true, log: payload.log as AttendanceLog, distance };
         }
-        if (!error && data) {
-          await this.saveLocalLog(data as AttendanceLog);
-          return { success: true, log: data as AttendanceLog, distance };
-        }
-        if (error) {
-          console.error('Supabase clockIn insert error:', error);
-          if (!isNetworkFailure(error)) {
-            return {
-              success: false,
-              error: `Gagal menyimpan absen masuk ke server: ${error.message}`,
-            };
-          }
-        }
+        return {
+          success: false,
+          error: payload?.error || 'Gagal menyimpan absen masuk ke server.',
+        };
       } catch (err: any) {
         if (!isNetworkFailure(err)) {
           return {
@@ -774,35 +911,32 @@ class AttendanceService {
    */
   async clockOut(logId: string, notes?: string): Promise<{ success: boolean; log?: AttendanceLog; error?: string }> {
     const nowIso = new Date().toISOString();
-    const supabase = this.getSupabase();
 
-    if (supabase) {
+    if (isSupabaseConfigured()) {
       try {
         const updatePayload: any = {
+          id: logId,
           clock_out: nowIso,
           updated_at: nowIso,
         };
         if (notes) updatePayload.notes = notes;
 
-        const { data, error } = await supabase
-          .from('attendance_logs')
-          .update(updatePayload)
-          .eq('id', logId)
-          .select()
-          .maybeSingle();
+        const res = await fetch('/api/attendance/logs', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatePayload),
+        });
+        const payload = await res.json().catch(() => ({}));
 
-        if (!error && data) {
-          await this.saveLocalLog(data as AttendanceLog);
-          return { success: true, log: data as AttendanceLog };
+        if (res.ok && payload?.log) {
+          await this.saveLocalLog(payload.log as AttendanceLog);
+          return { success: true, log: payload.log as AttendanceLog };
         }
-        if (error) {
-          console.warn('Supabase clockOut error:', error);
-          if (!isNetworkFailure(error)) {
-            return {
-              success: false,
-              error: `Gagal menyimpan absen pulang ke server: ${error.message}`,
-            };
-          }
+        if (!res.ok) {
+          return {
+            success: false,
+            error: payload?.error || 'Gagal menyimpan absen pulang ke server.',
+          };
         }
       } catch (err: any) {
         if (!isNetworkFailure(err)) {
@@ -832,16 +966,6 @@ class AttendanceService {
       notes: notes ? (target.notes ? `${target.notes} • ${notes}` : notes) : target.notes,
     };
     await this.saveLocalLog(updated);
-
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('attendance_logs').upsert(updated).select().single();
-        if (!error && data) {
-          await this.saveLocalLog(data as AttendanceLog);
-          return { success: true, log: data as AttendanceLog };
-        }
-      } catch {}
-    }
 
     this.enqueueOfflineAttendance(updated);
     return { success: true, log: updated };
@@ -879,20 +1003,22 @@ class AttendanceService {
       updated_at: nowIso,
     };
 
-    const supabase = this.getSupabase();
-    if (supabase) {
+    if (isSupabaseConfigured()) {
       try {
-        const { data, error } = await supabase.from('attendance_logs').upsert(newLog).select().single();
-        if (!error && data) {
-          await this.saveLocalLog(data as AttendanceLog);
-          return { success: true, log: data as AttendanceLog };
+        const res = await fetch('/api/attendance/logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'upsert', log: newLog }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (res.ok && payload?.log) {
+          await this.saveLocalLog(payload.log as AttendanceLog);
+          return { success: true, log: payload.log as AttendanceLog };
         }
-        if (error && !isNetworkFailure(error)) {
-          return {
-            success: false,
-            error: `Gagal menyimpan laporan ketidakhadiran ke server: ${error.message}`,
-          };
-        }
+        return {
+          success: false,
+          error: payload?.error || 'Gagal menyimpan laporan ketidakhadiran ke server.',
+        };
       } catch (err: any) {
         if (!isNetworkFailure(err)) {
           return {
@@ -925,22 +1051,20 @@ class AttendanceService {
     employeeId?: string;
   }): Promise<AttendanceLog[]> {
     await this.syncPendingAttendance();
-    const supabase = this.getSupabase();
-    if (supabase) {
+    if (isSupabaseConfigured()) {
       try {
-        let q = supabase
-          .from('attendance_logs')
-          .select('*')
-          .order('date', { ascending: false })
-          .order('created_at', { ascending: false });
-        if (filter?.date) q = q.eq('date', filter.date);
-        if (filter?.startDate) q = q.gte('date', filter.startDate);
-        if (filter?.endDate) q = q.lte('date', filter.endDate);
-        if (filter?.employeeId) q = q.eq('employee_id', filter.employeeId);
-        const { data, error } = await q;
+        const params = new URLSearchParams();
+        if (filter?.date) params.set('date', filter.date);
+        if (filter?.startDate) params.set('startDate', filter.startDate);
+        if (filter?.endDate) params.set('endDate', filter.endDate);
+        if (filter?.employeeId) params.set('employeeId', filter.employeeId);
+        const qs = params.toString();
 
-        if (!error && data) {
-          // Only merge UNSYNCED offline queue items (don't resurrect deleted/stale cache entries!)
+        const res = await fetch(`/api/attendance/logs${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+        if (res.ok) {
+          const payload = await res.json();
+          const data = Array.isArray(payload?.logs) ? (payload.logs as AttendanceLog[]) : [];
+
           let queuedLogs: AttendanceLog[] = [];
           if (typeof window !== 'undefined') {
             try {
@@ -966,7 +1090,6 @@ class AttendanceService {
           if (filter?.endDate) result = result.filter((l) => l.date <= filter.endDate!);
           return result;
         }
-        if (error) console.warn('Supabase getAllAttendanceLogs error:', error);
       } catch (err) {
         console.warn('Fallback to local logs:', err);
       }

@@ -88,7 +88,7 @@ export function SalesTrendChart({ data, periodLabel }: SalesTrendChartProps) {
   const activePoint = hoveredIdx !== null ? points[hoveredIdx] : null;
 
   return (
-    <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-5">
+    <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-4 sm:space-y-5">
       {/* Header and Toggle Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>

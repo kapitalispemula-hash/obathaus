@@ -343,17 +343,17 @@ export default function AdminReportsPage() {
 
   return (
     <AdminLayout>
-      <div className="p-6 lg:p-8 space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         {/* 1. Header Banner & Actions */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#ECEEF1] shadow-2xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-orange-100 text-[#FF6B00] uppercase tracking-wider">
+            <div className="flex items-center flex-wrap gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black bg-orange-100 text-[#FF6B00] uppercase tracking-wider">
                 Financial & Inventory Intelligence
               </span>
               <span className="text-xs text-[#71717A]">• Phase 6 Final Reporting</span>
             </div>
-            <h1 className="text-2xl font-black text-[#18181B] tracking-tight mt-1">
+            <h1 className="text-lg sm:text-2xl font-black text-[#18181B] tracking-tight mt-1">
               Laporan Finansial & Valuasi Operasional
             </h1>
             <p className="text-xs text-[#71717A] mt-0.5">
@@ -361,11 +361,11 @@ export default function AdminReportsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleExportCSV}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[#ECEEF1] hover:bg-[#F4F4F5] text-[#18181B] text-xs font-bold rounded-2xl transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#ECEEF1] hover:bg-[#F4F4F5] text-[#18181B] text-xs font-bold rounded-2xl transition-colors cursor-pointer shadow-2xs"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
               <span>Ekspor CSV</span>
@@ -374,24 +374,24 @@ export default function AdminReportsPage() {
             <button
               type="button"
               onClick={handleExportPDF}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs font-bold rounded-2xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs font-bold rounded-2xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
             >
               <FileText className="w-4 h-4" />
-              <span>Unduh Dokumen PDF</span>
+              <span>Unduh PDF</span>
             </button>
           </div>
         </div>
 
         {/* 2. Global Filter Toolbar: Outlet Switcher + Date Selector */}
-        <div className="bg-white p-4 rounded-3xl border border-[#ECEEF1] shadow-2xs flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5 sm:gap-3 w-full">
             {/* Multi-Outlet Dropdown */}
-            <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3.5 py-2 rounded-2xl text-xs font-bold text-[#18181B]">
-              <Store className="w-4 h-4 text-[#FF6B00]" />
+            <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3.5 py-2 rounded-2xl text-xs font-bold text-[#18181B] w-full sm:w-auto">
+              <Store className="w-4 h-4 text-[#FF6B00] shrink-0" />
               <select
                 value={selectedOutletId}
                 onChange={(e) => setSelectedOutletId(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer"
+                className="bg-transparent focus:outline-none cursor-pointer w-full truncate"
               >
                 <option value="all">🌐 Konsolidasi Semua Cabang (7 Outlet)</option>
                 {availableOutlets.map((o) => (
@@ -411,13 +411,14 @@ export default function AdminReportsPage() {
                 setCustomStart(start);
                 setCustomEnd(end);
               }}
-              align="right"
+              align="left"
+              className="w-full sm:w-auto [&>button]:w-full [&>button]:justify-between"
             />
           </div>
         </div>
 
         {/* 3. Navigation Tabs: 4 Specialized Reports */}
-        <div className="flex items-center gap-2 border-b border-[#ECEEF1] pb-1 overflow-x-auto">
+        <div className="flex items-center gap-2 border-b border-[#ECEEF1] pb-2 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('pnl')}
@@ -475,90 +476,90 @@ export default function AdminReportsPage() {
             TAB 1: PROFIT & LOSS (P&L) MULTI-OUTLET
         =================================================================== */}
         {activeTab === 'pnl' && (
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {/* 6 Key Financial Metrics Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {/* 1. Omzet Penjualan Bersih */}
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                  1. Omzet Penjualan Bersih (Net Revenue)
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider line-clamp-1">
+                  1. Omzet Bersih
                 </span>
-                <div className="text-2xl font-black text-[#18181B] tabular-nums">
+                <div className="text-base sm:text-2xl font-black text-[#18181B] tabular-nums truncate">
                   {formatRupiah(summary?.netRevenue || 0)}
                 </div>
-                <p className="text-[11px] text-[#71717A]">
-                  Total penjualan setelah diskon (Di luar PPN titipan)
+                <p className="text-[10px] sm:text-[11px] text-[#71717A]">
+                  Setelah diskon kasir
                 </p>
               </div>
 
               {/* 2. Total HPP Penjualan (COGS) */}
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                  2. Total HPP Bahan Baku (COGS)
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider line-clamp-1">
+                  2. Total HPP (COGS)
                 </span>
-                <div className="text-2xl font-black text-rose-600 tabular-nums">
+                <div className="text-base sm:text-2xl font-black text-rose-600 tabular-nums truncate">
                   {formatRupiah(summary?.totalHpp || 0)}
                 </div>
-                <p className="text-[11px] text-[#71717A]">
-                  Dihitung otomatis dari resep BOM bahan baku per menu
+                <p className="text-[10px] sm:text-[11px] text-[#71717A]">
+                  Resep BOM per menu
                 </p>
               </div>
 
               {/* 3. Laba Kotor (Gross Profit) */}
-              <div className="bg-emerald-50/50 p-5 rounded-3xl border border-emerald-200 shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
-                  3. Laba Kotor (Gross Profit)
+              <div className="bg-emerald-50/50 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-emerald-200 shadow-2xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-emerald-800 uppercase tracking-wider line-clamp-1">
+                  3. Laba Kotor
                 </span>
-                <div className="text-2xl font-black text-emerald-700 tabular-nums">
+                <div className="text-base sm:text-2xl font-black text-emerald-700 tabular-nums truncate">
                   {formatRupiah(summary?.grossProfit || 0)}
                 </div>
-                <p className="text-[11px] text-emerald-600 font-medium">
-                  Formula: Omzet Bersih - Total HPP Bahan Baku
+                <p className="text-[10px] sm:text-[11px] text-emerald-600 font-medium">
+                  Omzet - Total HPP
                 </p>
               </div>
 
               {/* 4. Beban Operasional (OPEX) */}
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                  4. Beban Operasional Toko (OPEX)
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider line-clamp-1">
+                  4. Beban OPEX
                 </span>
-                <div className="text-2xl font-black text-red-600 tabular-nums">
+                <div className="text-base sm:text-2xl font-black text-red-600 tabular-nums truncate">
                   {formatRupiah(summary?.operatingExpenses || 0)}
                 </div>
-                <p className="text-[11px] text-[#71717A]">
-                  Sewa tempat, listrik PLN, air, internet, gaji & supplies
+                <p className="text-[10px] sm:text-[11px] text-[#71717A]">
+                  Sewa, listrik, gaji, dll
                 </p>
               </div>
 
               {/* 5. Keuntungan Bersih Operasional */}
-              <div className="bg-[#FFF7ED] p-5 rounded-3xl border border-[#FED7AA] shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-[#FF6B00] uppercase tracking-wider">
-                  5. Keuntungan Bersih Operasional
+              <div className="bg-[#FFF7ED] p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#FED7AA] shadow-2xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#FF6B00] uppercase tracking-wider line-clamp-1">
+                  5. Laba Bersih
                 </span>
-                <div className="text-2xl font-black text-[#FF6B00] tabular-nums">
+                <div className="text-base sm:text-2xl font-black text-[#FF6B00] tabular-nums truncate">
                   {formatRupiah(summary?.netOperatingProfit || 0)}
                 </div>
-                <p className="text-[11px] text-[#FF6B00]/80 font-medium">
-                  Formula: Laba Kotor - Beban Operasional Toko
+                <p className="text-[10px] sm:text-[11px] text-[#FF6B00]/80 font-medium">
+                  Laba Kotor - OPEX
                 </p>
               </div>
 
               {/* 6. Net Profit Margin (NPM) */}
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                  6. Net Profit Margin (NPM)
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider line-clamp-1">
+                  6. Net Margin (NPM)
                 </span>
-                <div className="text-2xl font-black text-[#18181B] tabular-nums">
+                <div className="text-base sm:text-2xl font-black text-[#18181B] tabular-nums">
                   {formatPercent(summary?.netProfitMargin || 0)}
                 </div>
-                <p className="text-[11px] text-[#71717A]">
-                  (Keuntungan Bersih / Omzet Bersih) x 100%
+                <p className="text-[10px] sm:text-[11px] text-[#71717A]">
+                  Laba Bersih / Omzet
                 </p>
               </div>
             </div>
 
             {/* Multi-Outlet Comparison Matrix */}
-            <div className="bg-white rounded-3xl border border-[#ECEEF1] shadow-2xs p-6 space-y-4">
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs p-4 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-black text-[#18181B] tracking-tight">
@@ -643,73 +644,73 @@ export default function AdminReportsPage() {
             TAB 2: INVENTORY ASSET VALUATION
         =================================================================== */}
         {activeTab === 'valuation' && inventoryValuation && (
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {/* 4 Asset Valuation KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                    Total Valuasi Aset Konsolidasi
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                    Aset Konsolidasi
                   </p>
-                  <h3 className="text-2xl font-black text-[#FF6B00] mt-1">
+                  <h3 className="text-base sm:text-2xl font-black text-[#FF6B00] mt-1 truncate">
                     {formatRupiah(inventoryValuation.consolidated_total_value)}
                   </h3>
-                  <p className="text-[11px] text-[#71717A] mt-1">Gudang Pusat + 7 Outlet</p>
+                  <p className="text-[10px] sm:text-[11px] text-[#71717A] mt-0.5 truncate">Gudang + 7 Outlet</p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
-                  <Boxes className="w-6 h-6" />
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
+                  <Boxes className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                    Nilai Aset Gudang Pusat
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                    Aset Gudang Pusat
                   </p>
-                  <h3 className="text-2xl font-black text-[#18181B] mt-1">
+                  <h3 className="text-base sm:text-2xl font-black text-[#18181B] mt-1 truncate">
                     {formatRupiah(inventoryValuation.warehouse_total_value)}
                   </h3>
-                  <p className="text-[11px] text-blue-600 font-bold mt-1">Stok Cadangan Utama</p>
+                  <p className="text-[10px] sm:text-[11px] text-blue-600 font-bold mt-0.5 truncate">Stok Cadangan</p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <Store className="w-6 h-6" />
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Store className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                    Nilai Persediaan di 7 Outlet
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                    Stok 7 Outlet
                   </p>
-                  <h3 className="text-2xl font-black text-emerald-700 mt-1">
+                  <h3 className="text-base sm:text-2xl font-black text-emerald-700 mt-1 truncate">
                     {formatRupiah(inventoryValuation.outlets_total_value)}
                   </h3>
-                  <p className="text-[11px] text-emerald-600 font-bold mt-1">Stok Operasional Kasir</p>
+                  <p className="text-[10px] sm:text-[11px] text-emerald-600 font-bold mt-0.5 truncate">Stok Operasional</p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                  <DollarSign className="w-6 h-6" />
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <DollarSign className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                    Peringatan Stok Menipis
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                    Stok Menipis
                   </p>
-                  <h3 className="text-2xl font-black text-amber-600 mt-1">
+                  <h3 className="text-base sm:text-2xl font-black text-amber-600 mt-1">
                     {inventoryValuation.low_stock_count}{' '}
-                    <span className="text-xs font-semibold text-[#71717A]">bahan</span>
+                    <span className="text-[11px] sm:text-xs font-semibold text-[#71717A]">bahan</span>
                   </h3>
-                  <p className="text-[11px] text-amber-700 font-bold mt-1">Perlu Restock PO Supplier</p>
+                  <p className="text-[10px] sm:text-[11px] text-amber-700 font-bold mt-0.5 truncate">Perlu Restock</p>
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-6 h-6" />
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
               </div>
             </div>
 
             {/* Outlets Asset Breakdown Matrix */}
-            <div className="bg-white rounded-3xl border border-[#ECEEF1] shadow-2xs p-6 space-y-4">
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs p-4 sm:p-6 space-y-4">
               <h3 className="text-base font-black text-[#18181B] tracking-tight">
                 Sebaran Nilai Persediaan Bahan Baku di 7 Cabang
               </h3>
@@ -868,35 +869,35 @@ export default function AdminReportsPage() {
             TAB 4: CASH FLOW & SHIFT RECONCILIATION SUMMARY
         =================================================================== */}
         {activeTab === 'cash_shifts' && (
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {/* Shifts KPI Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase">Total Sesi Shift</span>
-                <h3 className="text-2xl font-black text-[#18181B] mt-1">{shiftsStats.totalShifts} Sesi</h3>
-                <p className="text-[11px] text-emerald-600 font-bold mt-1">
-                  {shiftsStats.activeShifts} Sedang Aktif di Outlet
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase">Total Shift</span>
+                <h3 className="text-base sm:text-2xl font-black text-[#18181B] mt-1">{shiftsStats.totalShifts} Sesi</h3>
+                <p className="text-[10px] sm:text-[11px] text-emerald-600 font-bold mt-1 truncate">
+                  {shiftsStats.activeShifts} Sedang Aktif
                 </p>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase">Penjualan Uang Tunai</span>
-                <h3 className="text-2xl font-black text-emerald-600 mt-1">{formatRupiah(shiftsStats.totalCashSales)}</h3>
-                <p className="text-[11px] text-[#71717A] mt-1">Setoran Uang Fisik Kasir</p>
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase">Penjualan Tunai</span>
+                <h3 className="text-base sm:text-2xl font-black text-emerald-600 mt-1 truncate">{formatRupiah(shiftsStats.totalCashSales)}</h3>
+                <p className="text-[10px] sm:text-[11px] text-[#71717A] mt-1 truncate">Setoran Uang Fisik</p>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase">Kas Kecil Masuk / Keluar</span>
-                <h3 className="text-2xl font-black text-rose-600 mt-1">-{formatRupiah(shiftsStats.totalPettyOut)}</h3>
-                <p className="text-[11px] text-indigo-600 font-bold mt-1">
-                  Kas Masuk: +{formatRupiah(shiftsStats.totalPettyIn)}
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase">Kas Kecil Keluar</span>
+                <h3 className="text-base sm:text-2xl font-black text-rose-600 mt-1 truncate">-{formatRupiah(shiftsStats.totalPettyOut)}</h3>
+                <p className="text-[10px] sm:text-[11px] text-indigo-600 font-bold mt-1 truncate">
+                  Masuk: +{formatRupiah(shiftsStats.totalPettyIn)}
                 </p>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs">
-                <span className="text-[11px] font-bold text-[#71717A] uppercase">Total Selisih Kas</span>
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs">
+                <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase">Selisih Kas</span>
                 <h3
-                  className={`text-2xl font-black mt-1 ${
+                  className={`text-base sm:text-2xl font-black mt-1 truncate ${
                     shiftsStats.totalDiscrepancy === 0
                       ? 'text-emerald-600'
                       : shiftsStats.totalDiscrepancy < 0
@@ -907,14 +908,14 @@ export default function AdminReportsPage() {
                   {shiftsStats.totalDiscrepancy > 0 ? '+' : ''}
                   {formatRupiah(shiftsStats.totalDiscrepancy)}
                 </h3>
-                <p className="text-[11px] text-[#71717A] mt-1">
-                  {shiftsStats.totalDiscrepancy === 0 ? 'Klop Sempurna' : 'Defisit / Surplus Fisik'}
+                <p className="text-[10px] sm:text-[11px] text-[#71717A] mt-1 truncate">
+                  {shiftsStats.totalDiscrepancy === 0 ? 'Klop Sempurna' : 'Defisit / Surplus'}
                 </p>
               </div>
             </div>
 
             {/* Payment Method Breakdown */}
-            <div className="bg-white rounded-3xl border border-[#ECEEF1] shadow-2xs p-6 space-y-4">
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs p-4 sm:p-6 space-y-4">
               <h3 className="text-base font-black text-[#18181B] tracking-tight">
                 Distribusi Pembayaran Pelanggan (Payment Method Breakdown)
               </h3>

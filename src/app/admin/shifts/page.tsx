@@ -142,17 +142,17 @@ export default function AdminShiftsPage() {
 
   return (
     <AdminLayout>
-      <div className="p-6 lg:p-8 space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         {/* 1. Header Banner */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#ECEEF1] shadow-2xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-orange-100 text-[#FF6B00] uppercase tracking-wider">
+            <div className="flex items-center flex-wrap gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black bg-orange-100 text-[#FF6B00] uppercase tracking-wider">
                 Multi-Outlet Shift Control
               </span>
               <span className="text-xs text-[#71717A]">• Phase 5 Audit Control</span>
             </div>
-            <h1 className="text-2xl font-black text-[#18181B] tracking-tight mt-1">
+            <h1 className="text-lg sm:text-2xl font-black text-[#18181B] tracking-tight mt-1">
               Rekonsiliasi Kas & Sesi Shift Kasir
             </h1>
             <p className="text-xs text-[#71717A] mt-0.5">
@@ -173,67 +173,67 @@ export default function AdminShiftsPage() {
         </div>
 
         {/* 2. KPI Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Sesi Shift Terpantau
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Shift Terpantau
               </p>
-              <h3 className="text-2xl font-black text-[#18181B] mt-1">
+              <h3 className="text-base sm:text-2xl font-black text-[#18181B] mt-1">
                 {stats.totalCount}{' '}
-                <span className="text-xs font-semibold text-[#71717A]">sesi</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-[#71717A]">sesi</span>
               </h3>
-              <p className="text-[11px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                {stats.activeCount} Shift sedang berjalan
+              <p className="text-[10px] sm:text-[11px] text-emerald-600 font-bold mt-1 flex items-center gap-1 truncate">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                {stats.activeCount} Shift aktif
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
-              <Clock className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Total Omzet Terverifikasi
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Omzet Terverifikasi
               </p>
-              <h3 className="text-2xl font-black text-[#18181B] mt-1">
+              <h3 className="text-base sm:text-2xl font-black text-[#18181B] mt-1 truncate">
                 {formatRupiah(stats.totalGrossRevenue)}
               </h3>
-              <p className="text-[11px] text-[#71717A] mt-1">
+              <p className="text-[10px] sm:text-[11px] text-[#71717A] mt-1 truncate">
                 Tunai: {formatRupiah(stats.totalCashSales)}
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <DollarSign className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <DollarSign className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Penjualan Non-Tunai
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Non-Tunai
               </p>
-              <h3 className="text-2xl font-black text-[#18181B] mt-1">
+              <h3 className="text-base sm:text-2xl font-black text-[#18181B] mt-1 truncate">
                 {formatRupiah(stats.totalNonCashSales)}
               </h3>
-              <p className="text-[11px] text-blue-600 font-bold mt-1">
-                QRIS, EDC & Transfer Bank
+              <p className="text-[10px] sm:text-[11px] text-blue-600 font-bold mt-1 truncate">
+                QRIS, EDC & Transfer
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Kumulatif Selisih Kas
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Selisih Kas
               </p>
               <h3
-                className={`text-2xl font-black mt-1 ${
+                className={`text-base sm:text-2xl font-black mt-1 truncate ${
                   stats.totalDifference === 0
                     ? 'text-emerald-600'
                     : stats.totalDifference < 0
@@ -244,40 +244,40 @@ export default function AdminShiftsPage() {
                 {stats.totalDifference > 0 ? '+' : ''}
                 {formatRupiah(stats.totalDifference)}
               </h3>
-              <p className="text-[11px] font-medium text-[#71717A] mt-1">
+              <p className="text-[10px] sm:text-[11px] font-medium text-[#71717A] mt-1 truncate">
                 {stats.totalDifference === 0
-                  ? 'Klop 100% (Sesuai)'
+                  ? 'Klop 100%'
                   : stats.totalDifference < 0
-                  ? 'Defisit kas (kurang setor)'
-                  : 'Surplus kas (lebih setor)'}
+                  ? 'Defisit kas'
+                  : 'Surplus kas'}
               </p>
             </div>
             <div
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${
                 stats.totalDifference === 0
                   ? 'bg-emerald-50 text-emerald-600'
                   : 'bg-red-50 text-red-600'
               }`}
             >
               {stats.totalDifference === 0 ? (
-                <CheckCircle2 className="w-6 h-6" />
+                <CheckCircle2 className="w-4 h-4 sm:w-6 sm:h-6" />
               ) : (
-                <AlertTriangle className="w-6 h-6" />
+                <AlertTriangle className="w-4 h-4 sm:w-6 sm:h-6" />
               )}
             </div>
           </div>
         </div>
 
         {/* 3. Filters Toolbar */}
-        <div className="bg-white p-4 rounded-3xl border border-[#ECEEF1] shadow-2xs flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:flex lg:flex-wrap items-center gap-2.5 sm:gap-3 w-full lg:w-auto">
             {/* Outlet Switcher */}
             <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3 py-2 rounded-2xl text-xs font-bold text-[#18181B]">
-              <Store className="w-4 h-4 text-[#FF6B00]" />
+              <Store className="w-4 h-4 text-[#FF6B00] shrink-0" />
               <select
                 value={selectedOutlet}
                 onChange={(e) => setSelectedOutlet(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer"
+                className="bg-transparent focus:outline-none cursor-pointer w-full truncate"
               >
                 <option value="all">Semua Outlet (7 Cabang)</option>
                 {availableOutlets.map((o) => (
@@ -290,11 +290,11 @@ export default function AdminShiftsPage() {
 
             {/* Status Filter */}
             <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3 py-2 rounded-2xl text-xs font-bold text-[#18181B]">
-              <Filter className="w-4 h-4 text-[#71717A]" />
+              <Filter className="w-4 h-4 text-[#71717A] shrink-0" />
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer"
+                className="bg-transparent focus:outline-none cursor-pointer w-full truncate"
               >
                 <option value="all">Semua Status Shift</option>
                 <option value="active">🟢 Shift Aktif</option>
@@ -304,11 +304,11 @@ export default function AdminShiftsPage() {
 
             {/* Discrepancy Filter */}
             <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3 py-2 rounded-2xl text-xs font-bold text-[#18181B]">
-              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
               <select
                 value={discrepancyFilter}
                 onChange={(e) => setDiscrepancyFilter(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer"
+                className="bg-transparent focus:outline-none cursor-pointer w-full truncate"
               >
                 <option value="all">Semua Kondisi Kas</option>
                 <option value="discrepancy_only">⚠️ Ada Selisih Kas Saja</option>
@@ -318,7 +318,7 @@ export default function AdminShiftsPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full lg:w-64">
             <Search className="w-4 h-4 text-[#A1A1AA] absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -330,9 +330,92 @@ export default function AdminShiftsPage() {
           </div>
         </div>
 
-        {/* 4. Main Shifts Table */}
-        <div className="bg-white rounded-3xl border border-[#ECEEF1] shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
+        {/* 4. Main Shifts List: Mobile Cards + Desktop Table */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs overflow-hidden">
+          {/* Mobile Cards */}
+          <div className="md:hidden divide-y divide-[#F0F0F0]">
+            {loading ? (
+              <div className="py-10 text-center text-xs text-[#71717A]">Memuat rekonsiliasi shift kasir...</div>
+            ) : filteredShifts.length === 0 ? (
+              <div className="py-10 text-center text-xs text-[#71717A]">Tidak ada riwayat shift yang sesuai.</div>
+            ) : (
+              filteredShifts.map((shift) => {
+                const diff = shift.cash_difference || 0;
+                return (
+                  <div key={shift.id} className="p-3.5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-black text-xs text-[#18181B]">{shift.shift_number}</span>
+                          {shift.status === 'active' && (
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          )}
+                        </div>
+                        <p className="text-[11px] font-semibold text-[#18181B] truncate mt-0.5">
+                          {shift.cashier?.full_name || 'Kasir'} &bull;{' '}
+                          <span className="text-[#71717A] font-normal">
+                            {shift.outlet?.name?.replace('Obat Haus - ', '') || shift.outlet_id}
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-[#71717A] mt-0.5">{formatDateTime(shift.opened_at)}</p>
+                      </div>
+
+                      {shift.status === 'active' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                          Aktif
+                        </span>
+                      ) : diff === 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                          Klop
+                        </span>
+                      ) : diff < 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-black bg-red-50 text-red-700 border border-red-200 shrink-0">
+                          Defisit {formatRupiah(Math.abs(diff))}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                          +{formatRupiah(diff)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 p-2.5 bg-[#FAFAFA] rounded-xl text-[10px]">
+                      <div>
+                        <span className="text-[#71717A] block">Tunai</span>
+                        <span className="font-bold text-emerald-600">{formatRupiah(shift.total_cash_sales)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#71717A] block">Sistem</span>
+                        <span className="font-bold text-[#18181B]">{formatRupiah(shift.closing_cash_expected || 0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[#71717A] block">Fisik</span>
+                        <span className="font-bold text-[#18181B]">
+                          {shift.status === 'closed' && shift.closing_cash_actual != null
+                            ? formatRupiah(shift.closing_cash_actual)
+                            : '-'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => openDetailModal(shift)}
+                        className="px-3 py-1.5 bg-[#FFF7ED] text-[#FF6B00] hover:bg-[#FFEDD5] text-[11px] font-bold rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Audit & X/Z</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#FAFAFA] text-[#71717A] border-b border-[#ECEEF1] font-bold uppercase tracking-wider text-[11px]">
                 <tr>

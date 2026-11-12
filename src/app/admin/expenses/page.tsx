@@ -245,16 +245,16 @@ export default function AdminExpensesPage() {
         </div>
 
         {/* Total Expense Summary Banner */}
-        <div className="bg-white p-5 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center font-bold">
-              <ReceiptText className="w-6 h-6" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center font-bold shrink-0">
+              <ReceiptText className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <p className="text-xs font-bold text-mutedtext uppercase tracking-wider">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-mutedtext uppercase tracking-wider truncate">
                 Total Biaya Operasional Terfilter
               </p>
-              <h2 className="text-2xl font-black text-red-600 tabular-nums mt-0.5">
+              <h2 className="text-lg sm:text-2xl font-black text-red-600 tabular-nums mt-0.5 truncate">
                 {formatRupiah(totalExpenseSum)}
               </h2>
             </div>
@@ -265,7 +265,7 @@ export default function AdminExpensesPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-xs flex flex-col md:flex-row gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-xs flex flex-col md:flex-row gap-2.5 sm:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-mutedtext" />
             <input
@@ -277,7 +277,7 @@ export default function AdminExpensesPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:flex-wrap">
             {/* Visual Monthly Calendar Date Picker */}
             <DateRangeCalendarPicker
               startDate={startDate}
@@ -286,14 +286,15 @@ export default function AdminExpensesPage() {
                 setStartDate(start);
                 setEndDate(end);
               }}
-              align="right"
+              align="left"
+              className="w-full sm:w-auto [&>button]:w-full [&>button]:justify-between"
             />
 
             {/* Outlet Filter Dropdown */}
             <select
               value={selectedOutlet}
               onChange={(e) => setSelectedOutlet(e.target.value)}
-              className="bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+              className="w-full sm:w-auto bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
             >
               <option value="all">🌐 Semua Cabang & Pusat</option>
               <option value="central">🏢 Kantor Pusat (Beban Umum)</option>
@@ -308,7 +309,7 @@ export default function AdminExpensesPage() {
             <select
               value={selectedCat}
               onChange={(e) => setSelectedCat(e.target.value)}
-              className="bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+              className="w-full sm:w-auto bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
             >
               <option value="all">Semua Kategori</option>
               {categories.map((c) => (

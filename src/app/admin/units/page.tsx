@@ -206,30 +206,30 @@ export default function AdminUnitsPage() {
         </div>
 
         {/* Tab Selector */}
-        <div className="flex items-center gap-1 bg-white p-2 rounded-2xl border border-borderline shadow-2xs">
+        <div className="flex items-center gap-1 bg-white p-2 rounded-2xl border border-borderline shadow-2xs overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('units')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
               activeTab === 'units'
                 ? 'bg-[#FF6B00] text-white shadow-xs'
                 : 'text-mutedtext hover:text-heading'
             }`}
           >
             <Scale className="w-4 h-4" />
-            <span>Master Satuan Standar ({units.length})</span>
+            <span>Master Satuan ({units.length})</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('conversions')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
               activeTab === 'conversions'
                 ? 'bg-[#FF6B00] text-white shadow-xs'
                 : 'text-mutedtext hover:text-heading'
             }`}
           >
             <RefreshCw className="w-4 h-4" />
-            <span>Faktor & Aturan Konversi ({conversions.length})</span>
+            <span>Faktor Konversi ({conversions.length})</span>
           </button>
         </div>
 

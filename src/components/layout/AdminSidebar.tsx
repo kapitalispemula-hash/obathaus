@@ -30,29 +30,43 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   CalendarCheck,
+  X,
+  Download,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
 import { TargetLogo } from '@/components/common/TargetLogo';
 
-export function AdminSidebar() {
+interface AdminSidebarProps {
+  isMobileDrawer?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export function AdminSidebar({ isMobileDrawer = false, onCloseMobile }: AdminSidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { settings } = useCart();
 
   // State to toggle between expanded (w-64 with labels) and collapsed (w-20 icons only)
   // Default to false (expanded) as requested by the user
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isCollapsedState, setIsCollapsedState] = useState<boolean>(false);
+  const [isStandaloneMode, setIsStandaloneMode] = useState<boolean>(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('admin_sidebar_collapsed');
     if (saved !== null) {
-      setIsCollapsed(saved === 'true');
+      setIsCollapsedState(saved === 'true');
     }
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+    setIsStandaloneMode(standalone);
   }, []);
 
+  const isCollapsed = isMobileDrawer ? false : isCollapsedState;
+
   const toggleCollapse = () => {
-    setIsCollapsed((prev) => {
+    setIsCollapsedState((prev) => {
       const next = !prev;
       localStorage.setItem('admin_sidebar_collapsed', String(next));
       return next;
@@ -232,14 +246,14 @@ export function AdminSidebar() {
 
   return (
     <aside
-      className={`bg-white border-r border-[#ECEEF1] flex flex-col justify-between py-5 shrink-0 h-full select-none shadow-xs transition-all duration-200 z-20 ${
-        isCollapsed ? 'w-20 items-center' : 'w-64'
+      className={`bg-white border-r border-[#ECEEF1] flex flex-col justify-between py-4 sm:py-5 shrink-0 h-full select-none shadow-xs transition-all duration-200 z-20 ${
+        isMobileDrawer ? 'w-72 max-w-[85vw]' : isCollapsed ? 'w-20 items-center' : 'w-64'
       }`}
     >
-      {/* 1. Top Header: Brand Mark & Expand/Collapse Toggle */}
-      <div className="flex flex-col w-full">
+      {/* 1. Top Header: Brand Mark & Expand/Collapse Toggle (or Mobile Close) */}
+      <div className="flex flex-col w-full min-h-0 flex-1">
         <div
-          className={`flex pb-4 border-b border-[#ECEEF1] transition-all ${
+          className={`flex pb-4 border-b border-[#ECEEF1] transition-all shrink-0 ${
             isCollapsed
               ? 'flex-col items-center gap-2 px-2'
               : 'flex-row items-center justify-between px-5'
@@ -247,6 +261,7 @@ export function AdminSidebar() {
         >
           <Link
             href="/admin/dashboard"
+            onClick={onCloseMobile}
             className={`flex items-center gap-3 group cursor-pointer min-w-0 ${
               isCollapsed ? 'justify-center' : ''
             }`}
@@ -264,20 +279,32 @@ export function AdminSidebar() {
             )}
           </Link>
 
-          {/* Toggle Button */}
-          <button
-            type="button"
-            onClick={toggleCollapse}
-            className="p-1.5 rounded-xl text-[#71717A] hover:text-[#18181B] hover:bg-[#F4F4F5] transition-colors cursor-pointer"
-            title={isCollapsed ? 'Tampilkan Nama Menu (Lebarkan)' : 'Sembunyikan Label Menu (Kecilkan)'}
-          >
-            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
+          {/* Toggle or Mobile Drawer Close Button */}
+          {isMobileDrawer ? (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              className="p-2 rounded-xl text-[#71717A] hover:text-[#18181B] hover:bg-[#F4F4F5] transition-colors cursor-pointer"
+              title="Tutup Menu"
+              aria-label="Tutup menu navigasi"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={toggleCollapse}
+              className="p-1.5 rounded-xl text-[#71717A] hover:text-[#18181B] hover:bg-[#F4F4F5] transition-colors cursor-pointer"
+              title={isCollapsed ? 'Tampilkan Nama Menu (Lebarkan)' : 'Sembunyikan Label Menu (Kecilkan)'}
+            >
+              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
+          )}
         </div>
 
         {/* 2. Admin Navigation Stack */}
         <nav
-          className={`flex flex-col gap-1 w-full overflow-y-auto max-h-[calc(100vh-170px)] no-scrollbar py-3 ${
+          className={`flex flex-col gap-1 w-full flex-1 min-h-0 overflow-y-auto no-scrollbar py-3 ${
             isCollapsed ? 'px-2 items-center' : 'px-3'
           }`}
         >
@@ -300,6 +327,7 @@ export function AdminSidebar() {
                     <Link
                       key={item.id}
                       href={item.href}
+                      onClick={onCloseMobile}
                       className={`relative group rounded-xl transition-all cursor-pointer flex items-center ${
                         isCollapsed
                           ? 'p-3 justify-center'
@@ -352,6 +380,7 @@ export function AdminSidebar() {
           <div className={`pt-3 mt-2 border-t border-[#F0F0F0] w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
             <Link
               href="/pos"
+              onClick={onCloseMobile}
               className={`rounded-xl transition-all cursor-pointer flex items-center ${
                 isCollapsed
                   ? 'p-3 text-[#A1A1AA] hover:text-[#FF6B00] hover:bg-[#FFF7ED] justify-center relative group'
@@ -367,12 +396,26 @@ export function AdminSidebar() {
                 </span>
               )}
             </Link>
+
+            {isMobileDrawer && !isStandaloneMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  onCloseMobile?.();
+                  window.dispatchEvent(new CustomEvent('open-admin-install-modal'));
+                }}
+                className="mt-2 w-full rounded-xl px-3.5 py-2.5 gap-3 bg-[#18181B] hover:bg-black text-white font-bold text-xs shadow-2xs transition-all cursor-pointer flex items-center"
+              >
+                <Download className="w-4 h-4 shrink-0 text-[#FF6B00]" />
+                <span className="truncate">Install Aplikasi Admin</span>
+              </button>
+            )}
           </div>
         </nav>
       </div>
 
       {/* 3. Bottom User Profile & Logout */}
-      <div className={`w-full pt-3 border-t border-[#ECEEF1] ${isCollapsed ? 'px-2 flex flex-col items-center' : 'px-3'}`}>
+      <div className={`w-full pt-3 border-t border-[#ECEEF1] shrink-0 ${isCollapsed ? 'px-2 flex flex-col items-center' : 'px-3'}`}>
         {!isCollapsed ? (
           <div className="flex items-center justify-between p-2.5 bg-[#FAFAFA] rounded-2xl border border-[#ECEEF1]">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -386,7 +429,10 @@ export function AdminSidebar() {
             </div>
             <button
               type="button"
-              onClick={logout}
+              onClick={() => {
+                onCloseMobile?.();
+                logout();
+              }}
               className="p-1.5 rounded-lg text-[#A1A1AA] hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
               title="Keluar / Logout"
             >

@@ -67,7 +67,7 @@ export function PaymentMethodDonutChart({
   const activeSlice = slices.find((s) => s.method === hoveredMethod);
 
   return (
-    <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-5">
+    <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-4 sm:space-y-5">
       <div>
         <h3 className="font-extrabold text-[#18181B] text-sm sm:text-base flex items-center gap-2">
           <CreditCard className="w-4 h-4 text-[#FF6B00]" />

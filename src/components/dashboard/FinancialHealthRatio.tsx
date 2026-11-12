@@ -25,7 +25,7 @@ export function FinancialHealthRatio({
   const profitPercent = Math.max(0, 100 - hppPercent - expensePercent);
 
   return (
-    <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-4">
+    <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h3 className="font-extrabold text-[#18181B] text-sm sm:text-base flex items-center gap-2">

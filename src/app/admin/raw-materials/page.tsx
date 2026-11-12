@@ -263,40 +263,40 @@ export default function AdminRawMaterialsPage() {
         </div>
 
         {/* Tab Selector & Search */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-2 rounded-2xl border border-borderline shadow-2xs">
-          <div className="flex items-center gap-1 bg-[#FAFAFA] p-1 rounded-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 sm:p-2 rounded-2xl border border-borderline shadow-2xs">
+          <div className="flex items-center gap-1 bg-[#FAFAFA] p-1 rounded-xl overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
               onClick={() => setActiveTab('materials')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
                 activeTab === 'materials'
                   ? 'bg-white text-[#FF6B00] shadow-xs'
                   : 'text-mutedtext hover:text-heading'
               }`}
             >
               <Package className="w-4 h-4" />
-              <span>Daftar Bahan Baku ({materials.length})</span>
+              <span>Daftar Bahan ({materials.length})</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('categories')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
                 activeTab === 'categories'
                   ? 'bg-white text-[#FF6B00] shadow-xs'
                   : 'text-mutedtext hover:text-heading'
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Kategori Bahan ({categories.length})</span>
+              <span>Kategori ({categories.length})</span>
             </button>
           </div>
 
           {activeTab === 'materials' && (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-1.5 bg-[#FAFAFA] border border-borderline rounded-xl text-xs font-medium text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/25"
+                className="w-full sm:w-auto px-3 py-1.5 bg-[#FAFAFA] border border-borderline rounded-xl text-xs font-medium text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/25"
               >
                 <option value="all">Semua Kategori</option>
                 {categories.map((c) => (

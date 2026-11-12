@@ -552,38 +552,38 @@ export default function AdminAttendancePage() {
             TAB 1: REKAP KEHADIRAN (MONITOR LIVE & RIWAYAT)
         ================================================================== */}
         {activeTab === 'recap' && (
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {/* Live Today Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">Hadir Tepat Waktu</span>
-                <div className="text-2xl font-black text-emerald-600">{totalPresentToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
-                <p className="text-[10px] text-mutedtext">Lolos GPS &lt; 100m</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="p-3.5 sm:p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider block truncate">Hadir Tepat Waktu</span>
+                <div className="text-lg sm:text-2xl font-black text-emerald-600">{totalPresentToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
+                <p className="text-[10px] text-mutedtext truncate">Lolos GPS &lt; 100m</p>
               </div>
 
-              <div className="p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">Terlambat Masuk</span>
-                <div className="text-2xl font-black text-amber-500">{totalLateToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
-                <p className="text-[10px] text-mutedtext">Lewat batas toleransi</p>
+              <div className="p-3.5 sm:p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider block truncate">Terlambat Masuk</span>
+                <div className="text-lg sm:text-2xl font-black text-amber-500">{totalLateToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
+                <p className="text-[10px] text-mutedtext truncate">Lewat toleransi</p>
               </div>
 
-              <div className="p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">Izin / Sakit</span>
-                <div className="text-2xl font-black text-purple-600">{totalSickOrLeaveToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
-                <p className="text-[10px] text-mutedtext">Telah lapor ke owner/manajer</p>
+              <div className="p-3.5 sm:p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider block truncate">Izin / Sakit</span>
+                <div className="text-lg sm:text-2xl font-black text-purple-600">{totalSickOrLeaveToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
+                <p className="text-[10px] text-mutedtext truncate">Lapor owner</p>
               </div>
 
-              <div className="p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
-                <span className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">Belum Absen Hari Ini</span>
-                <div className="text-2xl font-black text-slate-500">{totalUnaccountedToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
-                <p className="text-[10px] text-mutedtext">Dari total {totalEmployeesCount} staf aktif</p>
+              <div className="p-3.5 sm:p-4 bg-white rounded-2xl border border-borderline shadow-xs space-y-1">
+                <span className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider block truncate">Belum Absen</span>
+                <div className="text-lg sm:text-2xl font-black text-slate-500">{totalUnaccountedToday} <span className="text-xs font-bold text-slate-400">staf</span></div>
+                <p className="text-[10px] text-mutedtext truncate">Dari {totalEmployeesCount} staf</p>
               </div>
             </div>
 
             {/* Filter Bar */}
-            <div className="p-4 bg-white rounded-2xl border border-borderline shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="flex items-center p-1 bg-canvas border border-borderline rounded-xl text-xs font-bold">
+            <div className="p-3.5 sm:p-4 bg-white rounded-2xl border border-borderline shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
+                <div className="flex items-center p-1 bg-canvas border border-borderline rounded-xl text-xs font-bold overflow-x-auto no-scrollbar max-w-full">
                   {[
                     { id: 'daily', label: 'Harian' },
                     { id: 'range', label: 'Rentang Tanggal' },
@@ -593,7 +593,7 @@ export default function AdminAttendancePage() {
                       key={m.id}
                       type="button"
                       onClick={() => setPeriodMode(m.id as 'daily' | 'range' | 'all')}
-                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${
                         periodMode === m.id
                           ? 'bg-[#FF6B00] text-white shadow-2xs'
                           : 'text-mutedtext hover:text-heading'
@@ -609,35 +609,35 @@ export default function AdminAttendancePage() {
                     type="date"
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}
-                    className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                    className="w-full sm:w-auto p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
                   />
                 )}
 
                 {periodMode === 'range' && (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
                     <input
                       type="date"
                       value={filterStartDate}
                       onChange={(e) => setFilterStartDate(e.target.value)}
-                      className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                      className="flex-1 sm:flex-initial p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
                     />
                     <span className="text-xs text-mutedtext font-bold">s/d</span>
                     <input
                       type="date"
                       value={filterEndDate}
                       onChange={(e) => setFilterEndDate(e.target.value)}
-                      className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                      className="flex-1 sm:flex-initial p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
                     />
                   </div>
                 )}
 
-                <div>
+                <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
                   <select
                     value={filterLocation}
                     onChange={(e) => setFilterLocation(e.target.value)}
-                    className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                    className="w-full sm:w-auto p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00] truncate"
                   >
-                    <option value="all">Semua Lokasi Penempatan</option>
+                    <option value="all">Semua Lokasi</option>
                     <optgroup label="Cabang Outlet">
                       {outlets.map((o) => (
                         <option key={o.id} value={o.id}>{o.name}</option>
@@ -649,15 +649,13 @@ export default function AdminAttendancePage() {
                       ))}
                     </optgroup>
                   </select>
-                </div>
 
-                <div>
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                    className="w-full sm:w-auto p-2 text-xs font-bold bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00] truncate"
                   >
-                    <option value="all">Semua Status Kehadiran</option>
+                    <option value="all">Semua Status</option>
                     <option value="present">Hadir Tepat Waktu</option>
                     <option value="late">Terlambat</option>
                     <option value="sick">Sakit</option>
@@ -666,14 +664,14 @@ export default function AdminAttendancePage() {
                   </select>
                 </div>
 
-                <div className="relative">
+                <div className="relative w-full sm:w-48">
                   <Search className="w-3.5 h-3.5 text-mutedtext absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchEmployeeQuery}
                     onChange={(e) => setSearchEmployeeQuery(e.target.value)}
                     placeholder="Cari nama / kode staf..."
-                    className="pl-8 pr-3 py-2 text-xs bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00] w-48"
+                    className="pl-8 pr-3 py-2 text-xs bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-1 focus:ring-[#FF6B00] w-full"
                   />
                 </div>
               </div>
@@ -681,7 +679,7 @@ export default function AdminAttendancePage() {
               <button
                 type="button"
                 onClick={exportRecapCsv}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start lg:self-auto shrink-0"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto sm:self-start lg:self-auto shrink-0"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Ekspor CSV / Excel</span>
@@ -700,7 +698,51 @@ export default function AdminAttendancePage() {
                   </p>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+
+              {/* Mobile Recap Cards */}
+              <div className="md:hidden divide-y divide-borderline">
+                {employeeRecapRows.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-mutedtext">
+                    Belum ada karyawan terdaftar sesuai filter.
+                  </div>
+                ) : (
+                  employeeRecapRows.map((row) => (
+                    <div key={row.emp.id} className="p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {row.emp.avatar_url ? (
+                            <img
+                              src={row.emp.avatar_url}
+                              alt={row.emp.full_name}
+                              className="w-8 h-8 rounded-full object-cover border border-borderline shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF6B00] font-black text-xs flex items-center justify-center shrink-0">
+                              {row.emp.full_name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-heading truncate">{row.emp.full_name}</div>
+                            <div className="text-[10px] text-mutedtext truncate">{row.locName}</div>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-black text-heading shrink-0">{row.totalHoursText}</span>
+                      </div>
+
+                      <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] font-bold">
+                        <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">Hadir: {row.presentCount}</div>
+                        <div className="p-1.5 rounded-lg bg-amber-50 text-amber-700">Telat: {row.lateCount}</div>
+                        <div className="p-1.5 rounded-lg bg-purple-50 text-purple-700">Sakit: {row.sickCount}</div>
+                        <div className="p-1.5 rounded-lg bg-blue-50 text-blue-700">Izin: {row.leaveCount}</div>
+                        <div className="p-1.5 rounded-lg bg-red-50 text-red-700">Alpha: {row.alphaCount}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Desktop Recap Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-borderline bg-slate-50/60 text-[11px] font-bold text-mutedtext uppercase tracking-wider">
@@ -760,9 +802,76 @@ export default function AdminAttendancePage() {
               </div>
             </div>
 
-            {/* Attendance Table */}
+            {/* Attendance Logs List: Mobile Cards + Desktop Table */}
             <div className="bg-white rounded-2xl border border-borderline shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
+              {/* Mobile Logs Cards */}
+              <div className="md:hidden divide-y divide-borderline">
+                {filteredLogs.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-mutedtext">
+                    Tidak ada catatan absensi untuk filter yang dipilih.
+                  </div>
+                ) : (
+                  filteredLogs.map((log) => {
+                    const emp = employees.find((e) => e.id === log.employee_id);
+                    let locName = '-';
+                    if (emp) {
+                      locName = emp.assigned_location_type === 'warehouse'
+                        ? warehouses.find((w) => w.id === emp.assigned_location_id)?.name || 'Gudang Pusat'
+                        : outlets.find((o) => o.id === emp.assigned_location_id)?.name || 'Cabang Outlet';
+                    }
+                    const statusBadges: Record<string, { label: string; bg: string; text: string }> = {
+                      present: { label: 'Tepat Waktu', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+                      late: { label: 'Terlambat', bg: 'bg-amber-50', text: 'text-amber-700' },
+                      sick: { label: 'Sakit', bg: 'bg-purple-50', text: 'text-purple-700' },
+                      leave: { label: 'Izin', bg: 'bg-blue-50', text: 'text-blue-700' },
+                      alpha: { label: 'Alpha', bg: 'bg-red-50', text: 'text-red-700' },
+                    };
+                    const badge = statusBadges[log.status] || { label: log.status, bg: 'bg-slate-100', text: 'text-slate-700' };
+
+                    return (
+                      <div key={log.id} className="p-3.5 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {emp?.avatar_url ? (
+                              <img src={emp.avatar_url} alt={emp.full_name} className="w-8 h-8 rounded-full object-cover border border-borderline shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF6B00] font-black text-xs flex items-center justify-center shrink-0">
+                                {(emp?.full_name || 'K').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-heading truncate">{emp?.full_name || 'Karyawan'}</div>
+                              <div className="text-[10px] text-mutedtext truncate">{log.date} &bull; {locName}</div>
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase shrink-0 ${badge.bg} ${badge.text}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 p-2 bg-canvas rounded-xl text-[11px] font-mono">
+                          <div>
+                            <span className="text-[10px] font-sans text-mutedtext block">Masuk</span>
+                            <strong className="text-slate-800">{log.clock_in ? `${formatAttendanceTime(log.clock_in)} WITA` : '-'}</strong>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-sans text-mutedtext block">Pulang</span>
+                            <strong className="text-slate-800">{log.clock_out ? `${formatAttendanceTime(log.clock_out)} WITA` : '-'}</strong>
+                          </div>
+                        </div>
+                        {(log.clock_in_distance_meters !== null && log.clock_in_distance_meters !== undefined || log.notes) && (
+                          <p className="text-[11px] text-mutedtext">
+                            {log.clock_in_distance_meters !== null && log.clock_in_distance_meters !== undefined ? `Radar: ${log.clock_in_distance_meters}m ` : ''}
+                            {log.notes ? `• ${log.notes}` : ''}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Desktop Logs Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-borderline bg-slate-50 text-[11px] font-bold text-mutedtext uppercase tracking-wider">

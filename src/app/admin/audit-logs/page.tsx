@@ -212,12 +212,12 @@ export default function AdminAuditLogsPage() {
 
   return (
     <AdminLayout>
-      <div className="p-6 lg:p-8 space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         {/* 1. Header Banner */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-[#ECEEF1] shadow-2xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-zinc-900 text-white uppercase tracking-wider flex items-center gap-1">
+            <div className="flex items-center flex-wrap gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black bg-zinc-900 text-white uppercase tracking-wider flex items-center gap-1">
                 <Lock className="w-3 h-3 text-[#FF6B00]" />
                 Immutable Audit Trail
               </span>
@@ -226,7 +226,7 @@ export default function AdminAuditLogsPage() {
                 {isRealtimeLive ? 'Realtime Live' : 'Cloud Sync'}
               </span>
             </div>
-            <h1 className="text-2xl font-black text-[#18181B] tracking-tight mt-1">
+            <h1 className="text-lg sm:text-2xl font-black text-[#18181B] tracking-tight mt-1">
               Jejak Audit & Integritas Sistem (Audit Logs)
             </h1>
             <p className="text-xs text-[#71717A] mt-0.5">
@@ -247,91 +247,91 @@ export default function AdminAuditLogsPage() {
         </div>
 
         {/* 2. KPI Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Total Rekaman Log
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Total Log
               </p>
-              <h3 className="text-2xl font-black text-[#18181B] mt-1">
+              <h3 className="text-base sm:text-2xl font-black text-[#18181B] mt-1">
                 {stats.total}{' '}
-                <span className="text-xs font-semibold text-[#71717A]">aktivitas</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-[#71717A]">log</span>
               </h3>
-              <p className="text-[11px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Integritas 100% Terenkripsi
+              <p className="text-[10px] sm:text-[11px] text-emerald-600 font-bold mt-1 flex items-center gap-1 truncate">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                Terenkripsi
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
-              <Database className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
+              <Database className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Aktivitas Shift & Kas
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Shift & Kas
               </p>
-              <h3 className="text-2xl font-black text-[#18181B] mt-1">
+              <h3 className="text-base sm:text-2xl font-black text-[#18181B] mt-1">
                 {stats.shiftLogs}{' '}
-                <span className="text-xs font-semibold text-[#71717A]">event</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-[#71717A]">event</span>
               </h3>
-              <p className="text-[11px] text-[#71717A] mt-1">
-                Buka/tutup shift & kas kecil
+              <p className="text-[10px] sm:text-[11px] text-[#71717A] mt-1 truncate">
+                Shift & petty cash
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <Clock className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Pembatalan (Void)
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Pembatalan
               </p>
-              <h3 className="text-2xl font-black text-red-600 mt-1">
+              <h3 className="text-base sm:text-2xl font-black text-red-600 mt-1">
                 {stats.voidLogs}{' '}
-                <span className="text-xs font-semibold text-[#71717A]">transaksi</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-[#71717A]">void</span>
               </h3>
-              <p className="text-[11px] text-red-600 font-bold mt-1">
-                Koreksi & Pembatalan Kasir
+              <p className="text-[10px] sm:text-[11px] text-red-600 font-bold mt-1 truncate">
+                Koreksi kasir
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider">
-                Penyesuaian Persediaan
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider truncate">
+                Persediaan
               </p>
-              <h3 className="text-2xl font-black text-purple-600 mt-1">
+              <h3 className="text-base sm:text-2xl font-black text-purple-600 mt-1">
                 {stats.stockLogs}{' '}
-                <span className="text-xs font-semibold text-[#71717A]">event</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-[#71717A]">event</span>
               </h3>
-              <p className="text-[11px] text-purple-600 font-bold mt-1">
-                Opname & Surat Jalan
+              <p className="text-[10px] sm:text-[11px] text-purple-600 font-bold mt-1 truncate">
+                Opname & Retur
               </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-              <ShieldAlert className="w-6 h-6" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
           </div>
         </div>
 
         {/* 3. Filters Toolbar */}
-        <div className="bg-white p-4 rounded-3xl border border-[#ECEEF1] shadow-2xs flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2.5 sm:gap-3 w-full lg:w-auto">
             {/* Action Filter */}
-            <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3 py-2 rounded-2xl text-xs font-bold text-[#18181B]">
-              <Filter className="w-4 h-4 text-[#71717A]" />
+            <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3 py-2 rounded-2xl text-xs font-bold text-[#18181B] min-w-0">
+              <Filter className="w-4 h-4 text-[#71717A] shrink-0" />
               <select
                 value={actionFilter}
                 onChange={(e) => setActionFilter(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer"
+                className="bg-transparent focus:outline-none cursor-pointer w-full truncate"
               >
                 <option value="all">Semua Jenis Aksi</option>
                 <option value="pos_checkout">🛒 Checkout POS Kasir</option>
@@ -356,12 +356,12 @@ export default function AdminAuditLogsPage() {
             </div>
 
             {/* Entity Type Filter */}
-            <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3 py-2 rounded-2xl text-xs font-bold text-[#18181B]">
-              <Database className="w-4 h-4 text-[#71717A]" />
+            <div className="flex items-center gap-2 bg-[#FAFAFA] border border-[#ECEEF1] px-3 py-2 rounded-2xl text-xs font-bold text-[#18181B] min-w-0">
+              <Database className="w-4 h-4 text-[#71717A] shrink-0" />
               <select
                 value={entityFilter}
                 onChange={(e) => setEntityFilter(e.target.value)}
-                className="bg-transparent focus:outline-none cursor-pointer"
+                className="bg-transparent focus:outline-none cursor-pointer w-full truncate"
               >
                 <option value="all">Semua Entitas Database</option>
                 <option value="transaction">transaction</option>
@@ -383,7 +383,7 @@ export default function AdminAuditLogsPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative w-full sm:w-72">
+          <div className="relative w-full lg:w-72">
             <Search className="w-4 h-4 text-[#A1A1AA] absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -395,9 +395,56 @@ export default function AdminAuditLogsPage() {
           </div>
         </div>
 
-        {/* 4. Main Audit Table */}
-        <div className="bg-white rounded-3xl border border-[#ECEEF1] shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
+        {/* 4. Main Audit List: Mobile Cards + Desktop Table */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#ECEEF1] shadow-2xs overflow-hidden">
+          {/* Mobile Cards */}
+          <div className="md:hidden divide-y divide-[#F0F0F0]">
+            {loading ? (
+              <div className="py-10 text-center text-xs text-[#71717A]">Memuat jejak audit sistem...</div>
+            ) : filteredLogs.length === 0 ? (
+              <div className="py-10 text-center text-xs text-[#71717A]">Tidak ada log audit yang sesuai dengan filter.</div>
+            ) : (
+              filteredLogs.map((log) => {
+                const badge = getActionBadge(log.action);
+                const ActionIcon = badge.icon;
+                return (
+                  <div key={log.id} className="p-3.5 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-xl text-[10px] font-black border ${badge.bg}`}
+                      >
+                        <ActionIcon className="w-3 h-3 shrink-0" />
+                        <span className="truncate max-w-[180px]">{badge.label}</span>
+                      </span>
+                      <span className="text-[10px] font-mono text-[#71717A] shrink-0">
+                        {formatDateTime(log.created_at)}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[#18181B] font-medium line-clamp-2">{log.details}</p>
+
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <div className="text-[11px] text-[#71717A] truncate">
+                        <strong className="text-[#18181B]">{log.user?.full_name || 'System'}</strong> &bull;{' '}
+                        <span className="font-mono">{log.entity_type}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLog(log)}
+                        className="px-2.5 py-1 bg-[#F4F4F5] hover:bg-[#E4E4E7] text-[#18181B] text-[11px] font-bold rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1 shrink-0"
+                      >
+                        <Eye className="w-3 h-3 text-[#71717A]" />
+                        <span>Inspeksi</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#FAFAFA] text-[#71717A] border-b border-[#ECEEF1] font-bold uppercase tracking-wider text-[11px]">
                 <tr>

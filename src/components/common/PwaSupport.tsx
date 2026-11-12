@@ -78,15 +78,16 @@ export function PwaSupport() {
     };
     window.addEventListener('appinstalled', handleAppInstalled);
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
     // For iOS Safari or if mobile and no prompt yet
     if (mobileCheck && !checkStandalone) {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         checkAndShowBanner();
       }, 1500);
-      return () => clearTimeout(timer);
     }
 
     return () => {
+      if (timer) clearTimeout(timer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -96,7 +97,8 @@ export function PwaSupport() {
   }, []);
 
   const checkAndShowBanner = () => {
-    if (pathname?.startsWith('/absen')) return;
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : pathname;
+    if (currentPath?.startsWith('/absen') || currentPath?.startsWith('/admin')) return;
     try {
       const dismissedAt = localStorage.getItem(PWA_DISMISSED_KEY);
       if (dismissedAt) {
@@ -151,7 +153,7 @@ export function PwaSupport() {
       )}
 
       {/* Mobile Download/Install Popup Banner (Android & iOS) */}
-      {showMobileBanner && !isStandalone && !pathname?.startsWith('/absen') && (
+      {showMobileBanner && !isStandalone && !pathname?.startsWith('/absen') && !pathname?.startsWith('/admin') && (
         <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-4 animate-in slide-in-from-bottom duration-300">
           <div className="max-w-md mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-5 relative overflow-hidden backdrop-blur-md">
             {/* Top Close Button */}

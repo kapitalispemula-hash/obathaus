@@ -117,13 +117,13 @@ export default function AdminOutletMenusPage() {
     <AdminLayout>
       <div className="space-y-6">
         {/* Top Header Card */}
-        <div className="bg-white p-6 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA] flex items-center justify-center font-bold shadow-2xs">
-              <Tags className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA] flex items-center justify-center font-bold shadow-2xs shrink-0">
+              <Tags className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-heading">Menu & Harga Per Cabang</h1>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-heading truncate">Menu & Harga Per Cabang</h1>
               <p className="text-xs text-mutedtext">
                 Atur kebijakan harga khusus atau nonaktifkan menu sementara untuk cabang outlet tertentu
               </p>
@@ -131,14 +131,14 @@ export default function AdminOutletMenusPage() {
           </div>
 
           {/* Outlet Selector Dropdown */}
-          <div className="flex items-center gap-2 bg-[#FFF7ED] border border-[#FED7AA] px-4 py-2 rounded-xl shadow-2xs">
+          <div className="flex items-center gap-2 bg-[#FFF7ED] border border-[#FED7AA] px-3.5 sm:px-4 py-2 rounded-xl shadow-2xs w-full sm:w-auto">
             <Store className="w-4 h-4 text-[#FF6B00] shrink-0" />
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0 flex-1">
               <span className="text-[10px] text-mutedtext font-bold uppercase leading-tight">Pilih Outlet Cabang</span>
               <select
                 value={selectedOutletId}
                 onChange={(e) => setSelectedOutletId(e.target.value)}
-                className="bg-transparent text-xs font-bold text-heading focus:outline-none cursor-pointer pr-2"
+                className="bg-transparent text-xs font-bold text-heading focus:outline-none cursor-pointer pr-2 w-full truncate"
               >
                 {outlets.map((o) => (
                   <option key={o.id} value={o.id}>
@@ -158,25 +158,25 @@ export default function AdminOutletMenusPage() {
         )}
 
         {/* Filter & Search Bar */}
-        <div className="bg-white p-4 rounded-2xl border border-borderline shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-full pb-0.5 sm:pb-0 sm:flex-wrap">
             <button
               type="button"
               onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
                 selectedCategory === 'all'
                   ? 'bg-[#FF6B00] text-white shadow-2xs'
                   : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'
               }`}
             >
-              Semua Kategori ({products.length})
+              Semua ({products.length})
             </button>
             {categories.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
                   selectedCategory === cat
                     ? 'bg-[#FF6B00] text-white shadow-2xs'
                     : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'

@@ -101,14 +101,14 @@ export default function AdminDashboardPage() {
 
   return (
     <AdminLayout>
-      <div className="space-y-7">
+      <div className="space-y-5 sm:space-y-7">
         {/* ========================================================
             1. Executive Header & Period Segmented Control
         ======================================================== */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#F0F0F0]">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-black text-[#18181B] tracking-tight">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 pb-2 border-b border-[#F0F0F0]">
+          <div className="min-w-0">
+            <div className="flex items-center flex-wrap gap-2">
+              <h1 className="text-lg sm:text-2xl font-black text-[#18181B] tracking-tight">
                 Dashboard Operasional
               </h1>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA]">
@@ -116,19 +116,19 @@ export default function AdminDashboardPage() {
                 Live Toko
               </span>
             </div>
-            <p className="text-xs text-[#71717A] font-medium mt-1 flex items-center gap-1.5">
+            <p className="text-xs text-[#71717A] font-medium mt-1 flex items-center gap-1.5 min-w-0">
               <Store className="w-3.5 h-3.5 text-[#FF6B00] shrink-0" />
-              <span>
-                Cakupan Data:{' '}
+              <span className="truncate">
+                Cakupan:{' '}
                 <strong className="text-[#18181B]">
-                  {isAllOutletsSelected ? 'Konsolidasi Seluruh 7 Cabang Obat Haus' : activeOutlet?.name}
+                  {isAllOutletsSelected ? 'Konsolidasi 7 Cabang Obat Haus' : activeOutlet?.name}
                 </strong>
               </span>
             </p>
           </div>
 
           {/* Segmented Control Filter */}
-          <div className="flex items-center p-1.5 bg-[#F4F4F5] rounded-2xl border border-[#E4E4E7] overflow-x-auto shadow-2xs">
+          <div className="flex items-center p-1 sm:p-1.5 bg-[#F4F4F5] rounded-2xl border border-[#E4E4E7] overflow-x-auto no-scrollbar shadow-2xs max-w-full">
             {[
               { id: 'today', label: 'Hari Ini' },
               { id: 'yesterday', label: 'Kemarin' },
@@ -142,7 +142,7 @@ export default function AdminDashboardPage() {
                   key={p.id}
                   type="button"
                   onClick={() => setPeriod(p.id as any)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                  className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold shrink-0 transition-all cursor-pointer ${
                     isActive
                       ? 'bg-white text-[#18181B] shadow-xs'
                       : 'text-[#71717A] hover:text-[#18181B] hover:bg-white/60'
@@ -184,119 +184,119 @@ export default function AdminDashboardPage() {
         {/* ========================================================
             2. Hero Executive KPI Grid (4 High-Contrast Cards)
         ======================================================== */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
           {/* Card 1: Omzet Bersih */}
-          <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center font-bold">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between space-y-3 sm:space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center font-bold shrink-0">
                   <DollarSign className="w-4 h-4" />
                 </div>
-                <div>
-                  <span className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider block">
+                <div className="min-w-0">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider block truncate">
                     Omzet Bersih
                   </span>
-                  <span className="text-[10px] text-[#A1A1AA]">Setelah diskon kasir</span>
+                  <span className="hidden sm:block text-[10px] text-[#A1A1AA]">Setelah diskon kasir</span>
                 </div>
               </div>
-              <span className="text-[10px] font-extrabold text-[#FF6B00] bg-[#FFF7ED] px-2 py-0.5 rounded-full border border-[#FED7AA]">
+              <span className="hidden sm:inline-flex text-[10px] font-extrabold text-[#FF6B00] bg-[#FFF7ED] px-2 py-0.5 rounded-full border border-[#FED7AA] shrink-0">
                 Net Revenue
               </span>
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-black text-[#18181B] tracking-tight tabular-nums">
+              <div className="text-base sm:text-2xl lg:text-3xl font-black text-[#18181B] tracking-tight tabular-nums truncate">
                 {formatRupiah(summary?.netRevenue || 0)}
               </div>
-              <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#71717A]">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>Laba Kotor: <strong className="text-[#18181B]">{formatRupiah(summary?.grossProfit || 0)}</strong></span>
+              <div className="flex items-center gap-1.5 mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] text-[#71717A]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="truncate">Laba Kotor: <strong className="text-[#18181B]">{formatRupiah(summary?.grossProfit || 0)}</strong></span>
               </div>
             </div>
           </div>
 
           {/* Card 2: Keuntungan Bersih (Jet Black & Orange Hero Card) */}
-          <div className="bg-[#18181B] text-white p-6 rounded-[26px] shadow-md hover:shadow-lg transition-shadow relative overflow-hidden flex flex-col justify-between space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#27272A] text-[#FF6B00] flex items-center justify-center font-bold">
+          <div className="bg-[#18181B] text-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] shadow-md hover:shadow-lg transition-shadow relative overflow-hidden flex flex-col justify-between space-y-3 sm:space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#27272A] text-[#FF6B00] flex items-center justify-center font-bold shrink-0">
                   <Wallet className="w-4 h-4" />
                 </div>
-                <div>
-                  <span className="text-[11px] font-bold text-white/70 uppercase tracking-wider block">
-                    Keuntungan Bersih
+                <div className="min-w-0">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-white/70 uppercase tracking-wider block truncate">
+                    Laba Bersih
                   </span>
-                  <span className="text-[10px] text-white/50">Laba Operasional</span>
+                  <span className="hidden sm:block text-[10px] text-white/50">Laba Operasional</span>
                 </div>
               </div>
-              <span className="text-[10px] font-extrabold text-[#FF6B00] bg-[#FF6B00]/15 px-2 py-0.5 rounded-full border border-[#FF6B00]/30">
-                NPM {formatPercent(summary?.netProfitMargin || 0)}
+              <span className="text-[9px] sm:text-[10px] font-extrabold text-[#FF6B00] bg-[#FF6B00]/15 px-1.5 sm:px-2 py-0.5 rounded-full border border-[#FF6B00]/30 shrink-0">
+                {formatPercent(summary?.netProfitMargin || 0)}
               </span>
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-black text-[#FF6B00] tracking-tight tabular-nums">
+              <div className="text-base sm:text-2xl lg:text-3xl font-black text-[#FF6B00] tracking-tight tabular-nums truncate">
                 {formatRupiah(summary?.netOperatingProfit || 0)}
               </div>
-              <div className="flex items-center justify-between mt-2 text-[11px] text-white/60 pt-1 border-t border-white/10">
-                <span>Biaya Operasional:</span>
-                <span className="font-semibold text-white/80">{formatRupiah(summary?.operatingExpenses || 0)}</span>
+              <div className="flex items-center justify-between gap-1 mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] text-white/60 pt-1 border-t border-white/10">
+                <span className="truncate">OPEX:</span>
+                <span className="font-semibold text-white/80 truncate">{formatRupiah(summary?.operatingExpenses || 0)}</span>
               </div>
             </div>
           </div>
 
           {/* Card 3: Jumlah Transaksi & Rata-rata */}
-          <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#FAFAFA] text-[#18181B] border border-[#F0F0F0] flex items-center justify-center font-bold">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between space-y-3 sm:space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#FAFAFA] text-[#18181B] border border-[#F0F0F0] flex items-center justify-center font-bold shrink-0">
                   <ShoppingBag className="w-4 h-4" />
                 </div>
-                <div>
-                  <span className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider block">
-                    Volume Transaksi
+                <div className="min-w-0">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider block truncate">
+                    Transaksi
                   </span>
-                  <span className="text-[10px] text-[#A1A1AA]">Aktivitas pesanan</span>
+                  <span className="hidden sm:block text-[10px] text-[#A1A1AA]">Aktivitas pesanan</span>
                 </div>
               </div>
-              <span className="text-[10px] font-bold text-[#71717A] bg-[#FAFAFA] px-2 py-0.5 rounded-full border border-[#F0F0F0]">
+              <span className="hidden sm:inline-flex text-[10px] font-bold text-[#71717A] bg-[#FAFAFA] px-2 py-0.5 rounded-full border border-[#F0F0F0] shrink-0">
                 Total Struk
               </span>
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-black text-[#18181B] tracking-tight tabular-nums">
+              <div className="text-lg sm:text-2xl lg:text-3xl font-black text-[#18181B] tracking-tight tabular-nums">
                 {formatNumber(summary?.transactionCount || 0)}{' '}
-                <span className="text-sm font-bold text-[#71717A]">struk</span>
+                <span className="text-xs sm:text-sm font-bold text-[#71717A]">struk</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#71717A]">
-                <span>Rata-rata: <strong className="text-[#18181B]">{formatRupiah(summary?.averageTransaction || 0)}</strong>/struk</span>
+              <div className="flex items-center gap-1.5 mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] text-[#71717A]">
+                <span className="truncate">Avg: <strong className="text-[#18181B]">{formatRupiah(summary?.averageTransaction || 0)}</strong></span>
               </div>
             </div>
           </div>
 
           {/* Card 4: Menu Terjual & HPP */}
-          <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center font-bold">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between space-y-3 sm:space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center font-bold shrink-0">
                   <Package className="w-4 h-4" />
                 </div>
-                <div>
-                  <span className="text-[11px] font-bold text-[#71717A] uppercase tracking-wider block">
+                <div className="min-w-0">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-[#71717A] uppercase tracking-wider block truncate">
                     Menu Terjual
                   </span>
-                  <span className="text-[10px] text-[#A1A1AA]">Kuantitas item</span>
+                  <span className="hidden sm:block text-[10px] text-[#A1A1AA]">Kuantitas item</span>
                 </div>
               </div>
-              <span className="text-[10px] font-bold text-[#FF6B00] bg-[#FFF7ED] px-2 py-0.5 rounded-full border border-[#FED7AA]">
+              <span className="hidden sm:inline-flex text-[10px] font-bold text-[#FF6B00] bg-[#FFF7ED] px-2 py-0.5 rounded-full border border-[#FED7AA] shrink-0">
                 Katalog Menu
               </span>
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-black text-[#18181B] tracking-tight tabular-nums">
+              <div className="text-lg sm:text-2xl lg:text-3xl font-black text-[#18181B] tracking-tight tabular-nums">
                 {formatNumber(summary?.itemsSold || 0)}{' '}
-                <span className="text-sm font-bold text-[#71717A]">porsi</span>
+                <span className="text-xs sm:text-sm font-bold text-[#71717A]">porsi</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#71717A]">
-                <span>HPP Bahan: <strong className="text-[#18181B]">{formatRupiah(summary?.totalHpp || 0)}</strong></span>
+              <div className="flex items-center gap-1.5 mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] text-[#71717A]">
+                <span className="truncate">HPP: <strong className="text-[#18181B]">{formatRupiah(summary?.totalHpp || 0)}</strong></span>
               </div>
             </div>
           </div>
@@ -336,20 +336,20 @@ export default function AdminDashboardPage() {
         ======================================================== */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Top Selling Products */}
-          <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-[#18181B] text-base flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-[#FF6B00]" />
-                  <span>Menu Terlaris (Top Selling)</span>
+          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-4 sm:space-y-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-extrabold text-[#18181B] text-sm sm:text-base flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-[#FF6B00] shrink-0" />
+                  <span className="truncate">Menu Terlaris (Top Selling)</span>
                 </h3>
-                <p className="text-xs text-[#71717A] mt-0.5">Produk dengan pesanan dan kontribusi omzet tertinggi</p>
+                <p className="text-xs text-[#71717A] mt-0.5 truncate">Produk dengan kontribusi omzet tertinggi</p>
               </div>
               <Link
                 href="/admin/products"
-                className="text-xs font-bold text-[#FF6B00] hover:text-[#EA580C] hover:underline flex items-center gap-1"
+                className="text-xs font-bold text-[#FF6B00] hover:text-[#EA580C] hover:underline flex items-center gap-1 shrink-0"
               >
-                <span>Kelola Menu</span>
+                <span>Kelola</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -404,18 +404,18 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Recent Completed Transactions */}
-          <div className="bg-white p-6 rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-[#18181B] text-base flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-[#FF6B00]" />
-                  <span>Aktivitas Kasir Terbaru</span>
+          <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[26px] border border-[#F0F0F0] shadow-xs space-y-4 sm:space-y-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-extrabold text-[#18181B] text-sm sm:text-base flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#FF6B00] shrink-0" />
+                  <span className="truncate">Aktivitas Kasir Terbaru</span>
                 </h3>
-                <p className="text-xs text-[#71717A] mt-0.5">Struk pesanan yang baru saja diselesaikan</p>
+                <p className="text-xs text-[#71717A] mt-0.5 truncate">Struk pesanan yang baru saja diselesaikan</p>
               </div>
               <Link
                 href="/admin/transactions"
-                className="text-xs font-bold text-[#FF6B00] hover:text-[#EA580C] hover:underline flex items-center gap-1"
+                className="text-xs font-bold text-[#FF6B00] hover:text-[#EA580C] hover:underline flex items-center gap-1 shrink-0"
               >
                 <span>Lihat Semua</span>
                 <ChevronRight className="w-3.5 h-3.5" />

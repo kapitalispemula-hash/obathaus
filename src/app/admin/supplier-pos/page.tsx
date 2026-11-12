@@ -218,94 +218,96 @@ export default function AdminSupplierPOsPage() {
         )}
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-2xl border border-borderline shadow-2xs">
-            <span className="text-[10px] font-bold text-mutedtext uppercase tracking-wider">Total Permohonan PO</span>
-            <div className="text-2xl font-black text-heading font-mono mt-1">{pos.length}</div>
-            <p className="text-[11px] text-mutedtext mt-0.5">Seluruh PO tercatat sistem</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-2xs">
+            <span className="text-[10px] font-bold text-mutedtext uppercase tracking-wider block truncate">Total Permohonan PO</span>
+            <div className="text-lg sm:text-2xl font-black text-heading font-mono mt-1">{pos.length}</div>
+            <p className="text-[10px] sm:text-[11px] text-mutedtext mt-0.5 truncate">Tercatat sistem</p>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-amber-200 bg-amber-50/20 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Menunggu Persetujuan</span>
-              <Clock className="w-4 h-4 text-amber-600" />
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-amber-200 bg-amber-50/20 shadow-2xs">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider truncate">Menunggu Approval</span>
+              <Clock className="w-4 h-4 text-amber-600 shrink-0" />
             </div>
-            <div className="text-2xl font-black text-amber-700 font-mono mt-1">{countPending}</div>
-            <p className="text-[11px] text-amber-700 mt-0.5">Memerlukan otorisasi Admin</p>
+            <div className="text-lg sm:text-2xl font-black text-amber-700 font-mono mt-1">{countPending}</div>
+            <p className="text-[10px] sm:text-[11px] text-amber-700 mt-0.5 truncate">Otorisasi Admin</p>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-borderline shadow-2xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-mutedtext uppercase tracking-wider">Disetujui / Selesai</span>
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-2xs">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[10px] font-bold text-mutedtext uppercase tracking-wider truncate">Disetujui</span>
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
             </div>
-            <div className="text-2xl font-black text-heading font-mono mt-1">{countApproved}</div>
-            <p className="text-[11px] text-mutedtext mt-0.5">Telah diotorisasi & diterima</p>
+            <div className="text-lg sm:text-2xl font-black text-heading font-mono mt-1">{countApproved}</div>
+            <p className="text-[10px] sm:text-[11px] text-mutedtext mt-0.5 truncate">Diotorisasi</p>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-borderline shadow-2xs">
-            <span className="text-[10px] font-bold text-mutedtext uppercase tracking-wider">Estimasi Nilai PO</span>
-            <div className="text-xl font-black text-[#FF6B00] font-mono mt-1 truncate">
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-2xs">
+            <span className="text-[10px] font-bold text-mutedtext uppercase tracking-wider block truncate">Estimasi Nilai PO</span>
+            <div className="text-base sm:text-xl font-black text-[#FF6B00] font-mono mt-1 truncate">
               {formatRupiah(totalValue)}
             </div>
-            <p className="text-[11px] text-mutedtext mt-0.5">Nilai pengadaan logistik</p>
+            <p className="text-[10px] sm:text-[11px] text-mutedtext mt-0.5 truncate">Nilai logistik</p>
           </div>
         </div>
 
         {/* Filter Bar */}
-        <div className="bg-white p-4 rounded-2xl border border-borderline shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'all'
-                  ? 'bg-[#18181B] text-white shadow-xs'
-                  : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'
-              }`}
-            >
-              Semua ({pos.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('pending_approval')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'pending_approval'
-                  ? 'bg-[#18181B] text-white shadow-xs'
-                  : 'bg-[#FAFAFA] text-amber-700 hover:text-amber-800 border border-amber-200'
-              }`}
-            >
-              Menunggu Approval ({countPending})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('approved')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'approved'
-                  ? 'bg-[#18181B] text-white shadow-xs'
-                  : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'
-              }`}
-            >
-              Disetujui ({countApproved})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('rejected')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                statusFilter === 'rejected'
-                  ? 'bg-[#18181B] text-white shadow-xs'
-                  : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'
-              }`}
-            >
-              Ditolak ({pos.filter((p) => p.status === 'rejected').length})
-            </button>
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto min-w-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0 max-w-full">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                  statusFilter === 'all'
+                    ? 'bg-[#18181B] text-white shadow-xs'
+                    : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'
+                }`}
+              >
+                Semua ({pos.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('pending_approval')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                  statusFilter === 'pending_approval'
+                    ? 'bg-[#18181B] text-white shadow-xs'
+                    : 'bg-[#FAFAFA] text-amber-700 hover:text-amber-800 border border-amber-200'
+                }`}
+              >
+                Menunggu Approval ({countPending})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('approved')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                  statusFilter === 'approved'
+                    ? 'bg-[#18181B] text-white shadow-xs'
+                    : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'
+                }`}
+              >
+                Disetujui ({countApproved})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('rejected')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                  statusFilter === 'rejected'
+                    ? 'bg-[#18181B] text-white shadow-xs'
+                    : 'bg-[#FAFAFA] text-mutedtext hover:text-heading border border-borderline'
+                }`}
+              >
+                Ditolak ({pos.filter((p) => p.status === 'rejected').length})
+              </button>
+            </div>
 
-            <div className="h-5 w-px bg-borderline mx-1 hidden sm:block" />
+            <div className="h-5 w-px bg-borderline mx-1 hidden lg:block" />
 
             <select
               value={selectedSupplierFilter}
               onChange={(e) => setSelectedSupplierFilter(e.target.value)}
-              className="px-3 py-1.5 bg-[#FAFAFA] border border-borderline rounded-xl text-xs font-medium text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/25 focus:border-[#FF6B00]"
+              className="w-full sm:w-auto px-3 py-1.5 bg-[#FAFAFA] border border-borderline rounded-xl text-xs font-medium text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/25 focus:border-[#FF6B00]"
             >
               <option value="all">Semua Supplier</option>
               {suppliers.map((s) => (
@@ -328,9 +330,95 @@ export default function AdminSupplierPOsPage() {
           </div>
         </div>
 
-        {/* PO Table */}
+        {/* PO List: Mobile Cards + Desktop Table */}
         <div className="bg-white rounded-2xl border border-borderline shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile Cards */}
+          <div className="md:hidden divide-y divide-borderline">
+            {loading ? (
+              <div className="py-10 text-center text-xs text-mutedtext">Memuat daftar permohonan PO...</div>
+            ) : filteredPOs.length === 0 ? (
+              <div className="py-10 text-center text-xs text-mutedtext">Tidak ada permohonan PO yang cocok.</div>
+            ) : (
+              filteredPOs.map((p) => {
+                const totalCost = p.items?.reduce(
+                  (acc, it) => acc + (it.subtotal || (it.quantity_ordered * it.unit_cost)),
+                  0
+                ) || 0;
+                const isPending = p.status === 'pending_approval';
+                return (
+                  <div key={p.id} className="p-3.5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-mono font-black text-xs text-[#FF6B00]">{p.po_number}</p>
+                        <p className="text-xs font-bold text-heading truncate mt-0.5">{p.supplier?.name || 'Mitra Supplier'}</p>
+                        <p className="text-[10px] text-mutedtext mt-0.5">
+                          {new Date(p.order_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} &bull; {p.items?.length || 0} item
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                          p.status === 'pending_approval'
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : p.status === 'approved'
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                            : p.status === 'received' || p.status === 'completed'
+                            ? 'bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA]'
+                            : 'bg-red-50 text-red-800 border border-red-200'
+                        }`}
+                      >
+                        {p.status === 'pending_approval'
+                          ? 'Menunggu'
+                          : p.status === 'approved'
+                          ? 'Disetujui'
+                          : p.status === 'received' || p.status === 'completed'
+                          ? 'Diterima'
+                          : 'Ditolak'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <span className="font-mono text-sm font-black text-heading">{formatRupiah(totalCost)}</span>
+                      <div className="flex items-center gap-1.5">
+                        {isPending && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(p)}
+                              disabled={isProcessing}
+                              className="px-2.5 py-1 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>Setujui</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openRejectModal(p)}
+                              disabled={isProcessing}
+                              className="px-2 py-1 border border-red-200 bg-red-50 text-red-700 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Tolak</span>
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPO(p)}
+                          className="p-1.5 text-mutedtext hover:text-heading bg-[#FAFAFA] rounded-lg cursor-pointer"
+                          title="Lihat Detail"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-[#FAFAFA] border-b border-borderline text-mutedtext uppercase tracking-wider text-[11px] font-bold">

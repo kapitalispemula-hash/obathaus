@@ -296,11 +296,11 @@ export default function AdminProductsPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full md:w-auto">
             <select
               value={selectedCat}
               onChange={(e) => setSelectedCat(e.target.value)}
-              className="bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+              className="w-full sm:w-auto bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00] truncate"
             >
               <option value="all">Semua Kategori</option>
               {categories.map((c) => (
@@ -313,7 +313,7 @@ export default function AdminProductsPage() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+              className="w-full sm:w-auto bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00] truncate"
             >
               <option value="all">Semua Status</option>
               <option value="active">Aktif di Kasir</option>

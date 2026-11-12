@@ -207,13 +207,13 @@ export default function AdminOutletsPage() {
     <AdminLayout>
       <div className="space-y-6">
         {/* Top Header Card */}
-        <div className="bg-white p-6 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA] flex items-center justify-center font-bold shadow-2xs">
-              <Building2 className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA] flex items-center justify-center font-bold shadow-2xs shrink-0">
+              <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-heading">Manajemen Cabang & Gudang</h1>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-heading truncate">Manajemen Cabang & Gudang</h1>
               <p className="text-xs text-mutedtext">
                 Kelola jaringan 7 outlet Obat Haus dan 1 gudang pusat logistik Kota Makassar
               </p>
@@ -225,7 +225,7 @@ export default function AdminOutletsPage() {
               <button
                 type="button"
                 onClick={openAddOutletModal}
-                className="px-4 py-2.5 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="w-full sm:w-auto justify-center px-4 py-2.5 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Tambah Cabang Baru</span>
@@ -235,24 +235,24 @@ export default function AdminOutletsPage() {
         </div>
 
         {/* Tab Selector & Search */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-2 rounded-2xl border border-borderline shadow-2xs">
-          <div className="flex items-center gap-1 bg-[#FAFAFA] p-1 rounded-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 sm:p-2 rounded-2xl border border-borderline shadow-2xs">
+          <div className="flex items-center gap-1 bg-[#FAFAFA] p-1 rounded-xl overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
               onClick={() => setActiveTab('outlets')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
                 activeTab === 'outlets'
                   ? 'bg-white text-[#FF6B00] shadow-xs'
                   : 'text-mutedtext hover:text-heading'
               }`}
             >
               <Store className="w-4 h-4" />
-              <span>Daftar Cabang Outlet ({outlets.length})</span>
+              <span>Daftar Cabang ({outlets.length})</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('warehouse')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
                 activeTab === 'warehouse'
                   ? 'bg-white text-[#FF6B00] shadow-xs'
                   : 'text-mutedtext hover:text-heading'

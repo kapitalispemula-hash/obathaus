@@ -146,13 +146,13 @@ export default function AdminSuppliersPage() {
     <AdminLayout>
       <div className="space-y-6">
         {/* Top Header Card */}
-        <div className="bg-white p-6 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA] flex items-center justify-center font-bold shadow-2xs">
-              <Truck className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-borderline shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#FFF7ED] text-[#FF6B00] border border-[#FED7AA] flex items-center justify-center font-bold shadow-2xs shrink-0">
+              <Truck className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-heading">Data Supplier Bahan Baku</h1>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-heading truncate">Data Supplier Bahan Baku</h1>
               <p className="text-xs text-mutedtext">
                 Kelola mitra pengadaan bahan baku, kontak PIC, alamat logistik, dan termin pembayaran
               </p>
@@ -162,7 +162,7 @@ export default function AdminSuppliersPage() {
           <button
             type="button"
             onClick={openAddModal}
-            className="px-4 py-2.5 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="w-full sm:w-auto justify-center px-4 py-2.5 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Supplier Baru</span>

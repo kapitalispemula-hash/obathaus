@@ -188,55 +188,55 @@ export default function AdminStockLedgerPage() {
         </div>
 
         {/* 1. Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-2xl border border-borderline shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-subtle uppercase tracking-wider">Total Mutasi Tercatat</span>
-              <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00]">
-                <ClipboardList className="w-4 h-4" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-borderline shadow-xs">
+            <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+              <span className="text-[10px] sm:text-xs font-medium text-subtle uppercase tracking-wider truncate">Total Mutasi</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00] shrink-0">
+                <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
             </div>
-            <div className="text-2xl font-black text-dark">{totalEntries} Entri</div>
-            <div className="text-xs text-subtle mt-1">Transaksi mutasi stok terverifikasi</div>
+            <div className="text-lg sm:text-2xl font-black text-dark">{totalEntries} Entri</div>
+            <div className="text-[10px] sm:text-xs text-subtle mt-0.5 truncate">Terverifikasi</div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-borderline shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-subtle uppercase tracking-wider">Pemotongan POS Kasir</span>
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-                <ShoppingBag className="w-4 h-4" />
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-borderline shadow-xs">
+            <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+              <span className="text-[10px] sm:text-xs font-medium text-subtle uppercase tracking-wider truncate">Debit POS Kasir</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
             </div>
-            <div className="text-2xl font-black text-emerald-700">{posConsumptionCount} Transaksi</div>
-            <div className="text-xs text-emerald-600 font-medium mt-1">Auto-deduction resep produk menu</div>
+            <div className="text-lg sm:text-2xl font-black text-emerald-700">{posConsumptionCount} Trx</div>
+            <div className="text-[10px] sm:text-xs text-emerald-600 font-medium mt-0.5 truncate">Auto-deduction</div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-borderline shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-subtle uppercase tracking-wider">Distribusi Logistik</span>
-              <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                <Truck className="w-4 h-4" />
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-borderline shadow-xs">
+            <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+              <span className="text-[10px] sm:text-xs font-medium text-subtle uppercase tracking-wider truncate">Distribusi</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
             </div>
-            <div className="text-2xl font-black text-blue-700">{dispatchCount} Kiriman</div>
-            <div className="text-xs text-subtle mt-1">Perpindahan gudang ke 7 cabang</div>
+            <div className="text-lg sm:text-2xl font-black text-blue-700">{dispatchCount} Kiriman</div>
+            <div className="text-[10px] sm:text-xs text-subtle mt-0.5 truncate">Gudang ke cabang</div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-borderline shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-subtle uppercase tracking-wider">Integritas Audit</span>
-              <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
-                <Sparkles className="w-4 h-4" />
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-borderline shadow-xs">
+            <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+              <span className="text-[10px] sm:text-xs font-medium text-subtle uppercase tracking-wider truncate">Integritas Audit</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
             </div>
-            <div className="text-2xl font-black text-purple-700">100% Immutable</div>
-            <div className="text-xs text-purple-600 font-medium mt-1">Tidak dapat diubah atau dihapus</div>
+            <div className="text-base sm:text-2xl font-black text-purple-700">100% Immutable</div>
+            <div className="text-[10px] sm:text-xs text-purple-600 font-medium mt-0.5 truncate">Permanen</div>
           </div>
         </div>
 
         {/* 2. Controls & Advanced Filters */}
-        <div className="bg-white p-5 rounded-2xl border border-borderline shadow-xs space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-borderline shadow-xs space-y-3 sm:space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {/* Search Input */}
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-subtle" />

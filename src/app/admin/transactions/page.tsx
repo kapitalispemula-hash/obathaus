@@ -317,79 +317,79 @@ export default function AdminTransactionsPage() {
         </div>
 
         {/* 4 KPI Summary Cards for Selected Outlet Filter */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">
-                Total Omzet Terfilter
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-3.5 sm:p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider truncate">
+                Omzet Terfilter
               </p>
-              <h3 className="text-xl font-black text-heading mt-1">
+              <h3 className="text-base sm:text-xl font-black text-heading mt-1 truncate">
                 {formatRupiah(stats.totalRevenue)}
               </h3>
-              <p className="text-[10px] text-mutedtext mt-0.5">
+              <p className="text-[10px] text-mutedtext mt-0.5 truncate">
                 {selectedOutlet === 'all' ? 'Seluruh 7 Outlet' : availableOutlets.find(o => o.id === selectedOutlet)?.name || 'Outlet Terpilih'}
               </p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
-              <DollarSign className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#FFF7ED] text-[#FF6B00] flex items-center justify-center shrink-0">
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
 
-          <div className="bg-white p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">
+          <div className="bg-white p-3.5 sm:p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider truncate">
                 Total Transaksi
               </p>
-              <h3 className="text-xl font-black text-heading mt-1">
-                {stats.totalCount} <span className="text-xs font-medium text-mutedtext">pesanan</span>
+              <h3 className="text-base sm:text-xl font-black text-heading mt-1">
+                {stats.totalCount} <span className="text-[11px] sm:text-xs font-medium text-mutedtext">pesanan</span>
               </h3>
-              <p className="text-[10px] text-mutedtext mt-0.5">Volume transaksi kasir</p>
+              <p className="text-[10px] text-mutedtext mt-0.5 truncate">Volume kasir</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <Receipt className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
 
-          <div className="bg-white p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">
-                Transaksi Sukses
+          <div className="bg-white p-3.5 sm:p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider truncate">
+                Sukses
               </p>
-              <h3 className="text-xl font-black text-emerald-600 mt-1">
-                {stats.totalCompleted} <span className="text-xs font-medium text-mutedtext">selesai</span>
+              <h3 className="text-base sm:text-xl font-black text-emerald-600 mt-1">
+                {stats.totalCompleted} <span className="text-[11px] sm:text-xs font-medium text-mutedtext">selesai</span>
               </h3>
-              <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Status Completed</p>
+              <p className="text-[10px] text-emerald-600 font-bold mt-0.5 truncate">Completed</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
 
-          <div className="bg-white p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-mutedtext uppercase tracking-wider">
-                Transaksi Dibatalkan (Void)
+          <div className="bg-white p-3.5 sm:p-4.5 rounded-2xl border border-borderline shadow-2xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-mutedtext uppercase tracking-wider truncate">
+                Dibatalkan
               </p>
-              <h3 className="text-xl font-black text-red-600 mt-1">
-                {stats.totalVoided} <span className="text-xs font-medium text-mutedtext">dibatalkan</span>
+              <h3 className="text-base sm:text-xl font-black text-red-600 mt-1">
+                {stats.totalVoided} <span className="text-[11px] sm:text-xs font-medium text-mutedtext">void</span>
               </h3>
-              <p className="text-[10px] text-red-600 font-bold mt-0.5">Koreksi & Pembatalan</p>
+              <p className="text-[10px] text-red-600 font-bold mt-0.5 truncate">Koreksi kasir</p>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-5 h-5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
         </div>
 
         {/* Filters Toolbar */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-xs flex flex-col md:flex-row flex-wrap items-center gap-3">
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-borderline shadow-xs flex flex-col md:flex-row md:flex-wrap md:items-center gap-2.5 sm:gap-3">
           {/* Outlet Switcher Dropdown */}
-          <div className="flex items-center gap-2 bg-[#FAFAFA] border border-borderline rounded-xl px-3 py-2 text-xs font-bold text-heading shrink-0">
-            <Store className="w-4 h-4 text-[#FF6B00]" />
+          <div className="flex items-center gap-2 bg-[#FAFAFA] border border-borderline rounded-xl px-3 py-2 text-xs font-bold text-heading w-full md:w-auto shrink-0">
+            <Store className="w-4 h-4 text-[#FF6B00] shrink-0" />
             <select
               value={selectedOutlet}
               onChange={(e) => setSelectedOutlet(e.target.value)}
-              className="bg-transparent focus:outline-none cursor-pointer"
+              className="bg-transparent focus:outline-none cursor-pointer w-full truncate"
             >
               <option value="all">🌐 Semua Outlet (7 Cabang)</option>
               {availableOutlets.map((o) => (
@@ -409,25 +409,26 @@ export default function AdminTransactionsPage() {
               setEndDate(end);
             }}
             align="left"
+            className="w-full md:w-auto [&>button]:w-full [&>button]:justify-between"
           />
 
           {/* Search Box */}
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative w-full md:flex-1 md:min-w-[200px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-mutedtext" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari invoice (INV-...), kasir, atau nama cabang..."
+              placeholder="Cari invoice (INV-...), kasir, atau cabang..."
               className="w-full pl-10 pr-4 py-2 bg-canvas border border-borderline rounded-xl text-xs sm:text-sm text-heading placeholder:text-mutedtext focus:outline-none focus:ring-2 focus:ring-coral-500/20 focus:border-coral-500"
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full md:w-auto">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-coral-500/20 focus:border-coral-500"
+              className="w-full sm:w-auto bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-coral-500/20 focus:border-coral-500"
             >
               <option value="all">Semua Status</option>
               <option value="completed">Completed (Selesai)</option>
@@ -438,7 +439,7 @@ export default function AdminTransactionsPage() {
             <select
               value={paymentFilter}
               onChange={(e) => setPaymentFilter(e.target.value)}
-              className="bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-coral-500/20 focus:border-coral-500"
+              className="w-full sm:w-auto bg-canvas border border-borderline text-heading text-xs sm:text-sm rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-coral-500/20 focus:border-coral-500"
             >
               <option value="all">Semua Metode</option>
               <option value="cash">Tunai (Cash)</option>
@@ -449,9 +450,96 @@ export default function AdminTransactionsPage() {
           </div>
         </div>
 
-        {/* Transactions Table */}
+        {/* Transactions List: Mobile Cards + Desktop Table */}
         <div className="bg-white rounded-2xl border border-borderline shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile Card View */}
+          <div className="md:hidden divide-y divide-borderline">
+            {loading ? (
+              <div className="py-10 text-center text-xs text-mutedtext">Memuat transaksi...</div>
+            ) : filtered.length === 0 ? (
+              <div className="py-10 text-center text-xs text-mutedtext">Tidak ada transaksi yang cocok dengan filter.</div>
+            ) : (
+              filtered.map((trx) => (
+                <div key={trx.id} className="p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono font-black text-xs text-heading truncate">{trx.invoice_number}</p>
+                      <p className="text-[11px] text-mutedtext mt-0.5 truncate">
+                        {trx.outlet?.name ? trx.outlet.name.replace('Obat Haus - ', '') : 'Cabang'} &bull; {trx.cashier?.full_name || 'Kasir'}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+                        trx.status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : trx.status === 'voided'
+                          ? 'bg-red-50 text-red-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {trx.status}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <div>
+                      <p className="text-[10px] text-mutedtext">
+                        {formatDateTime(trx.created_at, true)} &bull;{' '}
+                        <span className="uppercase font-bold text-heading">{trx.payment_method}</span>
+                      </p>
+                      <p className="text-sm font-black text-[#FF6B00] tabular-nums mt-0.5">
+                        {formatRupiah(trx.grand_total)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setSelectedTrx(trx)}
+                        className="p-2 text-mutedtext hover:text-heading bg-canvas rounded-xl transition-colors"
+                        title="Lihat Rincian Transaksi"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleReprintReceipt(trx)}
+                        className="p-2 text-mutedtext hover:text-coral-500 bg-canvas rounded-xl transition-colors"
+                        title="Cetak Ulang Struk"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                      {trx.status === 'completed' && (
+                        <>
+                          <button
+                            onClick={() => handleOpenVoid(trx)}
+                            className="p-2 text-mutedtext hover:text-red-600 bg-canvas rounded-xl transition-colors"
+                            title="Batalkan (Void)"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenRefund(trx)}
+                            className="p-2 text-mutedtext hover:text-amber-600 bg-canvas rounded-xl transition-colors"
+                            title="Refund Transaksi"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleOpenDelete(trx)}
+                        className="p-2 text-mutedtext hover:text-red-600 bg-canvas rounded-xl transition-colors"
+                        title="Hapus Transaksi (Admin)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs sm:text-sm">
               <thead className="bg-canvas border-b border-borderline text-mutedtext text-[11px] uppercase tracking-wider font-bold">
                 <tr>

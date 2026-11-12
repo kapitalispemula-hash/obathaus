@@ -285,11 +285,16 @@ export function DateRangeCalendarPicker({
 
       {/* Popover Calendar Container */}
       {isOpen && (
-        <div
-          className={`absolute top-full mt-2 z-50 bg-white rounded-3xl shadow-2xl border border-[#ECEEF1] p-5 w-[330px] sm:w-[480px] select-none animate-in fade-in zoom-in-95 duration-150 ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
-        >
+        <>
+          <div
+            className="fixed inset-0 bg-black/25 z-40 sm:hidden"
+            onClick={() => setIsOpen(false)}
+          />
+          <div
+            className={`fixed inset-x-3 top-20 max-h-[80dvh] overflow-y-auto sm:overflow-visible sm:max-h-none sm:inset-x-auto sm:absolute sm:top-full sm:mt-2 z-50 bg-white rounded-3xl shadow-2xl border border-[#ECEEF1] p-4 sm:p-5 sm:w-[480px] select-none animate-in fade-in zoom-in-95 duration-150 ${
+              align === 'right' ? 'sm:right-0' : 'sm:left-0'
+            }`}
+          >
           {/* Header Popover */}
           <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-[#ECEEF1]">
             <div className="flex items-center gap-2">
@@ -458,7 +463,8 @@ export function DateRangeCalendarPicker({
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       email: safeUser.email,
       outletId: safeUser.primary_outlet_id ?? null,
       warehouseId: safeUser.primary_warehouse_id ?? null,
-      exp: Math.floor(Date.now() / 1000) + STAFF_SESSION_TTL_SECONDS,
+      exp: Date.now() + STAFF_SESSION_TTL_SECONDS * 1000,
     });
 
     const res = NextResponse.json({

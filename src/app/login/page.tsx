@@ -45,12 +45,13 @@ export default function LoginPage() {
 
     if (res.success) {
       if (res.role === 'admin') {
-        router.push('/admin/dashboard');
+        router.replace('/admin/dashboard');
       } else if (res.role === 'warehouse_operator') {
-        router.push('/warehouse/dashboard');
+        router.replace('/warehouse/dashboard');
       } else {
-        router.push('/pos');
+        router.replace('/pos');
       }
+      router.refresh();
     } else {
       setErrorMessage(res.error || 'Login gagal.');
     }

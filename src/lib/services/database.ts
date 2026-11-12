@@ -311,6 +311,43 @@ function isNetworkFailure(err: any): boolean {
   );
 }
 
+const POS_CACHE_TTL_MS = 45_000;
+const posReadCache = new Map<string, { expiresAt: number; value: unknown }>();
+const posInFlightCache = new Map<string, Promise<unknown>>();
+
+function invalidatePosCache(prefix?: string) {
+  if (!prefix) {
+    posReadCache.clear();
+    return;
+  }
+  for (const key of posReadCache.keys()) {
+    if (key === prefix || key.startsWith(prefix)) {
+      posReadCache.delete(key);
+    }
+  }
+}
+
+async function cachedPosRead<T>(key: string, ttlMs: number, loader: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const hit = posReadCache.get(key);
+  if (hit && hit.expiresAt > now) {
+    return hit.value as T;
+  }
+  const pending = posInFlightCache.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+
+  const promise = loader()
+    .then((val) => {
+      posReadCache.set(key, { expiresAt: Date.now() + ttlMs, value: val });
+      return val;
+    })
+    .finally(() => {
+      posInFlightCache.delete(key);
+    });
+  posInFlightCache.set(key, promise);
+  return promise;
+}
+
 function getActorIdFromBrowser(): string {
   if (typeof window === 'undefined') return '';
   return window.localStorage.getItem('cafepos_current_user_id') || '';
@@ -422,6 +459,7 @@ export const dbService = {
 
   async updateStoreSettings(settings: Partial<StoreSettings>): Promise<StoreSettings> {
     syncFromStorage();
+    invalidatePosCache('settings');
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -697,6 +735,7 @@ export const dbService = {
           throw new Error(`Gagal memperbarui produk di database: ${error.message}`);
         }
         if (!error && data) {
+          invalidatePosCache('products');
           localProducts = localProducts.map((p) => (p.id === id ? (data as Product) : p));
           setStorageItem(STORAGE_KEYS.PRODUCTS, localProducts);
           void this.recordAuditLog({
@@ -846,53 +885,139 @@ export const dbService = {
   // =========================================================================
   // ATOMIC CHECKOUT & TRANSACTIONS
   // =========================================================================
+  async preloadPosCheckoutContext(cashierId?: string, outletId?: string): Promise<void> {
+    try {
+      const outlets = await cachedPosRead('outlets', POS_CACHE_TTL_MS, () => this.getOutlets());
+      const resolvedOutletId =
+        isUuid(outletId) && outlets.some((o) => o.id === outletId)
+          ? outletId
+          : outlets[0]?.id || outletId || 'd0000000-0000-0000-0000-000000000001';
+
+      const jobs: Promise<unknown>[] = [
+        cachedPosRead('profiles', 60_000, () => this.getProfiles()),
+        cachedPosRead('products', POS_CACHE_TTL_MS, () => this.getProducts()),
+        cachedPosRead('rawMaterials', POS_CACHE_TTL_MS, () => this.getRawMaterials()),
+        cachedPosRead('settings', 60_000, () => this.getStoreSettings()),
+        cachedPosRead(`outletMenus:${resolvedOutletId}`, POS_CACHE_TTL_MS, () =>
+          this.getOutletMenus(resolvedOutletId)
+        ),
+        cachedPosRead(`recipes:${resolvedOutletId}`, POS_CACHE_TTL_MS, () =>
+          this.getRecipes(resolvedOutletId)
+        ),
+        cachedPosRead(`outletStockSnapshot:${resolvedOutletId}`, POS_CACHE_TTL_MS, async () => {
+          if (isSupabaseConfigured()) {
+            try {
+              const supabase = createClient();
+              const { data, error } = await supabase
+                .from('outlet_stocks')
+                .select('raw_material_id, quantity, minimum_stock')
+                .eq('outlet_id', resolvedOutletId);
+              if (!error && data) {
+                return data.map((r: any) => ({
+                  raw_material_id: r.raw_material_id as string,
+                  quantity: Number(r.quantity) || 0,
+                  minimum_stock: Number(r.minimum_stock ?? 0),
+                }));
+              }
+            } catch {}
+          }
+          const stocks = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+          return stocks
+            .filter((s) => s.outlet_id === resolvedOutletId)
+            .map((s) => ({
+              raw_material_id: s.raw_material_id,
+              quantity: Number(s.quantity) || 0,
+              minimum_stock: Number(s.minimum_stock ?? 0),
+            }));
+        }),
+      ];
+
+      if (cashierId) {
+        jobs.push(
+          cachedPosRead(`activeShift:${cashierId}:${resolvedOutletId}`, 60_000, () =>
+            this.getActiveShift(cashierId, resolvedOutletId)
+          )
+        );
+      }
+
+      await Promise.all(jobs);
+    } catch {
+      // Preload bersifat best-effort, abaikan jika gagal
+    }
+  },
+
   async processCheckout(payload: CheckoutPayload): Promise<Transaction> {
     syncFromStorage();
 
-    // 1. Check idempotency (local + cloud)
+    // 1. Check idempotency locally first (0 ms); cloud duplicate is handled directly on insert 23505
     if (payload.idempotency_key) {
       const existing = localTransactions.find((t) => t.idempotency_key === payload.idempotency_key);
       if (existing) return existing;
-
-      if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
-        try {
-          const supabase = createClient();
-          const { data: cloudExisting } = await supabase
-            .from('transactions')
-            .select('*, items:transaction_items(*)')
-            .eq('idempotency_key', payload.idempotency_key)
-            .maybeSingle();
-          if (cloudExisting) return cloudExisting as Transaction;
-        } catch {}
-      }
     }
 
-    // 2. Validate Cashier (Check Cloud Supabase & Local)
-    const profiles = await this.getProfiles();
-    const cashier = profiles.find((p) => p.id === payload.cashier_id) || localProfiles.find((p) => p.id === payload.cashier_id);
-    if (!cashier || !cashier.is_active) {
-      throw new Error('Akun kasir tidak valid atau sedang dinonaktifkan.');
-    }
-
-    // 3. Validate items
+    // 2. Validate items immediately before touching network/cache
     if (!payload.items || payload.items.length === 0) {
       throw new Error('Keranjang belanja kosong.');
     }
 
-    // Determine target outlet early so we can check branch-specific availability & prices
-    const targetOutletId = await resolveValidOutletId(payload.outlet_id || cashier.primary_outlet_id);
-    const [currentOutlets, outletMenus, allProducts, recipes, rawMaterials, currentOutletStocks, activeShift] = await Promise.all([
-      this.getOutlets(),
-      this.getOutletMenus(targetOutletId),
-      this.getProducts(),
-      this.getRecipes(targetOutletId),
-      this.getRawMaterials(),
-      this.getOutletStocks(targetOutletId),
-      this.getActiveShift(payload.cashier_id, targetOutletId),
+    // 3. Load cached POS context + outlets + cashier concurrently (0 ms when warmed on /pos load)
+    const [profiles, currentOutlets, allProducts, rawMaterials, settings] = await Promise.all([
+      cachedPosRead('profiles', 60_000, () => this.getProfiles()),
+      cachedPosRead('outlets', POS_CACHE_TTL_MS, () => this.getOutlets()),
+      cachedPosRead('products', POS_CACHE_TTL_MS, () => this.getProducts()),
+      cachedPosRead('rawMaterials', POS_CACHE_TTL_MS, () => this.getRawMaterials()),
+      cachedPosRead('settings', 60_000, () => this.getStoreSettings()),
     ]);
+
+    const cashier =
+      profiles.find((p) => p.id === payload.cashier_id) ||
+      localProfiles.find((p) => p.id === payload.cashier_id);
+    if (!cashier || !cashier.is_active) {
+      throw new Error('Akun kasir tidak valid atau sedang dinonaktifkan.');
+    }
+
+    const candidateOutletId = payload.outlet_id || cashier.primary_outlet_id;
+    const targetOutlet =
+      (isUuid(candidateOutletId) && currentOutlets.find((o) => o.id === candidateOutletId)) ||
+      currentOutlets[0];
+    const targetOutletId = targetOutlet?.id || candidateOutletId || 'd0000000-0000-0000-0000-000000000001';
+
+    const [outletMenus, recipes, stockSnapshots, activeShift] = await Promise.all([
+      cachedPosRead(`outletMenus:${targetOutletId}`, POS_CACHE_TTL_MS, () => this.getOutletMenus(targetOutletId)),
+      cachedPosRead(`recipes:${targetOutletId}`, POS_CACHE_TTL_MS, () => this.getRecipes(targetOutletId)),
+      cachedPosRead(`outletStockSnapshot:${targetOutletId}`, POS_CACHE_TTL_MS, async () => {
+        if (isSupabaseConfigured()) {
+          try {
+            const supabase = createClient();
+            const { data, error } = await supabase
+              .from('outlet_stocks')
+              .select('raw_material_id, quantity, minimum_stock')
+              .eq('outlet_id', targetOutletId);
+            if (!error && data) {
+              return data.map((r: any) => ({
+                raw_material_id: r.raw_material_id as string,
+                quantity: Number(r.quantity) || 0,
+                minimum_stock: Number(r.minimum_stock ?? 0),
+              }));
+            }
+          } catch {}
+        }
+        const stocks = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+        return stocks
+          .filter((s) => s.outlet_id === targetOutletId)
+          .map((s) => ({
+            raw_material_id: s.raw_material_id,
+            quantity: Number(s.quantity) || 0,
+            minimum_stock: Number(s.minimum_stock ?? 0),
+          }));
+      }),
+      cachedPosRead(`activeShift:${payload.cashier_id}:${targetOutletId}`, 60_000, () =>
+        this.getActiveShift(payload.cashier_id, targetOutletId)
+      ),
+    ]);
+
     localProducts = allProducts;
     localRawMaterials = rawMaterials;
-    const targetOutlet = currentOutlets.find((o) => o.id === targetOutletId) || currentOutlets[0];
 
     // 4. Server-Side Price & HPP Lookup from Products DB (Zero trust on client)
     let subtotal = 0;
@@ -933,7 +1058,6 @@ export const dbService = {
     }
 
     // 5. Discount Calculation & Limit Check
-    const settings = await this.getStoreSettings();
     let discountTotal = payload.discount_total || 0;
     if (discountTotal > 0) {
       if (!settings.discount_enabled) throw new Error('Fitur diskon sedang dinonaktifkan.');
@@ -1002,7 +1126,7 @@ export const dbService = {
 
     // Seed running balances for accurate double-entry calculation across multi-item checkout
     const runningBalances: Record<string, number> = {};
-    for (const s of currentOutletStocks) {
+    for (const s of stockSnapshots) {
       runningBalances[s.raw_material_id] = Number(s.quantity || 0);
     }
 
@@ -1077,7 +1201,7 @@ export const dbService = {
       };
     });
 
-    // Update active shift locally first
+    // Update active shift locally & in POS RAM cache immediately
     if (activeShift) {
       if (payload.payment_method === 'cash') {
         activeShift.total_cash_sales = Number(activeShift.total_cash_sales || 0) + grandTotal;
@@ -1097,6 +1221,27 @@ export const dbService = {
         : [activeShift, ...storedShifts];
       localShifts = updatedShifts;
       setStorageItem(STORAGE_KEYS.SHIFTS, localShifts);
+      posReadCache.set(`activeShift:${payload.cashier_id}:${targetOutletId}`, {
+        expiresAt: Date.now() + 60_000,
+        value: activeShift,
+      });
+    }
+
+    // Also update POS RAM stock snapshot cache immediately so rapid back-to-back checkouts stay exact
+    if (stockDeductions.length > 0) {
+      const updatedSnapshot = stockSnapshots.map((s) => ({
+        ...s,
+        quantity: runningBalances[s.raw_material_id] ?? s.quantity,
+      }));
+      for (const [matId, balAfter] of Object.entries(runningBalances)) {
+        if (!updatedSnapshot.some((s) => s.raw_material_id === matId)) {
+          updatedSnapshot.push({ raw_material_id: matId, quantity: balAfter, minimum_stock: 0 });
+        }
+      }
+      posReadCache.set(`outletStockSnapshot:${targetOutletId}`, {
+        expiresAt: Date.now() + POS_CACHE_TTL_MS,
+        value: updatedSnapshot,
+      });
     }
 
     // 10. Record Transaction with COGS, Outlet ID, and Shift ID
@@ -1127,7 +1272,7 @@ export const dbService = {
     localTransactions.unshift(newTransaction);
     setStorageItem(STORAGE_KEYS.TRANSACTIONS, localTransactions);
 
-    // REAL-TIME SUPABASE CLOUD COMMIT WITH FULL OFFLINE QUEUE FALLBACK (TRX + STOCKS + LEDGER + SHIFT)
+    // REAL-TIME SUPABASE CLOUD COMMIT WITH PARALLEL ITEMS/STOCK/LEDGER/SHIFT + OFFLINE FALLBACK
     let cloudCommitSucceeded = false;
     if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
@@ -1154,6 +1299,23 @@ export const dbService = {
         };
 
         let { error: trxErr } = await supabase.from('transactions').insert(insertPayload);
+
+        // Idempotency safety: if duplicate idempotency_key already committed to Supabase, return existing row
+        if (trxErr && trxErr.code === '23505' && trxErr.message?.includes('idempotency_key') && payload.idempotency_key) {
+          const { data: cloudExisting } = await supabase
+            .from('transactions')
+            .select('*, items:transaction_items(*)')
+            .eq('idempotency_key', payload.idempotency_key)
+            .maybeSingle();
+          if (cloudExisting) {
+            localTransactions = [
+              cloudExisting as Transaction,
+              ...localTransactions.filter((t) => t.id !== newTransaction.id && t.id !== cloudExisting.id),
+            ];
+            setStorageItem(STORAGE_KEYS.TRANSACTIONS, localTransactions);
+            return cloudExisting as Transaction;
+          }
+        }
 
         // Retry with server sequence or unique suffix on invoice_number collision across browsers
         if (trxErr && trxErr.code === '23505' && trxErr.message?.includes('invoice_number')) {
@@ -1195,26 +1357,110 @@ export const dbService = {
             discount_allocated: it.discount_allocated,
             created_at: it.created_at,
           }));
-          await supabase.from('transaction_items').insert(dbItems);
+
+          // Aggregate stock deductions per unique raw_material_id so multi-item recipes trigger only 1 atomic RPC per ingredient
+          const aggregatedMaterialDeltas = new Map<string, number>();
+          for (const ded of stockDeductions) {
+            aggregatedMaterialDeltas.set(
+              ded.raw_material_id,
+              (aggregatedMaterialDeltas.get(ded.raw_material_id) || 0) + ded.neededQty
+            );
+          }
+
+          // Prepare single bulk stock_ledger insert & local cache entries (eliminates N sequential inserts + N profile lookups)
+          const nowIso = now.toISOString();
+          const newLedgerEntries: StockLedgerEntry[] = stockDeductions.map((ded) => ({
+            id: crypto.randomUUID(),
+            transaction_time: nowIso,
+            location_type: 'outlet',
+            location_id: targetOutletId,
+            location_name: targetOutlet?.name || 'Outlet Cabang',
+            raw_material_id: ded.raw_material_id,
+            movement_type: 'pos_consumption',
+            quantity_change: -ded.neededQty,
+            balance_before: ded.balBefore,
+            balance_after: ded.balAfter,
+            unit_symbol: ded.unitSymbol || 'pcs',
+            unit_cost: ded.unitCost || 0,
+            total_cost: ded.neededQty * ded.unitCost,
+            reference_document_type: 'pos_transaction',
+            reference_document_id: newTransaction.id,
+            reference_document_number: newTransaction.invoice_number,
+            notes: `Pemakaian resep: ${ded.productName} (${ded.qtySold}x)`,
+            created_by: cashier.id,
+          }));
+
+          const postTransactionJobs: Promise<unknown>[] = [
+            Promise.resolve(supabase.from('transaction_items').insert(dbItems)),
+          ];
 
           if (insertPayload.shift_id && isUuid(insertPayload.shift_id)) {
-            const { error: shiftRpcErr } = await supabase.rpc('increment_shift_sales_atomic', {
-              p_shift_id: insertPayload.shift_id,
-              p_payment_method: newTransaction.payment_method,
-              p_amount: newTransaction.grand_total,
-            });
-            if (shiftRpcErr) {
-              await supabase
-                .from('cashier_shifts')
-                .update({
-                  total_cash_sales: activeShift?.total_cash_sales || 0,
-                  total_non_cash_sales: activeShift?.total_non_cash_sales || 0,
-                  closing_cash_expected: activeShift?.closing_cash_expected || 0,
-                  updated_at: now.toISOString(),
-                })
-                .eq('id', insertPayload.shift_id);
-            }
+            postTransactionJobs.push(
+              (async () => {
+                const { error: shiftRpcErr } = await supabase.rpc('increment_shift_sales_atomic', {
+                  p_shift_id: insertPayload.shift_id,
+                  p_payment_method: newTransaction.payment_method,
+                  p_amount: newTransaction.grand_total,
+                });
+                if (shiftRpcErr) {
+                  await supabase
+                    .from('cashier_shifts')
+                    .update({
+                      total_cash_sales: activeShift?.total_cash_sales || 0,
+                      total_non_cash_sales: activeShift?.total_non_cash_sales || 0,
+                      closing_cash_expected: activeShift?.closing_cash_expected || 0,
+                      updated_at: nowIso,
+                    })
+                    .eq('id', insertPayload.shift_id);
+                }
+              })()
+            );
           }
+
+          for (const [rawMaterialId, totalQty] of aggregatedMaterialDeltas.entries()) {
+            postTransactionJobs.push(
+              this.updateOutletStock(targetOutletId, rawMaterialId, -totalQty).catch((stockErr) => {
+                console.warn('Non-fatal stock deduction warning during checkout:', stockErr);
+              })
+            );
+          }
+
+          if (newLedgerEntries.length > 0) {
+            postTransactionJobs.push(
+              (async () => {
+                try {
+                  const ledgerRows = newLedgerEntries.map((entry) => ({
+                    id: entry.id,
+                    transaction_time: entry.transaction_time,
+                    location_type: entry.location_type,
+                    location_id: entry.location_id,
+                    location_name: entry.location_name || null,
+                    raw_material_id: entry.raw_material_id,
+                    movement_type: entry.movement_type,
+                    quantity_change: entry.quantity_change,
+                    balance_before: entry.balance_before,
+                    balance_after: entry.balance_after,
+                    unit_symbol: entry.unit_symbol,
+                    unit_cost: entry.unit_cost,
+                    total_cost: entry.total_cost,
+                    reference_document_type: entry.reference_document_type,
+                    reference_document_id: entry.reference_document_id,
+                    reference_document_number: entry.reference_document_number,
+                    notes: entry.notes || null,
+                    created_by: entry.created_by,
+                  }));
+                  await supabase.from('stock_ledger').insert(ledgerRows);
+                  const currentLedger = getStorageItem<StockLedgerEntry[]>(STORAGE_KEYS.STOCK_LEDGER, localStockLedger);
+                  localStockLedger = [...newLedgerEntries, ...currentLedger];
+                  setStorageItem(STORAGE_KEYS.STOCK_LEDGER, localStockLedger);
+                } catch (ledgerErr) {
+                  console.warn('Non-fatal bulk stock ledger warning during checkout:', ledgerErr);
+                }
+              })()
+            );
+          }
+
+          await Promise.all(postTransactionJobs);
 
           void this.recordAuditLog({
             user_id: cashier.id,
@@ -1250,36 +1496,8 @@ export const dbService = {
       });
     }
 
-    // Persist recipe stock deductions + double-entry ledger:
-    // - If cloud checkout succeeded -> commit to Supabase atomically + localStorage
-    // - If queued offline -> update local cache only so offline-sync.ts commits cloud stock & ledger on reconnect without double-deduction
-    if (cloudCommitSucceeded) {
-      for (const ded of stockDeductions) {
-        try {
-          await this.updateOutletStock(targetOutletId, ded.raw_material_id, -ded.neededQty);
-          await this.recordStockMovement({
-            location_type: 'outlet',
-            location_id: targetOutletId,
-            location_name: targetOutlet?.name || 'Outlet Cabang',
-            raw_material_id: ded.raw_material_id,
-            movement_type: 'pos_consumption',
-            quantity_change: -ded.neededQty,
-            balance_before: ded.balBefore,
-            balance_after: ded.balAfter,
-            unit_symbol: ded.unitSymbol,
-            unit_cost: ded.unitCost,
-            total_cost: ded.neededQty * ded.unitCost,
-            reference_document_type: 'pos_transaction',
-            reference_document_id: newTransaction.id,
-            reference_document_number: newTransaction.invoice_number,
-            notes: `Pemakaian resep: ${ded.productName} (${ded.qtySold}x)`,
-            created_by: cashier.id,
-          });
-        } catch (stockErr) {
-          console.warn('Non-fatal stock deduction warning during checkout:', stockErr);
-        }
-      }
-    } else if (stockDeductions.length > 0) {
+    // If queued offline -> update local cache only so offline-sync.ts commits cloud stock & ledger on reconnect without double-deduction
+    if (!cloudCommitSucceeded && stockDeductions.length > 0) {
       const currentStk = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
       const nextStk = [...currentStk];
       const currentLedger = getStorageItem<StockLedgerEntry[]>(STORAGE_KEYS.STOCK_LEDGER, localStockLedger);
@@ -5977,6 +6195,7 @@ export const dbService = {
       localRecipes = [recipeObj, ...current];
     }
     setStorageItem(STORAGE_KEYS.RECIPES, localRecipes);
+    invalidatePosCache('recipes:');
 
     void this.recordAuditLog({
       user_id: actorId || '',
@@ -6008,6 +6227,7 @@ export const dbService = {
     const current = getStorageItem<Recipe[]>(STORAGE_KEYS.RECIPES, localRecipes);
     localRecipes = current.filter((r) => r.id !== id);
     setStorageItem(STORAGE_KEYS.RECIPES, localRecipes);
+    invalidatePosCache('recipes:');
 
     void this.recordAuditLog({
       user_id: actorId || '',
@@ -6801,6 +7021,7 @@ export const dbService = {
 
     localShifts = [hydratedShift, ...current.filter((s) => s.id !== hydratedShift.id)];
     setStorageItem(STORAGE_KEYS.SHIFTS, localShifts);
+    invalidatePosCache('activeShift:');
 
     await this.recordAuditLog({
       user_id: validCashierId,
@@ -6918,6 +7139,7 @@ export const dbService = {
       ? current.map((s) => (s.id === shiftId ? target! : s))
       : [target, ...current];
     setStorageItem(STORAGE_KEYS.SHIFTS, localShifts);
+    invalidatePosCache('activeShift:');
 
     await this.recordAuditLog({
       user_id: target.cashier_id,

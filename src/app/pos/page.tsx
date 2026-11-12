@@ -10,6 +10,7 @@ import { ReceiptModal } from '@/components/receipt/ReceiptModal';
 import { useCart } from '@/lib/cart-context';
 import { useShift } from '@/lib/shift-context';
 import { useOutlet } from '@/lib/outlet-context';
+import { useAuth } from '@/lib/auth-context';
 import { dbService } from '@/lib/services/database';
 import { Category, Product, Transaction, PaymentMethod } from '@/types/database';
 import {
@@ -26,6 +27,7 @@ export default function PosPage() {
   const { addItem, items, itemCount, grandTotal, settings, orderNotes, setOrderNotes } = useCart();
   const { activeShift, openShiftModal, refreshActiveShift } = useShift();
   const { activeOutlet } = useOutlet();
+  const { user } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -49,6 +51,7 @@ export default function PosPage() {
       try {
         setLoading(true);
         const outletId = activeOutlet?.id;
+        void dbService.preloadPosCheckoutContext(user?.id, outletId);
         const [cats, rawProds, outletMenus] = await Promise.all([
           dbService.getCategories(true),
           dbService.getProducts({ onlyActive: true }),
@@ -84,7 +87,7 @@ export default function PosPage() {
       }
     }
     loadCatalog();
-  }, [activeOutlet?.id]);
+  }, [activeOutlet?.id, user?.id]);
 
   const currentCategoryName =
     selectedCategory === 'all'

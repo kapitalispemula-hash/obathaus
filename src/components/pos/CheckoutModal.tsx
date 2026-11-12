@@ -40,6 +40,7 @@ export function CheckoutModal({
   const [customCashInput, setCustomCashInput] = useState<string>(String(grandTotal));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const idempotencyKeyRef = React.useRef<string>('');
 
   React.useEffect(() => {
     if (isOpen) {
@@ -47,6 +48,7 @@ export function CheckoutModal({
       setAmountReceived(grandTotal);
       setCustomCashInput(String(grandTotal));
       setErrorMsg(null);
+      idempotencyKeyRef.current = `checkout_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     }
   }, [isOpen, initialPaymentMethod, grandTotal]);
 
@@ -89,8 +91,11 @@ export function CheckoutModal({
     setErrorMsg(null);
 
     try {
-      // Idempotency key per PRD CHECK-007
-      const idempotencyKey = `checkout_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      // Idempotency key per PRD CHECK-007 (stable across retries/double-tap in the same modal session)
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current = `checkout_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      }
+      const idempotencyKey = idempotencyKeyRef.current;
 
       const transaction = await dbService.processCheckout({
         cashier_id: user.id,

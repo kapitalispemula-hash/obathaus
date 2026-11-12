@@ -53,6 +53,7 @@ import {
   InventoryValuationItem,
   InventoryValuationSummary,
   AppNotification,
+  OutletCustomer,
 } from '@/types/database';
 import {
   INITIAL_CATEGORIES,
@@ -116,6 +117,7 @@ let localShifts: CashierShift[] = [...INITIAL_CASHIER_SHIFTS];
 let localShiftMovements: ShiftCashMovement[] = [...INITIAL_SHIFT_CASH_MOVEMENTS];
 let localAuditLogs: AuditLog[] = [...INITIAL_AUDIT_LOGS];
 let localNotifications: AppNotification[] = [...INITIAL_NOTIFICATIONS];
+let localCustomers: OutletCustomer[] = [];
 
 const initialData = generateRealistic30DaysData();
 let localTransactions: Transaction[] = initialData.transactions;
@@ -157,6 +159,7 @@ const STORAGE_KEYS = {
   SHIFT_MOVEMENTS: 'obathaus_shift_movements',
   AUDIT_LOGS: 'obathaus_audit_logs',
   NOTIFICATIONS: 'obathaus_notifications',
+  CUSTOMERS: 'obathaus_outlet_customers',
 };
 
 function getStorageItem<T>(key: string, defaultValue: T): T {
@@ -346,6 +349,15 @@ async function cachedPosRead<T>(key: string, ttlMs: number, loader: () => Promis
     });
   posInFlightCache.set(key, promise);
   return promise;
+}
+
+function normalizeCustomerPhone(raw: string): string {
+  const cleaned = String(raw || '')
+    .trim()
+    .replace(/[\s\-().]/g, '');
+  if (cleaned.startsWith('+62')) return `0${cleaned.slice(3)}`;
+  if (cleaned.startsWith('62') && cleaned.length >= 10) return `0${cleaned.slice(2)}`;
+  return cleaned;
 }
 
 function getActorIdFromBrowser(): string {
@@ -7808,6 +7820,281 @@ export const dbService = {
   },
 
   // =========================================================================
+  // OUTLET CUSTOMERS DATABASE (CASHIER CAPTURE + ADMIN CONSOLIDATED CRM)
+  // =========================================================================
+  async getCustomers(outletId?: string): Promise<OutletCustomer[]> {
+    const [outlets, profiles] = await Promise.all([this.getOutlets(), this.getProfiles()]);
+    let list: OutletCustomer[] | null = null;
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase
+          .from('outlet_customers')
+          .select('*, outlet:outlets(*)')
+          .order('created_at', { ascending: false });
+        if (outletId && outletId !== 'all') {
+          query = query.eq('outlet_id', outletId);
+        }
+        const { data, error } = await query;
+        if (error) {
+          if (!isNetworkFailure(error)) {
+            throw new Error(`Gagal memuat database pelanggan: ${error.message}`);
+          }
+        } else if (data) {
+          list = data as OutletCustomer[];
+          if (!outletId || outletId === 'all') {
+            localCustomers = list;
+            setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+          } else {
+            const current = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+            localCustomers = [...list, ...current.filter((c) => c.outlet_id !== outletId)];
+            setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+          }
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+        console.warn('Falling back to local getCustomers:', e);
+      }
+    }
+
+    if (!list) {
+      const localList = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+      list = outletId && outletId !== 'all' ? localList.filter((c) => c.outlet_id === outletId) : localList;
+    }
+
+    return list.map((c) => ({
+      ...c,
+      outlet: c.outlet || outlets.find((o) => o.id === c.outlet_id),
+      creator: c.created_by ? profiles.find((p) => p.id === c.created_by) : undefined,
+    }));
+  },
+
+  async createCustomer(payload: {
+    outlet_id: string;
+    name: string;
+    phone: string;
+    created_by?: string | null;
+  }): Promise<OutletCustomer> {
+    const cleanName = payload.name.trim();
+    const cleanPhone = normalizeCustomerPhone(payload.phone);
+    if (!cleanName) throw new Error('Nama pelanggan wajib diisi.');
+    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 7) {
+      throw new Error('Nomor telepon / WA tidak valid (minimal 7 digit).');
+    }
+
+    const validOutletId = await resolveValidOutletId(payload.outlet_id);
+    const validCreatorId = payload.created_by
+      ? await resolveValidProfileId(payload.created_by, 'cashier', true)
+      : null;
+
+    const now = new Date().toISOString();
+    const newCustomer: OutletCustomer = {
+      id: crypto.randomUUID(),
+      outlet_id: validOutletId,
+      name: cleanName,
+      phone: cleanPhone,
+      created_by: validCreatorId,
+      created_at: now,
+      updated_at: now,
+    };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('outlet_customers')
+          .insert({
+            id: newCustomer.id,
+            outlet_id: newCustomer.outlet_id,
+            name: newCustomer.name,
+            phone: newCustomer.phone,
+            created_by: newCustomer.created_by,
+            created_at: newCustomer.created_at,
+            updated_at: newCustomer.updated_at,
+          })
+          .select('*, outlet:outlets(*)')
+          .single();
+
+        if (error) {
+          if (error.code === '23505') {
+            throw new Error(`Nomor telepon/WA "${cleanPhone}" sudah terdaftar di cabang ini.`);
+          }
+          if (!isNetworkFailure(error)) {
+            throw new Error(`Gagal menyimpan data pelanggan: ${error.message}`);
+          }
+        } else if (data) {
+          const saved = data as OutletCustomer;
+          const current = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+          localCustomers = [saved, ...current.filter((c) => c.id !== saved.id)];
+          setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+          return saved;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+        console.warn('Falling back to local createCustomer:', e);
+      }
+    }
+
+    const current = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+    if (current.some((c) => c.outlet_id === validOutletId && normalizeCustomerPhone(c.phone) === cleanPhone)) {
+      throw new Error(`Nomor telepon/WA "${cleanPhone}" sudah terdaftar di cabang ini.`);
+    }
+    const outlets = await this.getOutlets();
+    const hydrated: OutletCustomer = {
+      ...newCustomer,
+      outlet: outlets.find((o) => o.id === validOutletId),
+    };
+    localCustomers = [hydrated, ...current];
+    setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+    return hydrated;
+  },
+
+  async importCustomersBulk(
+    rows: { outlet_id: string; name: string; phone: string; created_by?: string | null }[]
+  ): Promise<{ inserted: number; skipped: number }> {
+    const existingList = await this.getCustomers();
+    const existingKeys = new Set(
+      existingList.map((c) => `${c.outlet_id}::${normalizeCustomerPhone(c.phone)}`)
+    );
+
+    const now = new Date().toISOString();
+    const validRows: OutletCustomer[] = [];
+    let skipped = 0;
+
+    for (const row of rows) {
+      const cleanName = String(row.name || '').trim();
+      const cleanPhone = normalizeCustomerPhone(String(row.phone || ''));
+      if (!cleanName || cleanPhone.replace(/\D/g, '').length < 7 || !isUuid(row.outlet_id)) {
+        skipped++;
+        continue;
+      }
+      const key = `${row.outlet_id}::${cleanPhone}`;
+      if (existingKeys.has(key)) {
+        skipped++;
+        continue;
+      }
+      existingKeys.add(key);
+      validRows.push({
+        id: crypto.randomUUID(),
+        outlet_id: row.outlet_id,
+        name: cleanName,
+        phone: cleanPhone,
+        created_by: isUuid(row.created_by) ? row.created_by : null,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    if (validRows.length === 0) {
+      return { inserted: 0, skipped };
+    }
+
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      const dbPayload = validRows.map((r) => ({
+        id: r.id,
+        outlet_id: r.outlet_id,
+        name: r.name,
+        phone: r.phone,
+        created_by: r.created_by,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      }));
+      const { error } = await supabase
+        .from('outlet_customers')
+        .upsert(dbPayload, { onConflict: 'outlet_id,phone', ignoreDuplicates: true });
+      if (error && !isNetworkFailure(error)) {
+        throw new Error(`Gagal mengimpor data pelanggan ke cloud: ${error.message}`);
+      }
+    }
+
+    const current = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+    localCustomers = [...validRows, ...current];
+    setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+
+    return { inserted: validRows.length, skipped };
+  },
+
+  async updateCustomer(
+    id: string,
+    payload: { name?: string; phone?: string; outlet_id?: string }
+  ): Promise<OutletCustomer> {
+    const now = new Date().toISOString();
+    const updateFields: Record<string, any> = { updated_at: now };
+    if (payload.name !== undefined) {
+      const cleanName = payload.name.trim();
+      if (!cleanName) throw new Error('Nama pelanggan wajib diisi.');
+      updateFields.name = cleanName;
+    }
+    if (payload.phone !== undefined) {
+      const cleanPhone = normalizeCustomerPhone(payload.phone);
+      if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 7) {
+        throw new Error('Nomor telepon / WA tidak valid (minimal 7 digit).');
+      }
+      updateFields.phone = cleanPhone;
+    }
+    if (payload.outlet_id !== undefined) {
+      updateFields.outlet_id = await resolveValidOutletId(payload.outlet_id);
+    }
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('outlet_customers')
+          .update(updateFields)
+          .eq('id', id)
+          .select('*, outlet:outlets(*)')
+          .single();
+        if (error) {
+          if (error.code === '23505') {
+            throw new Error('Nomor telepon/WA tersebut sudah terdaftar di cabang ini.');
+          }
+          if (!isNetworkFailure(error)) {
+            throw new Error(`Gagal memperbarui data pelanggan: ${error.message}`);
+          }
+        } else if (data) {
+          const updated = data as OutletCustomer;
+          const current = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+          localCustomers = current.map((c) => (c.id === id ? updated : c));
+          setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+          return updated;
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+      }
+    }
+
+    const current = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+    const target = current.find((c) => c.id === id);
+    if (!target) throw new Error('Data pelanggan tidak ditemukan.');
+    const next = { ...target, ...updateFields } as OutletCustomer;
+    localCustomers = current.map((c) => (c.id === id ? next : c));
+    setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+    return next;
+  },
+
+  async deleteCustomer(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { error } = await supabase.from('outlet_customers').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          throw new Error(`Gagal menghapus data pelanggan: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) throw e;
+      }
+    }
+
+    const current = getStorageItem<OutletCustomer[]>(STORAGE_KEYS.CUSTOMERS, localCustomers);
+    localCustomers = current.filter((c) => c.id !== id);
+    setStorageItem(STORAGE_KEYS.CUSTOMERS, localCustomers);
+    return true;
+  },
+
+  // =========================================================================
   // DEMO RESET ENGINE
   // =========================================================================
   async resetDemoData(adminId?: string): Promise<{ success: boolean; message: string }> {
@@ -7845,6 +8132,7 @@ export const dbService = {
     localShiftMovements = [...INITIAL_SHIFT_CASH_MOVEMENTS];
     localAuditLogs = [...INITIAL_AUDIT_LOGS];
     localNotifications = [...INITIAL_NOTIFICATIONS];
+    localCustomers = [];
 
     const fresh = generateRealistic30DaysData();
     localTransactions = fresh.transactions;

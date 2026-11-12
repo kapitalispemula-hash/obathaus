@@ -32,6 +32,7 @@ import {
   CalendarCheck,
   X,
   Download,
+  UserCheck,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
@@ -222,6 +223,13 @@ export function AdminSidebar({ isMobileDrawer = false, onCloseMobile }: AdminSid
           href: '/admin/audit-logs',
           icon: ShieldAlert,
           isActive: pathname.startsWith('/admin/audit-logs'),
+        },
+        {
+          id: 'customers',
+          name: 'Database Pelanggan',
+          href: '/admin/customers',
+          icon: UserCheck,
+          isActive: pathname.startsWith('/admin/customers'),
         },
         {
           id: 'users',

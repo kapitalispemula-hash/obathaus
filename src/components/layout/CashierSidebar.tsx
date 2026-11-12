@@ -8,6 +8,7 @@ import {
   Clock,
   Package,
   ReceiptText,
+  Users,
   ShieldCheck,
   LogOut,
   ChevronLeft,
@@ -73,6 +74,13 @@ export function CashierSidebar() {
       href: '/pos/expenses',
       icon: ReceiptText,
       isActive: pathname.startsWith('/pos/expenses'),
+    },
+    {
+      id: 'pos-customers',
+      name: 'Database Pelanggan',
+      href: '/pos/customers',
+      icon: Users,
+      isActive: pathname.startsWith('/pos/customers'),
     },
   ];
 

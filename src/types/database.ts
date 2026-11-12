@@ -819,3 +819,16 @@ export interface AttendanceLog {
   employee?: EmployeeProfile;
   shift?: AttendanceShift;
 }
+
+export interface OutletCustomer {
+  id: string;
+  outlet_id: string;
+  name: string;
+  phone: string;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  // joined relations
+  outlet?: Outlet;
+  creator?: Profile;
+}

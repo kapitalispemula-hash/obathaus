@@ -129,15 +129,57 @@ export function findConversionFactor(
   return null;
 }
 
+const PCS_UNIT_ID = '11111111-0000-0000-0000-000000000005';
+const PCS_TOKENS = new Set(['pcs', 'piece', 'pieces', 'biji', 'buah', 'lembar']);
+
+export function isPcsUnit(unitId: string, units?: Unit[]): boolean {
+  if (unitId === PCS_UNIT_ID) return true;
+  if (!units || units.length === 0) return false;
+  const u = units.find((x) => x.id === unitId);
+  if (!u) return false;
+  const sym = (u.symbol || '').trim().toLowerCase();
+  const code = (u.code || '').trim().toLowerCase();
+  return PCS_TOKENS.has(sym) || PCS_TOKENS.has(code);
+}
+
 export function convertUnitQuantity(
   quantity: number,
   fromUnitId: string,
   toUnitId: string,
-  conversions: UnitConversion[]
+  conversions: UnitConversion[],
+  materialPackSize?: number,
+  units?: Unit[]
 ): { convertedQuantity: number; factor: number; matched: boolean } {
   const numericQty = Number(quantity) || 0;
   if (!fromUnitId || !toUnitId || fromUnitId === toUnitId) {
     return { convertedQuantity: numericQty, factor: 1, matched: true };
+  }
+
+  // Material-specific pack size conversion (e.g. 500 pcs/pack, 1000 pcs/pack)
+  const packSize = Number(materialPackSize);
+  if (Number.isFinite(packSize) && packSize > 1) {
+    const fromIsPcs = isPcsUnit(fromUnitId, units);
+    const toIsPcs = isPcsUnit(toUnitId, units);
+
+    if (fromIsPcs && !toIsPcs) {
+      // e.g. from 1 pcs -> 1/500 pack = 0.002 pack
+      const factor = 1 / packSize;
+      return {
+        convertedQuantity: roundStockQty(numericQty * factor, 6),
+        factor,
+        matched: true,
+      };
+    }
+
+    if (!fromIsPcs && toIsPcs) {
+      // e.g. from 1 pack -> 500 pcs
+      const factor = packSize;
+      return {
+        convertedQuantity: roundStockQty(numericQty * factor, 6),
+        factor,
+        matched: true,
+      };
+    }
   }
 
   const factor = findConversionFactor(fromUnitId, toUnitId, conversions);
@@ -159,7 +201,8 @@ export function convertUnitQuantity(
 export function getCompatibleUnits(
   baseUnitId: string,
   units: Unit[],
-  conversions: UnitConversion[]
+  conversions: UnitConversion[],
+  materialPackSize?: number
 ): Unit[] {
   if (!baseUnitId) return [];
 
@@ -175,6 +218,13 @@ export function getCompatibleUnits(
         queue.push(edge.toUnitId);
       }
     }
+  }
+
+  // If this material has pack_size > 1, make sure PCS is always available
+  const packSize = Number(materialPackSize);
+  if (Number.isFinite(packSize) && packSize > 1) {
+    const pcsUnit = units.find((u) => isPcsUnit(u.id, units));
+    if (pcsUnit) reachableIds.add(pcsUnit.id);
   }
 
   const baseUnit = units.find((u) => u.id === baseUnitId);

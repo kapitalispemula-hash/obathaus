@@ -42,6 +42,7 @@ export default function AdminRawMaterialsPage() {
   const [matSku, setMatSku] = useState('');
   const [matCategoryId, setMatCategoryId] = useState('');
   const [matUnitId, setMatUnitId] = useState('');
+  const [matPackSize, setMatPackSize] = useState<number>(1);
   const [matMinStock, setMatMinStock] = useState<number>(100);
   const [matEstimatedCost, setMatEstimatedCost] = useState<number>(0);
   const [matIsActive, setMatIsActive] = useState(true);
@@ -88,6 +89,7 @@ export default function AdminRawMaterialsPage() {
     setMatSku('');
     setMatCategoryId(categories[0]?.id || '');
     setMatUnitId(units[0]?.id || '11111111-0000-0000-0000-000000000001');
+    setMatPackSize(1);
     setMatMinStock(100);
     setMatEstimatedCost(150);
     setMatIsActive(true);
@@ -103,6 +105,7 @@ export default function AdminRawMaterialsPage() {
     setMatSku(m.sku || '');
     setMatCategoryId(m.category_id);
     setMatUnitId(m.standard_unit_id);
+    setMatPackSize(m.pack_size || 1);
     setMatMinStock(m.minimum_stock);
     setMatEstimatedCost(m.estimated_unit_cost);
     setMatIsActive(m.is_active);
@@ -141,6 +144,7 @@ export default function AdminRawMaterialsPage() {
             sku: matSku.trim() || null,
             category_id: matCategoryId,
             standard_unit_id: matUnitId,
+            pack_size: Math.max(1, Number(matPackSize) || 1),
             minimum_stock: Math.max(0, Number(matMinStock) || 0),
             estimated_unit_cost: Number(matEstimatedCost),
             is_active: matIsActive,
@@ -154,6 +158,7 @@ export default function AdminRawMaterialsPage() {
           sku: matSku.trim() || null,
           category_id: matCategoryId,
           standard_unit_id: matUnitId,
+          pack_size: Math.max(1, Number(matPackSize) || 1),
           minimum_stock: Number(matMinStock),
           estimated_unit_cost: Number(matEstimatedCost),
           is_active: matIsActive,
@@ -363,6 +368,11 @@ export default function AdminRawMaterialsPage() {
                         <span className="px-2 py-0.5 rounded-lg bg-orange-50 text-[#FF6B00] font-mono font-bold text-[11px] border border-orange-100">
                           {m.standard_unit?.symbol || 'g'} ({m.standard_unit?.name || 'Gram'})
                         </span>
+                        {m.pack_size && m.pack_size > 1 && (
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            isi {m.pack_size.toLocaleString('id-ID')} pcs
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-heading">
                         {m.minimum_stock.toLocaleString()} {m.standard_unit?.symbol || ''}
@@ -569,6 +579,35 @@ export default function AdminRawMaterialsPage() {
                       )}
                     </select>
                   </div>
+                </div>
+
+                {/* Kolom Input Isi per Satuan (Pack Size / Rasio Konversi) */}
+                <div className="bg-[#FFF7ED] p-3.5 rounded-xl border border-[#FED7AA]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-heading">
+                      Isi dalam Satuan (Rasio Konversi ke pcs)
+                    </label>
+                    <span className="text-[11px] font-bold text-[#FF6B00] bg-orange-100/90 px-2 py-0.5 rounded-md font-mono">
+                      1 {units.find((u) => u.id === matUnitId)?.name || 'satuan'} = {matPackSize.toLocaleString('id-ID')} pcs
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={matPackSize}
+                        onChange={(e) => setMatPackSize(Math.max(1, Number(e.target.value) || 1))}
+                        placeholder="Misal: 500 (1 pack = 500 pcs) atau 1000"
+                        className="w-full text-xs sm:text-sm p-2 bg-white border border-[#FED7AA] rounded-xl text-heading font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/30 focus:border-[#FF6B00]"
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-heading shrink-0 font-mono">pcs / unit</span>
+                  </div>
+                  <p className="text-[11px] text-mutedtext mt-1.5 leading-snug">
+                    Berapa pcs isi dalam 1 {units.find((u) => u.id === matUnitId)?.symbol || 'satuan'} ini? (Contoh: Sedotan = 500 pcs/pack, Kantongan = 1.000 pcs/pack, Cup = 1.000 pcs/ktn). Saat resep menu memakai satuan <strong className="text-heading">pcs</strong>, sistem otomatis memotong pecahan stok secara presisi.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

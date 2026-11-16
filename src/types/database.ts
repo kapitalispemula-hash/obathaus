@@ -271,6 +271,7 @@ export interface RawMaterial {
   standard_unit_id: string;
   minimum_stock: number;
   estimated_unit_cost: number;
+  pack_size?: number; // Jumlah isi dalam 1 satuan kemasan (misal 500 pcs/pack)
   is_active: boolean;
   created_at: string;
   updated_at: string;

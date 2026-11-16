@@ -328,3 +328,9 @@ BEGIN
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE employee_profiles; EXCEPTION WHEN duplicate_object THEN NULL; END;
   BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE attendance_logs; EXCEPTION WHEN duplicate_object THEN NULL; END;
 END $$;
+
+-- 11. RAW MATERIALS PACK_SIZE (CONVERSION TO PIECES/PCS)
+ALTER TABLE IF EXISTS public.raw_materials ADD COLUMN IF NOT EXISTS pack_size NUMERIC DEFAULT 1;
+UPDATE public.raw_materials SET pack_size = 500 WHERE (name ILIKE '%pipet%' OR name ILIKE '%sedotan%') AND (pack_size IS NULL OR pack_size = 1);
+UPDATE public.raw_materials SET pack_size = 1000 WHERE name ILIKE '%kantong%' AND (pack_size IS NULL OR pack_size = 1);
+

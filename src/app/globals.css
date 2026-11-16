@@ -36,6 +36,28 @@ body {
   display: none;
 }
 
+/* Admin Sidebar Custom Scrollbar (Clearly visible & draggable on laptops & desktop) */
+.admin-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+.admin-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-sidebar-scroll::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 9999px;
+  margin: 6px 0;
+}
+.admin-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 1px solid #f1f5f9;
+}
+.admin-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: #ff6b00;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;

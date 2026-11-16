@@ -312,8 +312,8 @@ export function AdminSidebar({ isMobileDrawer = false, onCloseMobile }: AdminSid
 
         {/* 2. Admin Navigation Stack */}
         <nav
-          className={`flex flex-col gap-1 w-full flex-1 min-h-0 overflow-y-auto no-scrollbar py-3 ${
-            isCollapsed ? 'px-2 items-center' : 'px-3'
+          className={`flex flex-col gap-1 w-full flex-1 min-h-0 overflow-y-auto admin-sidebar-scroll pt-3 pb-8 overscroll-contain ${
+            isCollapsed ? 'px-2 items-center' : 'pl-3 pr-2'
           }`}
         >
           {navSections.map((section, sIdx) => (
@@ -385,7 +385,7 @@ export function AdminSidebar({ isMobileDrawer = false, onCloseMobile }: AdminSid
           ))}
 
           {/* Quick Switch to POS Cashier */}
-          <div className={`pt-3 mt-2 border-t border-[#F0F0F0] w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
+          <div className={`pt-3 mt-2 mb-2 border-t border-[#F0F0F0] w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
             <Link
               href="/pos"
               onClick={onCloseMobile}

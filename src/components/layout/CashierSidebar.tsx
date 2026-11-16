@@ -138,8 +138,8 @@ export function CashierSidebar() {
 
         {/* 2. Outlet POS Navigation Stack */}
         <nav
-          className={`flex flex-col gap-1 w-full overflow-y-auto max-h-[calc(100vh-220px)] no-scrollbar py-3 ${
-            isCollapsed ? 'px-2 items-center' : 'px-3'
+          className={`flex flex-col gap-1 w-full overflow-y-auto max-h-[calc(100vh-220px)] admin-sidebar-scroll pt-3 pb-6 overscroll-contain ${
+            isCollapsed ? 'px-2 items-center' : 'pl-3 pr-2'
           }`}
         >
           {!isCollapsed && (

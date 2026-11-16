@@ -440,7 +440,7 @@ export default function PosStockPage() {
 
                         <td className="py-3.5 px-4 text-right">
                           <span className="font-bold text-sm text-slate-900">
-                            {s.quantity.toLocaleString('id-ID')}
+                            {s.quantity.toLocaleString('id-ID', { maximumFractionDigits: 3 })}
                           </span>{' '}
                           <span className="text-slate-500">
                             {mat?.standard_unit?.symbol || 'g'}
@@ -448,7 +448,7 @@ export default function PosStockPage() {
                         </td>
 
                         <td className="py-3.5 px-4 text-right text-slate-500">
-                          {min.toLocaleString('id-ID')} {mat?.standard_unit?.symbol || ''}
+                          {min.toLocaleString('id-ID', { maximumFractionDigits: 3 })} {mat?.standard_unit?.symbol || ''}
                         </td>
 
                         <td className="py-3.5 px-5 text-right">

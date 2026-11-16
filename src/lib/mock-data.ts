@@ -248,13 +248,16 @@ export const INITIAL_UNITS: Unit[] = [
   { id: '11111111-0000-0000-0000-000000000008', code: 'BTL', name: 'Botol', symbol: 'btl', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
   { id: '11111111-0000-0000-0000-000000000009', code: 'KLG', name: 'Kaleng', symbol: 'klg', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
   { id: '11111111-0000-0000-0000-000000000010', code: 'SCH', name: 'Sachet', symbol: 'sch', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000011', code: 'PCK-500', name: 'Pack (500 pcs)', symbol: 'pack', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
+  { id: '11111111-0000-0000-0000-000000000012', code: 'PCK-1000', name: 'Pack (1.000 pcs)', symbol: 'pack', unit_type: 'piece', is_active: true, created_at: '2026-10-01T08:00:00Z' },
 ];
 
 export const INITIAL_UNIT_CONVERSIONS: UnitConversion[] = [
   { id: '22222222-0000-0000-0000-000000000001', from_unit_id: '11111111-0000-0000-0000-000000000002', to_unit_id: '11111111-0000-0000-0000-000000000001', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
   { id: '22222222-0000-0000-0000-000000000002', from_unit_id: '11111111-0000-0000-0000-000000000004', to_unit_id: '11111111-0000-0000-0000-000000000003', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
-  { id: '22222222-0000-0000-0000-000000000003', from_unit_id: '11111111-0000-0000-0000-000000000006', to_unit_id: '11111111-0000-0000-0000-000000000005', conversion_factor: 50, created_at: '2026-10-01T08:00:00Z' },
-  { id: '22222222-0000-0000-0000-000000000004', from_unit_id: '11111111-0000-0000-0000-000000000007', to_unit_id: '11111111-0000-0000-0000-000000000005', conversion_factor: 24, created_at: '2026-10-01T08:00:00Z' },
+  { id: '22222222-0000-0000-0000-000000000500', from_unit_id: '11111111-0000-0000-0000-000000000011', to_unit_id: '11111111-0000-0000-0000-000000000005', conversion_factor: 500, created_at: '2026-10-01T08:00:00Z' },
+  { id: '22222222-0000-0000-0000-000000001000', from_unit_id: '11111111-0000-0000-0000-000000000012', to_unit_id: '11111111-0000-0000-0000-000000000005', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
+  { id: '22222222-0000-0000-0000-000000000004', from_unit_id: '11111111-0000-0000-0000-000000000007', to_unit_id: '11111111-0000-0000-0000-000000000005', conversion_factor: 1000, created_at: '2026-10-01T08:00:00Z' },
 ];
 
 export const INITIAL_RAW_MATERIAL_CATEGORIES: RawMaterialCategory[] = [];

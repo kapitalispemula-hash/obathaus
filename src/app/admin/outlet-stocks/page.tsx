@@ -392,7 +392,7 @@ export default function AdminOutletStocksPage() {
                         </td>
 
                         <td className="py-4 px-4 text-right font-black text-dark text-base">
-                          {stk.quantity.toLocaleString('id-ID')}{' '}
+                          {stk.quantity.toLocaleString('id-ID', { maximumFractionDigits: 3 })}{' '}
                           <span className="text-xs font-normal text-subtle">
                             {mat?.standard_unit?.symbol || 'pcs'}
                           </span>
@@ -433,8 +433,8 @@ export default function AdminOutletStocksPage() {
                             </div>
                             <div className="text-[10px] text-subtle mt-1">
                               {stk.quantity > min
-                                ? `+${(stk.quantity - min).toLocaleString('id-ID')} dari batas aman`
-                                : `Kurang ${(min - stk.quantity).toLocaleString('id-ID')} unit`}
+                                ? `+${(stk.quantity - min).toLocaleString('id-ID', { maximumFractionDigits: 3 })} dari batas aman`
+                                : `Kurang ${(min - stk.quantity).toLocaleString('id-ID', { maximumFractionDigits: 3 })} unit`}
                             </div>
                           </div>
                         </td>

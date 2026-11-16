@@ -190,48 +190,59 @@ export function DateRangeCalendarPicker({
 
   // Presets
   const applyPreset = (presetKey: string) => {
-    const today = new Date();
-    const todayStr = toISODate(today);
+    let todayStr: string;
+    try {
+      todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
+    } catch {
+      todayStr = toISODate(new Date());
+    }
+    const [tY, tM, tD] = todayStr.split('-').map(Number);
+    const shiftDate = (delta: number) => {
+      const d = new Date(Date.UTC(tY, tM - 1, tD + delta));
+      return d.toISOString().slice(0, 10);
+    };
+
+    let start = todayStr;
+    let end = todayStr;
+    let label = '';
 
     if (presetKey === 'today') {
-      setTempStart(todayStr);
-      setTempEnd(todayStr);
-      setViewDate(new Date());
+      start = todayStr;
+      end = todayStr;
+      label = `Hari Ini (${formatIndoDate(todayStr)})`;
     } else if (presetKey === 'yesterday') {
-      const y = new Date();
-      y.setDate(y.getDate() - 1);
-      const yStr = toISODate(y);
-      setTempStart(yStr);
-      setTempEnd(yStr);
-      setViewDate(y);
+      start = shiftDate(-1);
+      end = start;
+      label = `Kemarin (${formatIndoDate(start)})`;
     } else if (presetKey === '7days') {
-      const past = new Date();
-      past.setDate(past.getDate() - 6);
-      setTempStart(toISODate(past));
-      setTempEnd(todayStr);
-      setViewDate(today);
+      start = shiftDate(-6);
+      end = todayStr;
+      label = `${formatIndoDate(start)} - ${formatIndoDate(end)}`;
     } else if (presetKey === '30days') {
-      const past = new Date();
-      past.setDate(past.getDate() - 29);
-      setTempStart(toISODate(past));
-      setTempEnd(todayStr);
-      setViewDate(today);
+      start = shiftDate(-29);
+      end = todayStr;
+      label = `${formatIndoDate(start)} - ${formatIndoDate(end)}`;
     } else if (presetKey === 'this_month') {
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      setTempStart(toISODate(startOfMonth));
-      setTempEnd(toISODate(endOfMonth));
-      setViewDate(today);
+      start = `${tY}-${padZero(tM)}-01`;
+      end = todayStr;
+      label = `Bulan Ini (${formatIndoDate(start)} - ${formatIndoDate(end)})`;
     } else if (presetKey === 'last_month') {
-      const startOfLast = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const endOfLast = new Date(today.getFullYear(), today.getMonth(), 0);
-      setTempStart(toISODate(startOfLast));
-      setTempEnd(toISODate(endOfLast));
-      setViewDate(startOfLast);
+      const prevM = tM === 1 ? 12 : tM - 1;
+      const prevY = tM === 1 ? tY - 1 : tY;
+      const lastDay = new Date(prevY, prevM, 0).getDate();
+      start = `${prevY}-${padZero(prevM)}-01`;
+      end = `${prevY}-${padZero(prevM)}-${padZero(lastDay)}`;
+      label = `Bulan Lalu (${MONTH_NAMES[prevM - 1]} ${prevY})`;
     } else if (presetKey === 'all') {
-      setTempStart('');
-      setTempEnd('');
+      start = '';
+      end = '';
+      label = 'Semua Periode';
     }
+
+    setTempStart(start);
+    setTempEnd(end);
+    onChange(start, end, label);
+    setIsOpen(false);
   };
 
   // Apply button

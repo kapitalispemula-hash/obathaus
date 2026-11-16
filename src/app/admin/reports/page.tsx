@@ -45,18 +45,80 @@ export default function AdminReportsPage() {
   // Active Tab: 'pnl' | 'valuation' | 'menu' | 'cash_shifts'
   const [activeTab, setActiveTab] = useState<'pnl' | 'valuation' | 'menu' | 'cash_shifts'>('pnl');
 
-  // Filters
+  const REPORTS_FILTER_KEY = 'obathaus_reports_filter_state_v2';
+
+  // Filters (Persistent with localStorage so refresh won't revert)
   const [period, setPeriod] = useState<
     'today' | 'yesterday' | '7days' | '30days' | 'this_month' | 'this_year' | 'custom'
-  >('custom');
-  const [customStart, setCustomStart] = useState(() => {
+  >(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('obathaus_reports_filter_state_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.period) return parsed.period;
+        }
+      } catch {}
+    }
+    return 'custom';
+  });
+
+  const [customStart, setCustomStart] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('obathaus_reports_filter_state_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.customStart) return parsed.customStart;
+        }
+      } catch {}
+    }
     const d = new Date(Date.now() - 29 * 86400000);
     return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
   });
-  const [customEnd, setCustomEnd] = useState(() => {
+
+  const [customEnd, setCustomEnd] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('obathaus_reports_filter_state_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.customEnd) return parsed.customEnd;
+        }
+      } catch {}
+    }
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
   });
-  const [selectedOutletId, setSelectedOutletId] = useState<string>('all');
+
+  const [selectedOutletId, setSelectedOutletId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('obathaus_reports_filter_state_v2');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.selectedOutletId) return parsed.selectedOutletId;
+        }
+      } catch {}
+    }
+    return 'all';
+  });
+
+  // Save filter changes to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          REPORTS_FILTER_KEY,
+          JSON.stringify({
+            period,
+            customStart,
+            customEnd,
+            selectedOutletId,
+          })
+        );
+      } catch {}
+    }
+  }, [period, customStart, customEnd, selectedOutletId]);
 
   // Data States
   const [loading, setLoading] = useState(true);
@@ -75,37 +137,68 @@ export default function AdminReportsPage() {
   useEffect(() => {
     if (!isAllOutletsSelected && activeOutlet) {
       setSelectedOutletId(activeOutlet.id);
-    } else {
-      setSelectedOutletId('all');
     }
   }, [activeOutlet, isAllOutletsSelected]);
 
-  const loadAllReports = async () => {
+  const loadAllReports = async (targetTab = activeTab) => {
     try {
       setLoading(true);
-      const [analyticsData, comparisonData, valuationData, shiftsData, s] = await Promise.all([
+
+      // Fast single-bundle: financial analytics + outlet comparison + store settings
+      const jobs: Promise<any>[] = [
         dbService.getFinancialAnalytics(period, customStart, customEnd, selectedOutletId),
         dbService.getOutletComparisonReport(period, customStart, customEnd),
-        dbService.getInventoryValuationReport(),
-        dbService.getShifts({
-          outletId: selectedOutletId !== 'all' ? selectedOutletId : undefined,
-          startDate: customStart || undefined,
-          endDate: customEnd ? `${customEnd}T23:59:59+08:00` : undefined,
-        }),
         dbService.getStoreSettings(),
-      ]);
+      ];
+
+      // Lazy-load Tab 2 & 3: Valuation & Menu efficiency only when viewed
+      if (targetTab === 'valuation' || targetTab === 'menu') {
+        jobs.push(dbService.getInventoryValuationReport());
+      } else {
+        jobs.push(Promise.resolve(inventoryValuation));
+      }
+
+      // Lazy-load Tab 4: Cash Shifts only when viewed
+      if (targetTab === 'cash_shifts') {
+        jobs.push(
+          dbService.getShifts({
+            outletId: selectedOutletId !== 'all' ? selectedOutletId : undefined,
+            startDate: customStart || undefined,
+            endDate: customEnd || undefined,
+          })
+        );
+      } else {
+        jobs.push(Promise.resolve(shifts));
+      }
+
+      const [analyticsData, comparisonData, s, valuationData, shiftsData] = await Promise.all(jobs);
 
       setAnalytics(analyticsData);
       setOutletComparison(comparisonData);
-      setInventoryValuation(valuationData);
-      setShifts(shiftsData);
       setSettings(s);
+      if (valuationData) setInventoryValuation(valuationData);
+      if (shiftsData) setShifts(shiftsData);
     } catch (err) {
-      console.error('Failed to load comprehensive reports:', err);
+      console.error('Failed to load reports:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  // Trigger lazy loading when switching tabs
+  useEffect(() => {
+    if ((activeTab === 'valuation' || activeTab === 'menu') && !inventoryValuation) {
+      void dbService.getInventoryValuationReport().then((data) => setInventoryValuation(data));
+    } else if (activeTab === 'cash_shifts' && shifts.length === 0) {
+      void dbService
+        .getShifts({
+          outletId: selectedOutletId !== 'all' ? selectedOutletId : undefined,
+          startDate: customStart || undefined,
+          endDate: customEnd || undefined,
+        })
+        .then((data) => setShifts(data));
+    }
+  }, [activeTab, customStart, customEnd, selectedOutletId]);
 
   useEffect(() => {
     loadAllReports();

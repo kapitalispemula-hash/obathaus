@@ -301,7 +301,9 @@ function getWitaDateStr(date: Date = new Date()): string {
 
 function getWitaIsoFromDateStr(dateStr: string, endOfDay = false): string {
   const clean = dateStr.slice(0, 10);
-  return `${clean}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+08:00`;
+  const witaIso = `${clean}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}+08:00`;
+  const d = new Date(witaIso);
+  return isNaN(d.getTime()) ? witaIso : d.toISOString();
 }
 
 function isNetworkFailure(err: any): boolean {
@@ -2753,29 +2755,214 @@ export const dbService = {
     customEnd?: string
   ): Promise<OutletFinancialPerformance[]> {
     const outlets = await this.getOutlets();
-    const result = await Promise.all(
-      outlets.map(async (outlet) => {
-        const data = await this.getFinancialAnalytics(period, customStart, customEnd, outlet.id);
-        return {
-          outlet_id: outlet.id,
-          outlet_name: outlet.name,
-          outlet_code: outlet.code,
-          transaction_count: data.summary.transactionCount,
-          items_sold: data.summary.itemsSold,
-          gross_sales: data.summary.grossSales ?? data.summary.netRevenue,
-          discount_total: data.summary.discountTotal ?? 0,
-          net_revenue: data.summary.netRevenue,
-          total_cogs: data.summary.totalHpp,
-          gross_profit: data.summary.grossProfit,
-          gross_margin_percent: data.summary.netRevenue > 0
-            ? Number(((data.summary.grossProfit / data.summary.netRevenue) * 100).toFixed(1))
-            : 0,
-          operating_expenses: data.summary.operatingExpenses,
-          net_operating_profit: data.summary.netOperatingProfit,
-          net_margin_percent: data.summary.netProfitMargin,
-        };
-      })
-    );
+
+    const todayStr = getWitaDateStr(new Date());
+    const [yearNum, monthNum, dayNum] = todayStr.split('-').map(Number);
+    const shiftDateStr = (deltaDays: number) =>
+      new Date(Date.UTC(yearNum, monthNum - 1, dayNum + deltaDays)).toISOString().slice(0, 10);
+
+    let startDateStr = todayStr;
+    let endDateStr = todayStr;
+
+    switch (period) {
+      case 'today':
+        startDateStr = todayStr;
+        endDateStr = todayStr;
+        break;
+      case 'yesterday':
+        startDateStr = shiftDateStr(-1);
+        endDateStr = startDateStr;
+        break;
+      case '7days':
+        startDateStr = shiftDateStr(-6);
+        endDateStr = todayStr;
+        break;
+      case '30days':
+        startDateStr = shiftDateStr(-29);
+        endDateStr = todayStr;
+        break;
+      case 'this_month':
+        startDateStr = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
+        endDateStr = todayStr;
+        break;
+      case 'this_year':
+        startDateStr = `${yearNum}-01-01`;
+        endDateStr = todayStr;
+        break;
+      case 'custom':
+        startDateStr = customStart ? customStart.slice(0, 10) : todayStr;
+        endDateStr = customEnd ? customEnd.slice(0, 10) : startDateStr;
+        break;
+      default:
+        startDateStr = shiftDateStr(-29);
+        endDateStr = todayStr;
+        break;
+    }
+
+    const startIso = getWitaIsoFromDateStr(startDateStr, false);
+    const endIso = getWitaIsoFromDateStr(endDateStr, true);
+
+    // Fetch consolidated transactions & expenses once across all outlets (replaces 28+ separate calls)
+    const [rawTransactions, validExpenses] = await Promise.all([
+      this.getTransactions({
+        startDate: startIso,
+        endDate: endIso,
+      }),
+      this.getOperatingExpenses({
+        startDate: startDateStr,
+        endDate: endDateStr,
+      }),
+    ]);
+
+    const nonVoidTransactions = rawTransactions.filter((t) => t.status !== 'voided');
+
+    const refundsByTrxId = new Map<
+      string,
+      {
+        refund_type: 'full' | 'partial';
+        refund_amount: number;
+        refund_hpp: number;
+        items: { transaction_item_id: string; quantity: number; refund_subtotal: number; refund_hpp: number }[];
+      }[]
+    >();
+
+    if (isSupabaseConfigured() && nonVoidTransactions.length > 0) {
+      try {
+        const supabase = createClient();
+        const trxIds = nonVoidTransactions.map((t) => t.id).filter(isUuid);
+        if (trxIds.length > 0) {
+          const { data: refundRows } = await supabase
+            .from('transaction_refunds')
+            .select('transaction_id, refund_type, refund_amount, refund_hpp, items:transaction_refund_items(transaction_item_id, quantity, refund_subtotal, refund_hpp)')
+            .in('transaction_id', trxIds);
+
+          if (refundRows) {
+            for (const r of refundRows as any[]) {
+              const list = refundsByTrxId.get(r.transaction_id) || [];
+              list.push({
+                refund_type: r.refund_type,
+                refund_amount: Number(r.refund_amount || 0),
+                refund_hpp: Number(r.refund_hpp || 0),
+                items: (r.items || []).map((ri: any) => ({
+                  transaction_item_id: ri.transaction_item_id,
+                  quantity: Number(ri.quantity || 0),
+                  refund_subtotal: Number(ri.refund_subtotal || 0),
+                  refund_hpp: Number(ri.refund_hpp || 0),
+                })),
+              });
+              refundsByTrxId.set(r.transaction_id, list);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load partial refunds for outlet comparison:', e);
+      }
+    }
+
+    // Group transactions by outlet_id
+    const trxsByOutlet = new Map<string, Transaction[]>();
+    for (const trx of nonVoidTransactions) {
+      if (trx.status === 'completed' || trx.status === 'refunded') {
+        const outId = trx.outlet_id || 'unassigned';
+        const list = trxsByOutlet.get(outId) || [];
+        list.push(trx);
+        trxsByOutlet.set(outId, list);
+      }
+    }
+
+    // Group expenses by outlet_id
+    const expensesByOutlet = new Map<string, number>();
+    for (const exp of validExpenses) {
+      const outId = exp.outlet_id || 'unassigned';
+      const cur = expensesByOutlet.get(outId) || 0;
+      expensesByOutlet.set(outId, cur + (Number(exp.amount) || 0));
+    }
+
+    const result: OutletFinancialPerformance[] = outlets.map((outlet) => {
+      const outletTrxs = trxsByOutlet.get(outlet.id) || [];
+      let grossSales = 0;
+      let discountTotal = 0;
+      let netRevenue = 0;
+      let totalHpp = 0;
+      let itemsSold = 0;
+
+      for (const trx of outletTrxs) {
+        const refs = refundsByTrxId.get(trx.id) || [];
+        const totalRefundAmount = refs.reduce((acc, r) => acc + r.refund_amount, 0);
+        const totalRefundHpp = refs.reduce((acc, r) => acc + r.refund_hpp, 0);
+
+        if (trx.status === 'refunded') {
+          const onlyPartial = refs.length > 0 && refs.every((r) => r.refund_type === 'partial');
+          if (!onlyPartial || totalRefundAmount >= Number(trx.grand_total || 0)) {
+            continue;
+          }
+        }
+
+        const refundedItemMap = new Map<string, { qty: number; subtotal: number; hpp: number }>();
+        let hasItemBreakdown = false;
+        for (const r of refs) {
+          for (const ri of r.items) {
+            hasItemBreakdown = true;
+            const prev = refundedItemMap.get(ri.transaction_item_id) || { qty: 0, subtotal: 0, hpp: 0 };
+            refundedItemMap.set(ri.transaction_item_id, {
+              qty: prev.qty + ri.quantity,
+              subtotal: prev.subtotal + ri.refund_subtotal,
+              hpp: prev.hpp + ri.refund_hpp,
+            });
+          }
+        }
+
+        const rawNet = Math.max(0, Number(trx.subtotal || 0) - Number(trx.discount_total || 0));
+        let trxRefundedNet = 0;
+        let trxHpp = 0;
+
+        (trx.items || []).forEach((item) => {
+          const refInfo = refundedItemMap.get(item.id);
+          const refQty = refInfo ? Math.min(item.quantity, refInfo.qty) : 0;
+          const effQty = Math.max(0, item.quantity - refQty);
+          const origItemNet = Math.max(0, Number(item.subtotal || 0) - Number(item.discount_allocated || 0));
+          const itemNetRefund = item.quantity > 0 ? Math.round((origItemNet / item.quantity) * refQty) : 0;
+
+          trxRefundedNet += itemNetRefund;
+          trxHpp += effQty * Number(item.unit_hpp || 0);
+          itemsSold += effQty;
+        });
+
+        if (!hasItemBreakdown && totalRefundAmount > 0) {
+          trxRefundedNet = Math.min(rawNet, totalRefundAmount);
+          trxHpp = Math.max(0, trxHpp - totalRefundHpp);
+        }
+
+        const trxEffectiveNet = Math.max(0, rawNet - trxRefundedNet);
+        grossSales += Math.max(0, Number(trx.subtotal || 0) - trxRefundedNet);
+        discountTotal += Number(trx.discount_total || 0);
+        netRevenue += trxEffectiveNet;
+        totalHpp += trxHpp;
+      }
+
+      const grossProfit = netRevenue - totalHpp;
+      const operatingExpenses = expensesByOutlet.get(outlet.id) || 0;
+      const netOperatingProfit = grossProfit - operatingExpenses;
+      const netProfitMargin = netRevenue > 0 ? Number(((netOperatingProfit / netRevenue) * 100).toFixed(2)) : 0;
+      const grossMarginPercent = netRevenue > 0 ? Number(((grossProfit / netRevenue) * 100).toFixed(1)) : 0;
+
+      return {
+        outlet_id: outlet.id,
+        outlet_name: outlet.name,
+        outlet_code: outlet.code,
+        transaction_count: outletTrxs.length,
+        items_sold: itemsSold,
+        gross_sales: grossSales,
+        discount_total: discountTotal,
+        net_revenue: netRevenue,
+        total_cogs: totalHpp,
+        gross_profit: grossProfit,
+        gross_margin_percent: grossMarginPercent,
+        operating_expenses: operatingExpenses,
+        net_operating_profit: netOperatingProfit,
+        net_margin_percent: netProfitMargin,
+      };
+    });
 
     return result.sort((a, b) => b.net_revenue - a.net_revenue);
   },

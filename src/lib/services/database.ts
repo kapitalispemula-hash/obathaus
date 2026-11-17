@@ -143,6 +143,7 @@ const STORAGE_KEYS = {
   CONVERSIONS: 'obathaus_conversions',
   RAW_CATEGORIES: 'obathaus_raw_categories',
   RAW_MATERIALS: 'obathaus_raw_materials',
+  DELETED_RAW_MATERIAL_IDS: 'obathaus_deleted_raw_material_ids',
   SUPPLIERS: 'obathaus_suppliers',
   OUTLET_MENUS: 'obathaus_outlet_menus',
   WH_STOCKS: 'obathaus_wh_stocks',
@@ -261,6 +262,17 @@ function syncFromStorage(force = false) {
       localProfiles = INITIAL_PROFILES
         .filter((p) => !deletedProfileIds.has(p.id))
         .map((p) => (isSupabaseConfigured() ? stripProfilePassword(p) : p));
+    }
+
+    const deletedRawMaterialIds = new Set(getStorageItem<string[]>(STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS, []));
+    const storedRawMaterials = getStorageItem<RawMaterial[] | null>(STORAGE_KEYS.RAW_MATERIALS, null);
+    if (Array.isArray(storedRawMaterials) && storedRawMaterials.length > 0) {
+      const validStored = storedRawMaterials.filter((m) => m && m.id && m.name && !deletedRawMaterialIds.has(m.id));
+      const existingIds = new Set(validStored.map((m) => m.id));
+      const missingInitial = INITIAL_RAW_MATERIALS.filter((m) => !existingIds.has(m.id) && !deletedRawMaterialIds.has(m.id));
+      localRawMaterials = [...validStored, ...missingInitial];
+    } else {
+      localRawMaterials = INITIAL_RAW_MATERIALS.filter((m) => !deletedRawMaterialIds.has(m.id));
     }
 
     const storedTransactions = getStorageItem<Transaction[] | null>(STORAGE_KEYS.TRANSACTIONS, null);
@@ -3532,6 +3544,9 @@ export const dbService = {
   },
 
   async getRawMaterials(): Promise<RawMaterial[]> {
+    syncFromStorage();
+    const deletedRawMaterialIds = new Set(getStorageItem<string[]>(STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS, []));
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -3540,10 +3555,14 @@ export const dbService = {
           .select('*, category:raw_material_categories(*), standard_unit:units(*)')
           .order('name');
         if (!error && data) {
-          return (data as any[]).map((r) => ({
-            ...r,
-            pack_size: Number(r.pack_size) > 0 ? Number(r.pack_size) : 1,
-          })) as RawMaterial[];
+          const list = (data as any[])
+            .filter((r) => !deletedRawMaterialIds.has(r.id))
+            .map((r) => ({
+              ...r,
+              pack_size: Number(r.pack_size) > 0 ? Number(r.pack_size) : 1,
+            })) as RawMaterial[];
+          localRawMaterials = list;
+          return list;
         }
       } catch (e) {
         console.warn('Falling back to local getRawMaterials:', e);
@@ -3554,12 +3573,14 @@ export const dbService = {
     const categories = await this.getRawMaterialCategories();
     const units = await this.getUnits();
 
-    return rawList.map((r) => ({
-      ...r,
-      pack_size: Number(r.pack_size) > 0 ? Number(r.pack_size) : 1,
-      category: categories.find((c) => c.id === r.category_id),
-      standard_unit: units.find((u) => u.id === r.standard_unit_id),
-    }));
+    return rawList
+      .filter((r) => !deletedRawMaterialIds.has(r.id))
+      .map((r) => ({
+        ...r,
+        pack_size: Number(r.pack_size) > 0 ? Number(r.pack_size) : 1,
+        category: categories.find((c) => c.id === r.category_id),
+        standard_unit: units.find((u) => u.id === r.standard_unit_id),
+      }));
   },
 
   async createRawMaterial(payload: Partial<RawMaterial>): Promise<RawMaterial> {
@@ -3638,11 +3659,28 @@ export const dbService = {
           console.warn('Auto-init stock error:', stockInitErr);
         }
 
-        if (data) return { ...data, pack_size: packSize } as RawMaterial;
+        if (data) {
+          const deletedIds = getStorageItem<string[]>(STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS, []);
+          if (deletedIds.includes(newRaw.id)) {
+            setStorageItem(
+              STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS,
+              deletedIds.filter((id) => id !== newRaw.id)
+            );
+          }
+          return { ...data, pack_size: packSize } as RawMaterial;
+        }
       } catch (e: any) {
         console.error('createRawMaterial exception:', e);
         throw e;
       }
+    }
+
+    const deletedIds = getStorageItem<string[]>(STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS, []);
+    if (deletedIds.includes(newRaw.id)) {
+      setStorageItem(
+        STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS,
+        deletedIds.filter((id) => id !== newRaw.id)
+      );
     }
 
     const current = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
@@ -3746,19 +3784,66 @@ export const dbService = {
   },
 
   async deleteRawMaterial(id: string): Promise<boolean> {
+    syncFromStorage();
+    invalidatePosCache('rawMaterials');
+    invalidatePosCache('outletStocks');
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        await supabase.from('raw_materials').delete().eq('id', id);
-      } catch (e) {
+
+        // 1. Bersihkan seluruh referensi child di tabel relasional agar batasan RESTRICT tidak memblokir penghapusan
+        await Promise.allSettled([
+          supabase.from('recipe_items').delete().eq('raw_material_id', id),
+          supabase.from('outlet_stocks').delete().eq('raw_material_id', id),
+          supabase.from('warehouse_stocks').delete().eq('raw_material_id', id),
+          supabase.from('stock_ledger').delete().eq('raw_material_id', id),
+          supabase.from('stock_opname_items').delete().eq('raw_material_id', id),
+          supabase.from('warehouse_return_items').delete().eq('raw_material_id', id),
+          supabase.from('dispatch_items').delete().eq('raw_material_id', id),
+          supabase.from('outlet_order_items').delete().eq('raw_material_id', id),
+          supabase.from('supplier_receipt_items').delete().eq('raw_material_id', id),
+          supabase.from('supplier_po_items').delete().eq('raw_material_id', id),
+        ]);
+
+        // 2. Eksekusi hapus riil di tabel master raw_materials Supabase
+        const { error } = await supabase.from('raw_materials').delete().eq('id', id);
+        if (error && !isNetworkFailure(error)) {
+          console.error('Supabase delete raw_materials error:', error);
+          throw new Error(`Gagal menghapus bahan baku dari database Supabase: ${error.message}`);
+        }
+      } catch (e: any) {
+        if (!isNetworkFailure(e)) {
+          console.error('deleteRawMaterial Supabase exception:', e);
+          throw e;
+        }
         console.warn('Falling back to local deleteRawMaterial:', e);
       }
+    }
+
+    const deletedIds = getStorageItem<string[]>(STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS, []);
+    if (!deletedIds.includes(id)) {
+      setStorageItem(STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS, [...deletedIds, id]);
     }
 
     const current = getStorageItem<RawMaterial[]>(STORAGE_KEYS.RAW_MATERIALS, localRawMaterials);
     const updated = current.filter((r) => r.id !== id);
     localRawMaterials = updated;
     setStorageItem(STORAGE_KEYS.RAW_MATERIALS, updated);
+
+    // Bersihkan stok outlet lokal terkait
+    const currentOutletStocks = getStorageItem<OutletStock[]>(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+    localOutletStocks = currentOutletStocks.filter((s) => s.raw_material_id !== id);
+    setStorageItem(STORAGE_KEYS.OUTLET_STOCKS, localOutletStocks);
+
+    void this.recordAuditLog({
+      user_id: getActorIdFromBrowser(),
+      action: 'delete_raw_material',
+      entity_type: 'raw_material',
+      entity_id: id,
+      details: `Menghapus bahan baku (ID: ${id})`,
+    });
+
     return true;
   },
 

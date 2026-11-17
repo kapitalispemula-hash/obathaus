@@ -18,6 +18,7 @@ import {
   XCircle,
   Scale,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 import {
   INITIAL_RAW_MATERIALS,
@@ -58,6 +59,10 @@ export default function AdminRawMaterialsPage() {
   const [catIsActive, setCatIsActive] = useState(true);
   const [catFormError, setCatFormError] = useState<string | null>(null);
   const [isSavingCat, setIsSavingCat] = useState(false);
+
+  // Delete State Material
+  const [materialToDelete, setMaterialToDelete] = useState<RawMaterial | null>(null);
+  const [isDeletingMat, setIsDeletingMat] = useState(false);
 
   const loadData = async () => {
     try {
@@ -170,6 +175,24 @@ export default function AdminRawMaterialsPage() {
       setMatFormError(err.message || 'Gagal menyimpan bahan baku.');
     } finally {
       setIsSavingMat(false);
+    }
+  };
+
+  const confirmDeleteMaterial = async () => {
+    if (!materialToDelete) return;
+    try {
+      setIsDeletingMat(true);
+      await dbService.deleteRawMaterial(materialToDelete.id);
+      setMaterialToDelete(null);
+      if (isMatModalOpen && editingMat?.id === materialToDelete.id) {
+        setIsMatModalOpen(false);
+      }
+      await loadData();
+    } catch (err: any) {
+      console.error('Error deleting raw material:', err);
+      alert(err.message || 'Gagal menghapus bahan baku dari database.');
+    } finally {
+      setIsDeletingMat(false);
     }
   };
 
@@ -392,14 +415,24 @@ export default function AdminRawMaterialsPage() {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => openEditMatModal(m)}
-                          className="p-1.5 text-mutedtext hover:text-[#FF6B00] rounded-lg hover:bg-[#FFF7ED] transition-colors cursor-pointer"
-                          title="Edit Bahan Baku"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditMatModal(m)}
+                            className="p-1.5 text-mutedtext hover:text-[#FF6B00] rounded-lg hover:bg-[#FFF7ED] transition-colors cursor-pointer"
+                            title="Edit Bahan Baku"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMaterialToDelete(m)}
+                            className="p-1.5 text-mutedtext hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Hapus Bahan Baku"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -669,21 +702,38 @@ export default function AdminRawMaterialsPage() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
-                  <button
-                    type="button"
-                    onClick={() => setIsMatModalOpen(false)}
-                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSavingMat}
-                    className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
-                  >
-                    {isSavingMat ? 'Menyimpan...' : 'Simpan Bahan'}
-                  </button>
+                <div className="flex items-center justify-between pt-4 border-t border-borderline">
+                  {editingMat ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMaterialToDelete(editingMat);
+                        setIsMatModalOpen(false);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Hapus Bahan</span>
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsMatModalOpen(false)}
+                      className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingMat}
+                      className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                    >
+                      {isSavingMat ? 'Menyimpan...' : 'Simpan Bahan'}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>
@@ -771,6 +821,70 @@ export default function AdminRawMaterialsPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+        {/* Modal Konfirmasi Hapus Bahan Baku */}
+        {materialToDelete && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-heading text-sm sm:text-base">
+                    Hapus Bahan Baku?
+                  </h3>
+                  <p className="text-xs text-mutedtext mt-1 leading-relaxed">
+                    Bahan baku ini akan <span className="font-semibold text-red-600">dihapus permanen dari database</span> beserta data persediaan terkait di gudang dan seluruh outlet cabang. Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                </div>
+              </div>
+
+              {/* Box Detail Bahan */}
+              <div className="p-3.5 bg-canvas border border-borderline rounded-xl flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-white border border-borderline flex items-center justify-center shrink-0 text-[#FF6B00] font-bold">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-heading truncate">
+                    {materialToDelete.name}
+                  </div>
+                  <div className="text-[11px] text-mutedtext flex items-center gap-2 mt-0.5 font-mono">
+                    <span className="text-[#FF6B00] font-bold">{materialToDelete.code}</span>
+                    <span>•</span>
+                    <span>{materialToDelete.standard_unit?.symbol || 'satuan'}</span>
+                    {materialToDelete.pack_size && materialToDelete.pack_size > 1 && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-600">isi {materialToDelete.pack_size.toLocaleString('id-ID')} pcs</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-borderline">
+                <button
+                  type="button"
+                  onClick={() => setMaterialToDelete(null)}
+                  disabled={isDeletingMat}
+                  className="px-4 py-2 text-xs font-bold text-mutedtext hover:text-heading hover:bg-canvas rounded-xl transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteMaterial}
+                  disabled={isDeletingMat}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-70 text-white text-xs font-bold rounded-xl shadow-md shadow-red-600/20 transition-all cursor-pointer"
+                >
+                  {isDeletingMat && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isDeletingMat ? 'Menghapus...' : 'Ya, Hapus Bahan'}</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

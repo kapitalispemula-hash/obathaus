@@ -334,3 +334,25 @@ ALTER TABLE IF EXISTS public.raw_materials ADD COLUMN IF NOT EXISTS pack_size NU
 UPDATE public.raw_materials SET pack_size = 500 WHERE (name ILIKE '%pipet%' OR name ILIKE '%sedotan%') AND (pack_size IS NULL OR pack_size = 1);
 UPDATE public.raw_materials SET pack_size = 1000 WHERE name ILIKE '%kantong%' AND (pack_size IS NULL OR pack_size = 1);
 
+-- 12. ENABLE ON DELETE CASCADE FOR RAW_MATERIALS FOREIGN KEYS
+-- Memastikan penghapusan bahan baku di Master langsung bersih ke semua tabel relasional tanpa error foreign key
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (
+    SELECT tc.table_name, tc.constraint_name
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    WHERE tc.constraint_type = 'FOREIGN KEY'
+      AND tc.table_schema = 'public'
+      AND kcu.column_name = 'raw_material_id'
+  ) LOOP
+    EXECUTE 'ALTER TABLE public.' || quote_ident(r.table_name) || ' DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name);
+    EXECUTE 'ALTER TABLE public.' || quote_ident(r.table_name) || ' ADD CONSTRAINT ' || quote_ident(r.constraint_name) || ' FOREIGN KEY (raw_material_id) REFERENCES public.raw_materials(id) ON DELETE CASCADE';
+  END LOOP;
+END $$;
+
+

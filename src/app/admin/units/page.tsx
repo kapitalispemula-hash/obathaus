@@ -301,11 +301,19 @@ export default function AdminUnitsPage() {
         {/* Tab 2: Conversions Table */}
         {activeTab === 'conversions' && (
           <div className="bg-white rounded-2xl border border-borderline shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-borderline">
-              <h3 className="font-bold text-heading text-sm">Tabel Pengali Konversi Bahan</h3>
-              <p className="text-xs text-mutedtext">
-                Digunakan sistem saat penerimaan barang dari supplier dalam kuantitas besar untuk dipecah ke satuan gramasi resep outlet
-              </p>
+            <div className="p-5 border-b border-borderline flex flex-col gap-2.5">
+              <div>
+                <h3 className="font-bold text-heading text-sm">Tabel Pengali Konversi Bahan (Global)</h3>
+                <p className="text-xs text-mutedtext">
+                  Aturan konversi universal yang berlaku mutlak untuk seluruh bahan (misal: 1 kg = 1.000 g, 1 L = 1.000 ml).
+                </p>
+              </div>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2.5">
+                <span className="text-base shrink-0">💡</span>
+                <span className="leading-relaxed">
+                  <strong>Tips Bahan Kemasan Berbeda:</strong> Untuk bahan dengan isi kemasan bervariasi (seperti <em>Bubuk Cokelat 1 pcs = 800 gr</em> vs <em>Bubuk Matcha 1 pcs = 500 gr</em>, atau <em>Sirup 1 btl = 750 ml</em>), atur rasio isinya langsung di menu <strong className="text-[#FF6B00]">Master Bahan Baku</strong> agar tidak terjadi penolakan atau bentrok antar barang.
+                </span>
+              </div>
             </div>
 
             <div className="overflow-x-auto">

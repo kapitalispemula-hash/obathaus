@@ -355,4 +355,9 @@ BEGIN
   END LOOP;
 END $$;
 
+-- 13. MATERIAL-SPECIFIC RECIPE UNIT CONVERSION (FLEXIBLE FOR ALL UNITS)
+-- Mengizinkan konversi isi berbeda per bahan baku (misal: Bubuk Cokelat 1 pcs = 800 g, Bubuk Matcha 1 pcs = 500 g, Sirup 1 btl = 750 ml)
+ALTER TABLE IF EXISTS public.raw_materials ADD COLUMN IF NOT EXISTS recipe_unit_id UUID REFERENCES public.units(id) ON DELETE SET NULL;
+
+
 

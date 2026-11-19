@@ -44,6 +44,7 @@ export default function AdminRawMaterialsPage() {
   const [matCategoryId, setMatCategoryId] = useState('');
   const [matUnitId, setMatUnitId] = useState('');
   const [matPackSize, setMatPackSize] = useState<number>(1);
+  const [matRecipeUnitId, setMatRecipeUnitId] = useState<string>('');
   const [matMinStock, setMatMinStock] = useState<number>(100);
   const [matEstimatedCost, setMatEstimatedCost] = useState<number>(0);
   const [matIsActive, setMatIsActive] = useState(true);
@@ -95,6 +96,7 @@ export default function AdminRawMaterialsPage() {
     setMatCategoryId(categories[0]?.id || '');
     setMatUnitId(units[0]?.id || '11111111-0000-0000-0000-000000000001');
     setMatPackSize(1);
+    setMatRecipeUnitId('');
     setMatMinStock(100);
     setMatEstimatedCost(150);
     setMatIsActive(true);
@@ -111,6 +113,7 @@ export default function AdminRawMaterialsPage() {
     setMatCategoryId(m.category_id);
     setMatUnitId(m.standard_unit_id);
     setMatPackSize(m.pack_size || 1);
+    setMatRecipeUnitId(m.recipe_unit_id || '');
     setMatMinStock(m.minimum_stock);
     setMatEstimatedCost(m.estimated_unit_cost);
     setMatIsActive(m.is_active);
@@ -150,6 +153,7 @@ export default function AdminRawMaterialsPage() {
             category_id: matCategoryId,
             standard_unit_id: matUnitId,
             pack_size: Math.max(1, Number(matPackSize) || 1),
+            recipe_unit_id: matRecipeUnitId && matRecipeUnitId !== matUnitId ? matRecipeUnitId : null,
             minimum_stock: Math.max(0, Number(matMinStock) || 0),
             estimated_unit_cost: Number(matEstimatedCost),
             is_active: matIsActive,
@@ -164,6 +168,7 @@ export default function AdminRawMaterialsPage() {
           category_id: matCategoryId,
           standard_unit_id: matUnitId,
           pack_size: Math.max(1, Number(matPackSize) || 1),
+          recipe_unit_id: matRecipeUnitId && matRecipeUnitId !== matUnitId ? matRecipeUnitId : null,
           minimum_stock: Number(matMinStock),
           estimated_unit_cost: Number(matEstimatedCost),
           is_active: matIsActive,
@@ -393,7 +398,7 @@ export default function AdminRawMaterialsPage() {
                         </span>
                         {m.pack_size && m.pack_size > 1 && (
                           <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                            isi {m.pack_size.toLocaleString('id-ID')} pcs
+                            isi {m.pack_size.toLocaleString('id-ID')} {m.recipe_unit?.symbol || (units.find((u) => u.id === m.recipe_unit_id)?.symbol) || 'pcs'}
                           </div>
                         )}
                       </td>
@@ -591,7 +596,7 @@ export default function AdminRawMaterialsPage() {
 
                   <div>
                     <label className="block text-xs font-bold text-heading mb-1">
-                      Satuan Resep *
+                      Satuan Stok / Gudang *
                     </label>
                     <select
                       value={matUnitId}
@@ -614,32 +619,62 @@ export default function AdminRawMaterialsPage() {
                   </div>
                 </div>
 
-                {/* Kolom Input Isi per Satuan (Pack Size / Rasio Konversi) */}
-                <div className="bg-[#FFF7ED] p-3.5 rounded-xl border border-[#FED7AA]">
-                  <div className="flex items-center justify-between mb-1.5">
+                {/* Kolom Input Isi per Satuan (Pack Size / Rasio Konversi Bebas Semua Satuan) */}
+                <div className="bg-[#FFF7ED] p-3.5 rounded-xl border border-[#FED7AA] space-y-2.5">
+                  <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-heading">
-                      Isi dalam Satuan (Rasio Konversi ke pcs)
+                      Konversi Isi Satuan (Rasio Resep)
                     </label>
-                    <span className="text-[11px] font-bold text-[#FF6B00] bg-orange-100/90 px-2 py-0.5 rounded-md font-mono">
-                      1 {units.find((u) => u.id === matUnitId)?.name || 'satuan'} = {matPackSize.toLocaleString('id-ID')} pcs
-                    </span>
+                    {matPackSize > 1 && matRecipeUnitId && matRecipeUnitId !== matUnitId ? (
+                      <span className="text-[11px] font-bold text-[#FF6B00] bg-orange-100/90 px-2 py-0.5 rounded-md font-mono">
+                        1 {units.find((u) => u.id === matUnitId)?.symbol || 'satuan'} = {matPackSize.toLocaleString('id-ID')} {units.find((u) => u.id === matRecipeUnitId)?.symbol || 'satuan'}
+                      </span>
+                    ) : matPackSize > 1 ? (
+                      <span className="text-[11px] font-bold text-[#FF6B00] bg-orange-100/90 px-2 py-0.5 rounded-md font-mono">
+                        1 {units.find((u) => u.id === matUnitId)?.symbol || 'satuan'} = {matPackSize.toLocaleString('id-ID')} pcs
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Jumlah Isi Kemasan:
+                      </label>
                       <input
                         type="number"
                         min="1"
-                        step="1"
+                        step="any"
                         value={matPackSize}
                         onChange={(e) => setMatPackSize(Math.max(1, Number(e.target.value) || 1))}
-                        placeholder="Misal: 500 (1 pack = 500 pcs) atau 1000"
+                        placeholder="Misal: 800, 500, 750, 1000"
                         className="w-full text-xs sm:text-sm p-2 bg-white border border-[#FED7AA] rounded-xl text-heading font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/30 focus:border-[#FF6B00]"
                       />
                     </div>
-                    <span className="text-xs font-bold text-heading shrink-0 font-mono">pcs / unit</span>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        Satuan Isi / Takaran Resep:
+                      </label>
+                      <select
+                        value={matRecipeUnitId}
+                        onChange={(e) => setMatRecipeUnitId(e.target.value)}
+                        className="w-full text-xs sm:text-sm p-2 bg-white border border-[#FED7AA] rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/30 focus:border-[#FF6B00]"
+                      >
+                        <option value="">-- Sama dengan Satuan Stok --</option>
+                        {units
+                          .filter((u) => u.id !== matUnitId)
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.symbol})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-mutedtext mt-1.5 leading-snug">
-                    Berapa pcs isi dalam 1 {units.find((u) => u.id === matUnitId)?.symbol || 'satuan'} ini? (Contoh: Sedotan = 500 pcs/pack, Kantongan = 1.000 pcs/pack, Cup = 1.000 pcs/ktn). Saat resep menu memakai satuan <strong className="text-heading">pcs</strong>, sistem otomatis memotong pecahan stok secara presisi.
+
+                  <p className="text-[11px] text-mutedtext leading-relaxed">
+                    💡 Contoh: Bubuk Cokelat diisi <strong>800 Gram</strong>, Bubuk Matcha diisi <strong>500 Gram</strong>, Sirup diisi <strong>750 ml</strong>, Sedotan diisi <strong>500 pcs</strong>. Konversi ini melekat khusus pada bahan ini sehingga tidak akan bentrok dengan bahan lain.
                   </p>
                 </div>
 

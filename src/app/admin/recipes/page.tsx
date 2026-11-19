@@ -170,7 +170,9 @@ export default function AdminRecipesPage() {
       stdUnitId,
       conversions,
       mat?.pack_size,
-      units
+      units,
+      mat?.recipe_unit_id,
+      stdUnitId
     );
     const unitCostInRecipeUnit = baseUnitCost * factor;
     const subtotal = quantity * unitCostInRecipeUnit;
@@ -641,7 +643,7 @@ export default function AdminRecipesPage() {
                         {recipeItems.map((itm, idx) => {
                           const { mat, stdUnitId, stdQty, matched, unitCostInRecipeUnit, subtotal } =
                             getConvertedCostInfo(itm.raw_material_id, itm.quantity, itm.unit_id);
-                          const compatibleUnits = getCompatibleUnits(stdUnitId, units, conversions, mat?.pack_size);
+                          const compatibleUnits = getCompatibleUnits(stdUnitId, units, conversions, mat?.pack_size, mat?.recipe_unit_id);
                           const isDifferentUnit = itm.unit_id !== stdUnitId;
 
                           return (
@@ -874,7 +876,9 @@ export default function AdminRecipesPage() {
                             stdUnitId,
                             conversions,
                             mat?.pack_size,
-                            units
+                            units,
+                            mat?.recipe_unit_id,
+                            stdUnitId
                           );
                           const isConverted = itm.unit_id !== stdUnitId && matched;
 

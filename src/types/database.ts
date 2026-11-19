@@ -271,12 +271,14 @@ export interface RawMaterial {
   standard_unit_id: string;
   minimum_stock: number;
   estimated_unit_cost: number;
-  pack_size?: number; // Jumlah isi dalam 1 satuan kemasan (misal 500 pcs/pack)
+  pack_size?: number; // Jumlah isi dalam 1 satuan dasar (misal 500 pcs/pack, 800 gr/pcs, 750 ml/btl)
+  recipe_unit_id?: string | null; // Satuan takaran resep/isi (misal: Gram, Ml, Pcs)
   is_active: boolean;
   created_at: string;
   updated_at: string;
   category?: RawMaterialCategory;
   standard_unit?: Unit;
+  recipe_unit?: Unit;
 }
 
 export interface Supplier {

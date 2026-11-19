@@ -1197,7 +1197,16 @@ export const dbService = {
             convertedQuantity: stdQtyPerServing,
             factor: recipeToStockFactor,
             matched: hasConversion,
-          } = convertUnitQuantity(rItem.quantity, rItem.unit_id, stdUnitId, unitConversions, mat?.pack_size, allUnits);
+          } = convertUnitQuantity(
+            rItem.quantity,
+            rItem.unit_id,
+            stdUnitId,
+            unitConversions,
+            mat?.pack_size,
+            allUnits,
+            mat?.recipe_unit_id,
+            stdUnitId
+          );
 
           // Biaya per satuan dasar stok (mis. Rp 165.000 / kg)
           const baseUnitCost =
@@ -1807,7 +1816,10 @@ export const dbService = {
               rItm.unit_id,
               stdUnitId,
               unitConversions,
-              mat?.pack_size
+              mat?.pack_size,
+              allUnits,
+              mat?.recipe_unit_id,
+              stdUnitId
             );
             const restoredQty = roundStockQty(stdQtyPerServing * itm.quantity, 4);
             const prevBal = Number(outletStocks.find((s) => s.raw_material_id === rItm.raw_material_id)?.quantity || 0);
@@ -3550,6 +3562,7 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
+        const units = await this.getUnits();
         const { data, error } = await supabase
           .from('raw_materials')
           .select('*, category:raw_material_categories(*), standard_unit:units(*)')
@@ -3560,6 +3573,8 @@ export const dbService = {
             .map((r) => ({
               ...r,
               pack_size: Number(r.pack_size) > 0 ? Number(r.pack_size) : 1,
+              recipe_unit_id: r.recipe_unit_id || null,
+              recipe_unit: units.find((u) => u.id === r.recipe_unit_id),
             })) as RawMaterial[];
           localRawMaterials = list;
           return list;
@@ -3578,14 +3593,17 @@ export const dbService = {
       .map((r) => ({
         ...r,
         pack_size: Number(r.pack_size) > 0 ? Number(r.pack_size) : 1,
+        recipe_unit_id: r.recipe_unit_id || null,
         category: categories.find((c) => c.id === r.category_id),
         standard_unit: units.find((u) => u.id === r.standard_unit_id),
+        recipe_unit: units.find((u) => u.id === r.recipe_unit_id),
       }));
   },
 
   async createRawMaterial(payload: Partial<RawMaterial>): Promise<RawMaterial> {
     invalidatePosCache('rawMaterials');
     const packSize = Number(payload.pack_size) > 0 ? Number(payload.pack_size) : 1;
+    const recipeUnitId = payload.recipe_unit_id !== undefined ? (payload.recipe_unit_id || null) : null;
     const newRaw: RawMaterial = {
       id: payload.id || crypto.randomUUID(),
       code: payload.code || `RAW-${Math.floor(Math.random() * 900 + 100)}`,
@@ -3596,6 +3614,7 @@ export const dbService = {
       minimum_stock: payload.minimum_stock ?? 100,
       estimated_unit_cost: payload.estimated_unit_cost ?? 0,
       pack_size: packSize,
+      recipe_unit_id: recipeUnitId,
       is_active: payload.is_active ?? true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -3610,15 +3629,15 @@ export const dbService = {
           .select('*, category:raw_material_categories(*), standard_unit:units(*)')
           .single();
 
-        // If pack_size column is not yet migrated in Supabase schema cache, retry without it
-        if (error && (error.code === 'PGRST204' || String(error.message || '').includes('pack_size'))) {
-          const { pack_size: _ps, ...withoutPackSize } = newRaw;
+        // If pack_size or recipe_unit_id column is not yet migrated in Supabase schema cache, retry without it
+        if (error && (error.code === 'PGRST204' || String(error.message || '').includes('pack_size') || String(error.message || '').includes('recipe_unit_id'))) {
+          const { pack_size: _ps, recipe_unit_id: _ru, ...withoutCustomCols } = newRaw;
           const retryRes = await supabase
             .from('raw_materials')
-            .insert(withoutPackSize)
+            .insert(withoutCustomCols)
             .select('*, category:raw_material_categories(*), standard_unit:units(*)')
             .single();
-          data = retryRes.data ? ({ ...retryRes.data, pack_size: packSize } as any) : null;
+          data = retryRes.data ? ({ ...retryRes.data, pack_size: packSize, recipe_unit_id: recipeUnitId } as any) : null;
           error = retryRes.error;
         }
 
@@ -3703,6 +3722,7 @@ export const dbService = {
       payload.minimum_stock !== null;
     const syncedMin = shouldSyncOutlets ? Math.max(0, Number(payload.minimum_stock) || 0) : null;
     const packSize = payload.pack_size !== undefined ? Math.max(1, Number(payload.pack_size) || 1) : undefined;
+    const recipeUnitId = payload.recipe_unit_id !== undefined ? (payload.recipe_unit_id || null) : undefined;
 
     if (isSupabaseConfigured()) {
       try {
@@ -3714,16 +3734,20 @@ export const dbService = {
           .select('*, category:raw_material_categories(*), standard_unit:units(*)')
           .single();
 
-        // If pack_size column is not yet migrated in Supabase schema cache, retry without it
-        if (error && (error.code === 'PGRST204' || String(error.message || '').includes('pack_size'))) {
-          const { pack_size: _ps, ...withoutPackSize } = payload;
+        // If pack_size or recipe_unit_id column is not yet migrated in Supabase schema cache, retry without it
+        if (error && (error.code === 'PGRST204' || String(error.message || '').includes('pack_size') || String(error.message || '').includes('recipe_unit_id'))) {
+          const { pack_size: _ps, recipe_unit_id: _ru, ...withoutCustomCols } = payload;
           const retryRes = await supabase
             .from('raw_materials')
-            .update({ ...withoutPackSize, updated_at: now })
+            .update({ ...withoutCustomCols, updated_at: now })
             .eq('id', id)
             .select('*, category:raw_material_categories(*), standard_unit:units(*)')
             .single();
-          data = retryRes.data ? ({ ...retryRes.data, ...(packSize !== undefined ? { pack_size: packSize } : {}) } as any) : null;
+          data = retryRes.data ? ({
+            ...retryRes.data,
+            ...(packSize !== undefined ? { pack_size: packSize } : {}),
+            ...(recipeUnitId !== undefined ? { recipe_unit_id: recipeUnitId } : {}),
+          } as any) : null;
           error = retryRes.error;
         }
 
@@ -3763,6 +3787,7 @@ export const dbService = {
             ...r,
             ...payload,
             pack_size: payload.pack_size !== undefined ? Math.max(1, Number(payload.pack_size) || 1) : r.pack_size,
+            recipe_unit_id: payload.recipe_unit_id !== undefined ? (payload.recipe_unit_id || null) : r.recipe_unit_id,
             updated_at: now,
           }
         : r
@@ -6454,7 +6479,16 @@ export const dbService = {
         const mat = materials.find((m) => m.id === itm.raw_material_id);
         const un = units.find((u) => u.id === itm.unit_id) || mat?.standard_unit;
         const stdUnitId = mat?.standard_unit_id || itm.unit_id;
-        const { factor } = convertUnitQuantity(1, itm.unit_id, stdUnitId, conversions, mat?.pack_size, units);
+        const { factor } = convertUnitQuantity(
+          1,
+          itm.unit_id,
+          stdUnitId,
+          conversions,
+          mat?.pack_size,
+          units,
+          mat?.recipe_unit_id,
+          stdUnitId
+        );
 
         // unit_cost pada RecipeItem adalah biaya per 1 satuan resep (mis. Rp 165/g dari Rp 165.000/kg)
         const cost =

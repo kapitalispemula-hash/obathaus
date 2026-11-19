@@ -148,41 +148,41 @@ export function convertUnitQuantity(
   toUnitId: string,
   conversions: UnitConversion[],
   materialPackSize?: number,
-  units?: Unit[]
+  units?: Unit[],
+  materialRecipeUnitId?: string | null,
+  standardUnitId?: string
 ): { convertedQuantity: number; factor: number; matched: boolean } {
   const numericQty = Number(quantity) || 0;
   if (!fromUnitId || !toUnitId || fromUnitId === toUnitId) {
     return { convertedQuantity: numericQty, factor: 1, matched: true };
   }
 
-  // Material-specific pack size conversion (e.g. 500 pcs/pack, 1000 pcs/pack)
   const packSize = Number(materialPackSize);
-  if (Number.isFinite(packSize) && packSize > 1) {
-    const fromIsPcs = isPcsUnit(fromUnitId, units);
-    const toIsPcs = isPcsUnit(toUnitId, units);
+  const activeConversions = [...conversions];
 
-    if (fromIsPcs && !toIsPcs) {
-      // e.g. from 1 pcs -> 1/500 pack = 0.002 pack
-      const factor = 1 / packSize;
-      return {
-        convertedQuantity: roundStockQty(numericQty * factor, 6),
-        factor,
-        matched: true,
-      };
+  // Material-specific pack / content conversion (e.g. 1 pcs = 800 g, 1 pcs = 500 g, 1 btl = 750 ml, 1 pack = 500 pcs)
+  if (Number.isFinite(packSize) && packSize > 0 && packSize !== 1) {
+    let targetUnitId = materialRecipeUnitId;
+    if (!targetUnitId && units) {
+      // Default fallback: if recipe unit is not specified, default to pcs for backward compatibility
+      const pcs = units.find((u) => isPcsUnit(u.id, units));
+      if (pcs) targetUnitId = pcs.id;
     }
 
-    if (!fromIsPcs && toIsPcs) {
-      // e.g. from 1 pack -> 500 pcs
-      const factor = packSize;
-      return {
-        convertedQuantity: roundStockQty(numericQty * factor, 6),
-        factor,
-        matched: true,
-      };
+    const baseUnitId = standardUnitId || (fromUnitId === targetUnitId ? toUnitId : fromUnitId);
+
+    if (targetUnitId && baseUnitId && baseUnitId !== targetUnitId) {
+      activeConversions.push({
+        id: `mat-conv-${baseUnitId}-${targetUnitId}`,
+        from_unit_id: baseUnitId,
+        to_unit_id: targetUnitId,
+        conversion_factor: packSize,
+        created_at: '2026-10-01T00:00:00Z',
+      });
     }
   }
 
-  const factor = findConversionFactor(fromUnitId, toUnitId, conversions);
+  const factor = findConversionFactor(fromUnitId, toUnitId, activeConversions);
   if (factor === null) {
     return { convertedQuantity: numericQty, factor: 1, matched: false };
   }
@@ -197,16 +197,39 @@ export function convertUnitQuantity(
 /**
  * Returns all units reachable from `baseUnitId` via `unit_conversions`
  * (with `baseUnitId` always placed first).
+ * Supports material-specific pack size & recipe unit.
  */
 export function getCompatibleUnits(
   baseUnitId: string,
   units: Unit[],
   conversions: UnitConversion[],
-  materialPackSize?: number
+  materialPackSize?: number,
+  materialRecipeUnitId?: string | null
 ): Unit[] {
   if (!baseUnitId) return [];
 
-  const graph = buildConversionGraph(conversions);
+  const packSize = Number(materialPackSize);
+  const activeConversions = [...conversions];
+
+  if (Number.isFinite(packSize) && packSize > 0 && packSize !== 1) {
+    let targetUnitId = materialRecipeUnitId;
+    if (!targetUnitId && units) {
+      const pcs = units.find((u) => isPcsUnit(u.id, units));
+      if (pcs) targetUnitId = pcs.id;
+    }
+
+    if (targetUnitId && baseUnitId !== targetUnitId) {
+      activeConversions.push({
+        id: `mat-compat-${baseUnitId}-${targetUnitId}`,
+        from_unit_id: baseUnitId,
+        to_unit_id: targetUnitId,
+        conversion_factor: packSize,
+        created_at: '2026-10-01T00:00:00Z',
+      });
+    }
+  }
+
+  const graph = buildConversionGraph(activeConversions);
   const reachableIds = new Set<string>([baseUnitId]);
   const queue: string[] = [baseUnitId];
 
@@ -218,13 +241,6 @@ export function getCompatibleUnits(
         queue.push(edge.toUnitId);
       }
     }
-  }
-
-  // If this material has pack_size > 1, make sure PCS is always available
-  const packSize = Number(materialPackSize);
-  if (Number.isFinite(packSize) && packSize > 1) {
-    const pcsUnit = units.find((u) => isPcsUnit(u.id, units));
-    if (pcsUnit) reachableIds.add(pcsUnit.id);
   }
 
   const baseUnit = units.find((u) => u.id === baseUnitId);

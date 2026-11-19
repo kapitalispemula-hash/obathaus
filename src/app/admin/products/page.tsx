@@ -464,8 +464,9 @@ export default function AdminProductsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-6 overflow-y-auto space-y-4 bg-white">
-              {formError && (
+            <form onSubmit={handleSaveProduct} className="flex flex-col flex-1 overflow-hidden min-h-0 bg-white">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                {formError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{formError}</span>
@@ -736,8 +737,9 @@ export default function AdminProductsPage() {
                   </label>
                 </div>
               </div>
+            </div>
 
-              <div className="pt-4 border-t border-borderline flex items-center justify-between gap-3">
+              <div className="px-6 py-3.5 border-t border-borderline flex items-center justify-between gap-3 bg-[#FAFAFA] shrink-0">
                 {editingProduct ? (
                   <button
                     type="button"

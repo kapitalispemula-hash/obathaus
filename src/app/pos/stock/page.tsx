@@ -561,8 +561,8 @@ export default function PosStockPage() {
         {/* 3. Modal Permintaan Bahan ke Gudang Pusat */}
         {isOrderModalOpen && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden">
-              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+            <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00]">
                     <Plus className="w-5 h-5" />
@@ -580,7 +580,8 @@ export default function PosStockPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleCreateOrder} className="p-6 space-y-4 text-xs">
+              <form onSubmit={handleCreateOrder} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
                 <div>
                   <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
                     Bahan Baku yang Diminta
@@ -636,25 +637,26 @@ export default function PosStockPage() {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#FF6B00]"
                   />
                 </div>
+              </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsOrderModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmittingOrder}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>{isSubmittingOrder ? 'Mengirim...' : 'Kirim Permintaan'}</span>
-                  </button>
-                </div>
-              </form>
+              <div className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-end gap-3 bg-[#FAFAFA] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsOrderModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-white cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingOrder}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmittingOrder ? 'Mengirim...' : 'Kirim Permintaan'}</span>
+                </button>
+              </div>
+            </form>
             </div>
           </div>
         )}
@@ -662,7 +664,7 @@ export default function PosStockPage() {
         {isReturnModalOpen && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-[#FF6B00]">
                     <RotateCcw className="w-5 h-5" />
@@ -682,7 +684,8 @@ export default function PosStockPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitReturn} className="p-6 overflow-y-auto space-y-4 text-xs">
+              <form onSubmit={handleSubmitReturn} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
                 <div>
                   <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
                     Alasan Retur Barang <span className="text-rose-500">*</span>
@@ -787,25 +790,26 @@ export default function PosStockPage() {
                     );
                   })}
                 </div>
+              </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsReturnModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmittingReturn}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>{isSubmittingReturn ? 'Mengirim Retur...' : 'Kirim Pengajuan Retur'}</span>
-                  </button>
-                </div>
-              </form>
+              <div className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-end gap-3 bg-[#FAFAFA] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsReturnModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-white cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReturn}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{isSubmittingReturn ? 'Mengirim Retur...' : 'Kirim Pengajuan Retur'}</span>
+                </button>
+              </div>
+            </form>
             </div>
           </div>
         )}

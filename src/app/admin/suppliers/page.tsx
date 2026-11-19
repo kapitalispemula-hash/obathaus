@@ -286,7 +286,7 @@ export default function AdminSuppliersPage() {
         {isModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-heading text-sm sm:text-base">
                   {editingSupplier ? 'Edit Data Supplier' : 'Tambah Supplier Baru'}
                 </h3>
@@ -299,13 +299,14 @@ export default function AdminSuppliersPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSave} className="p-6 space-y-4 overflow-y-auto">
-                {formError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{formError}</span>
-                  </div>
-                )}
+              <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  {formError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -418,24 +419,25 @@ export default function AdminSuppliersPage() {
                     Supplier Aktif untuk Pengadaan PO
                   </label>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
-                  >
-                    {isSaving ? 'Menyimpan...' : 'Simpan Supplier'}
-                  </button>
-                </div>
-              </form>
+              <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {isSaving ? 'Menyimpan...' : 'Simpan Supplier'}
+                </button>
+              </div>
+            </form>
             </div>
           </div>
         )}

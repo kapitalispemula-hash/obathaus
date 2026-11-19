@@ -1408,8 +1408,8 @@ export default function WarehouseReturnsPage() {
         {/* 6. Modal Detail Retur (Read Only) */}
         {selectedReturn && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden">
-              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+            <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
                     <FileText className="w-5 h-5" />
@@ -1427,7 +1427,7 @@ export default function WarehouseReturnsPage() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-4 text-xs">
+              <div className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <div>
                     <span className="text-slate-500 block">Cabang Pengirim:</span>
@@ -1506,27 +1506,27 @@ export default function WarehouseReturnsPage() {
                     </table>
                   </div>
                 </div>
+              </div>
 
-                <div className="pt-2 flex items-center justify-between gap-2">
-                  {selectedReturn.status === 'accepted' ? (
-                    <button
-                      type="button"
-                      onClick={() => openCreateSupplierReturnModal(selectedReturn)}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 text-[#FF6B00] border border-orange-200 text-xs font-bold cursor-pointer"
-                    >
-                      <Factory className="w-3.5 h-3.5" />
-                      <span>Teruskan ke Retur Supplier</span>
-                    </button>
-                  ) : (
-                    <span />
-                  )}
+              <div className="px-6 py-3.5 border-t border-[#ECEEF1] flex items-center justify-between gap-2 bg-[#FAFAFA] shrink-0">
+                {selectedReturn.status === 'accepted' ? (
                   <button
-                    onClick={() => setSelectedReturn(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
+                    type="button"
+                    onClick={() => openCreateSupplierReturnModal(selectedReturn)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FFF7ED] hover:bg-orange-100 text-[#FF6B00] border border-orange-200 text-xs font-bold cursor-pointer"
                   >
-                    Tutup
+                    <Factory className="w-3.5 h-3.5" />
+                    <span>Teruskan ke Retur Supplier</span>
                   </button>
-                </div>
+                ) : (
+                  <span />
+                )}
+                <button
+                  onClick={() => setSelectedReturn(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
+                >
+                  Tutup
+                </button>
               </div>
             </div>
           </div>
@@ -1767,8 +1767,8 @@ export default function WarehouseReturnsPage() {
         {/* 8. Modal Detail Retur Supplier */}
         {selectedSupplierReturn && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden">
-              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+            <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-slate-800">
                     <Factory className="w-5 h-5" />
@@ -1787,7 +1787,7 @@ export default function WarehouseReturnsPage() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-4 text-xs">
+              <div className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <div>
                     <span className="text-slate-500 block">Supplier Tujuan:</span>
@@ -1855,16 +1855,16 @@ export default function WarehouseReturnsPage() {
                     </table>
                   </div>
                 </div>
+              </div>
 
-                <div className="pt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSupplierReturn(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
-                  >
-                    Tutup
-                  </button>
-                </div>
+              <div className="px-6 py-3.5 border-t border-[#ECEEF1] flex justify-end bg-[#FAFAFA] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSupplierReturn(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
+                >
+                  Tutup
+                </button>
               </div>
             </div>
           </div>

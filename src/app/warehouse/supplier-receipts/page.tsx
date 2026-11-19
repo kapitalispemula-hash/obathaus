@@ -282,7 +282,7 @@ export default function WarehouseSupplierReceiptsPage() {
         {isModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <div>
                   <h3 className="font-bold text-heading text-base">Catat Penerimaan Barang Masuk</h3>
                   <p className="text-xs text-mutedtext">Verifikasi fisik barang yang tiba dari supplier</p>
@@ -296,13 +296,14 @@ export default function WarehouseSupplierReceiptsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveReceipt} className="p-6 space-y-4 overflow-y-auto">
-                {formError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{formError}</span>
-                  </div>
-                )}
+              <form onSubmit={handleSaveReceipt} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  {formError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -415,91 +416,92 @@ export default function WarehouseSupplierReceiptsPage() {
                     ))}
                   </div>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
-                  >
-                    {isSaving ? 'Menyimpan & Menambah Stok...' : 'Konfirmasi Penerimaan Fisik'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {isSaving ? 'Menyimpan & Menambah Stok...' : 'Konfirmasi Penerimaan Fisik'}
+                </button>
+              </div>
+            </form>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Modal Detail Receipt */}
-        {selectedReceipt && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+      {/* Modal Detail Receipt */}
+      {selectedReceipt && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
+              <div>
+                <h3 className="font-bold text-heading text-base font-mono text-[#FF6B00]">
+                  {selectedReceipt.receipt_number}
+                </h3>
+                <p className="text-xs text-mutedtext">Bukti Penerimaan Barang Supplier</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedReceipt(null)}
+                className="w-8 h-8 flex items-center justify-center text-mutedtext hover:text-heading rounded-full hover:bg-[#FAFAFA]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
+              <div className="grid grid-cols-2 gap-3 bg-[#FAFAFA] p-3 rounded-xl border border-borderline">
                 <div>
-                  <h3 className="font-bold text-heading text-base font-mono text-[#FF6B00]">
-                    {selectedReceipt.receipt_number}
-                  </h3>
-                  <p className="text-xs text-mutedtext">Bukti Penerimaan Barang Supplier</p>
+                  <span className="text-mutedtext">No. DO Supplier:</span>
+                  <p className="font-bold text-heading mt-0.5">{selectedReceipt.delivery_order_number || '-'}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReceipt(null)}
-                  className="w-8 h-8 flex items-center justify-center text-mutedtext hover:text-heading rounded-full hover:bg-[#FAFAFA]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div>
+                  <span className="text-mutedtext">Referensi PO:</span>
+                  <p className="font-mono font-bold text-heading mt-0.5">{selectedReceipt.supplier_po?.po_number || '-'}</p>
+                </div>
               </div>
 
-              <div className="p-6 space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-3 bg-[#FAFAFA] p-3 rounded-xl border border-borderline">
-                  <div>
-                    <span className="text-mutedtext">No. DO Supplier:</span>
-                    <p className="font-bold text-heading mt-0.5">{selectedReceipt.delivery_order_number || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-mutedtext">Referensi PO:</span>
-                    <p className="font-mono font-bold text-heading mt-0.5">{selectedReceipt.supplier_po?.po_number || '-'}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-bold text-heading mb-2">Item Bahan Diterima:</h4>
-                  <div className="divide-y divide-borderline border border-borderline rounded-xl overflow-hidden">
-                    {selectedReceipt.items?.map((it) => (
-                      <div key={it.id} className="p-3 flex items-center justify-between">
-                        <div>
-                          <p className="font-bold text-heading">{it.raw_material?.name || it.raw_material_id}</p>
-                          {it.batch_number && (
-                            <p className="text-[11px] text-mutedtext font-mono">
-                              Batch: {it.batch_number} {it.expiry_date ? `• Exp: ${it.expiry_date}` : ''}
-                            </p>
-                          )}
-                        </div>
-                        <p className="font-mono font-bold text-emerald-600">
-                          +{it.quantity_received.toLocaleString()}
-                        </p>
+              <div>
+                <h4 className="font-bold text-heading mb-2">Item Bahan Diterima:</h4>
+                <div className="divide-y divide-borderline border border-borderline rounded-xl overflow-hidden">
+                  {selectedReceipt.items?.map((it) => (
+                    <div key={it.id} className="p-3 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-heading">{it.raw_material?.name || it.raw_material_id}</p>
+                        {it.batch_number && (
+                          <p className="text-[11px] text-mutedtext font-mono">
+                            Batch: {it.batch_number} {it.expiry_date ? `• Exp: ${it.expiry_date}` : ''}
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                      <p className="font-mono font-bold text-emerald-600">
+                        +{it.quantity_received.toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
+            </div>
 
-              <div className="px-6 py-3 border-t border-borderline flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setSelectedReceipt(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-heading rounded-xl text-xs font-bold"
-                >
-                  Tutup
-                </button>
-              </div>
+            <div className="px-6 py-3.5 border-t border-borderline flex justify-end bg-[#FAFAFA] shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedReceipt(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-heading rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
             </div>
           </div>
         )}

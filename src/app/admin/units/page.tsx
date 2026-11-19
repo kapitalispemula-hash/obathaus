@@ -376,8 +376,8 @@ export default function AdminUnitsPage() {
         {/* Modal Unit */}
         {isUnitModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-heading text-sm sm:text-base">
                   {editingUnit ? 'Edit Satuan Standar' : 'Tambah Satuan Baru'}
                 </h3>
@@ -390,71 +390,73 @@ export default function AdminUnitsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveUnit} className="p-6 space-y-4">
-                {unitFormError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{unitFormError}</span>
-                  </div>
-                )}
+              <form onSubmit={handleSaveUnit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  {unitFormError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{unitFormError}</span>
+                    </div>
+                  )}
 
-                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">
+                        Kode Satuan *
+                      </label>
+                      <input
+                        type="text"
+                        value={unitCode}
+                        onChange={(e) => setUnitCode(e.target.value)}
+                        placeholder="GRM"
+                        className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading uppercase font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">
+                        Simbol *
+                      </label>
+                      <input
+                        type="text"
+                        value={unitSymbol}
+                        onChange={(e) => setUnitSymbol(e.target.value)}
+                        placeholder="g"
+                        className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-heading mb-1">
-                      Kode Satuan *
+                      Nama Satuan Lengkap *
                     </label>
                     <input
                       type="text"
-                      value={unitCode}
-                      onChange={(e) => setUnitCode(e.target.value)}
-                      placeholder="GRM"
-                      className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading uppercase font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                      value={unitName}
+                      onChange={(e) => setUnitName(e.target.value)}
+                      placeholder="Gram"
+                      className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-heading mb-1">
-                      Simbol *
+                      Kategori Fisik
                     </label>
-                    <input
-                      type="text"
-                      value={unitSymbol}
-                      onChange={(e) => setUnitSymbol(e.target.value)}
-                      placeholder="g"
-                      className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                    />
+                    <select
+                      value={unitType}
+                      onChange={(e) => setUnitType(e.target.value as UnitType)}
+                      className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    >
+                      <option value="weight">Berat / Massa (Gram, Kg, Ton)</option>
+                      <option value="volume">Volume Cair (Mililiter, Liter)</option>
+                      <option value="piece">Kuantitas Buah / Kemasan (Pcs, Pack, Dus)</option>
+                    </select>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">
-                    Nama Satuan Lengkap *
-                  </label>
-                  <input
-                    type="text"
-                    value={unitName}
-                    onChange={(e) => setUnitName(e.target.value)}
-                    placeholder="Gram"
-                    className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">
-                    Kategori Fisik
-                  </label>
-                  <select
-                    value={unitType}
-                    onChange={(e) => setUnitType(e.target.value as UnitType)}
-                    className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  >
-                    <option value="weight">Berat / Massa (Gram, Kg, Ton)</option>
-                    <option value="volume">Volume Cair (Mililiter, Liter)</option>
-                    <option value="piece">Kuantitas Buah / Kemasan (Pcs, Pack, Dus)</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
+                <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsUnitModalOpen(false)}
@@ -478,8 +480,8 @@ export default function AdminUnitsPage() {
         {/* Modal Conversion */}
         {isConvModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-heading text-sm sm:text-base">
                   Tambah Aturan Konversi Satuan
                 </h3>
@@ -492,66 +494,68 @@ export default function AdminUnitsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveConversion} className="p-6 space-y-4">
-                {convFormError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{convFormError}</span>
+              <form onSubmit={handleSaveConversion} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  {convFormError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{convFormError}</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-bold text-heading mb-1">
+                      Satuan Pengadaan (Dari Satuan Besar) *
+                    </label>
+                    <select
+                      value={fromUnitId}
+                      onChange={(e) => setFromUnitId(e.target.value)}
+                      className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    >
+                      {units.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.symbol})
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">
-                    Satuan Pengadaan (Dari Satuan Besar) *
-                  </label>
-                  <select
-                    value={fromUnitId}
-                    onChange={(e) => setFromUnitId(e.target.value)}
-                    className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.symbol})
-                      </option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="block text-xs font-bold text-heading mb-1">
+                      Faktor Pengali (Berapa Banyak Isi di Dalamnya) *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={convFactor}
+                      onChange={(e) => setConvFactor(Number(e.target.value))}
+                      placeholder="Contoh: 1000 atau 50"
+                      className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    />
+                    <p className="text-[11px] text-mutedtext mt-1">
+                      Contoh: 1 Kilogram = 1000 Gram, 1 Pack = 50 Pcs.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-heading mb-1">
+                      Satuan Resep / Target (Ke Satuan Kecil) *
+                    </label>
+                    <select
+                      value={toUnitId}
+                      onChange={(e) => setToUnitId(e.target.value)}
+                      className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    >
+                      {units.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.symbol})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">
-                    Faktor Pengali (Berapa Banyak Isi di Dalamnya) *
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={convFactor}
-                    onChange={(e) => setConvFactor(Number(e.target.value))}
-                    placeholder="Contoh: 1000 atau 50"
-                    className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  />
-                  <p className="text-[11px] text-mutedtext mt-1">
-                    Contoh: 1 Kilogram = 1000 Gram, 1 Pack = 50 Pcs.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">
-                    Satuan Resep / Target (Ke Satuan Kecil) *
-                  </label>
-                  <select
-                    value={toUnitId}
-                    onChange={(e) => setToUnitId(e.target.value)}
-                    className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.symbol})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
+                <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsConvModalOpen(false)}

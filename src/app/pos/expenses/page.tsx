@@ -431,7 +431,7 @@ export default function PosExpensesPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white shrink-0">
               <div>
                 <h3 className="font-bold text-heading text-base">
                   {editingExp ? 'Edit Pengeluaran Cabang' : 'Catat Pengeluaran Cabang'}
@@ -448,13 +448,14 @@ export default function PosExpensesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-4 bg-white">
-              {formError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{formError}</span>
-                </div>
-              )}
+            <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden min-h-0 bg-white">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                {formError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
 
               <div>
                 <label className="block text-xs font-bold text-heading mb-1">
@@ -527,24 +528,25 @@ export default function PosExpensesPage() {
                   className="w-full text-xs sm:text-sm p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
                 />
               </div>
+            </div>
 
-              <div className="pt-4 border-t border-borderline flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-mutedtext hover:text-heading hover:bg-canvas rounded-xl cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
-                >
-                  {isSaving ? 'Menyimpan...' : 'Simpan Pengeluaran'}
-                </button>
-              </div>
-            </form>
+            <div className="px-6 py-3.5 border-t border-borderline flex items-center justify-end gap-3 bg-[#FAFAFA] shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-mutedtext hover:text-heading hover:bg-canvas rounded-xl cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+              >
+                {isSaving ? 'Menyimpan...' : 'Simpan Pengeluaran'}
+              </button>
+            </div>
+          </form>
           </div>
         </div>
       )}

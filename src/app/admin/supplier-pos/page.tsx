@@ -607,7 +607,7 @@ export default function AdminSupplierPOsPage() {
         {selectedPO && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <div>
                   <h3 className="font-bold text-heading text-base font-mono text-[#FF6B00]">
                     {selectedPO.po_number}
@@ -771,8 +771,8 @@ export default function AdminSupplierPOsPage() {
         {/* Modal Alasan Penolakan */}
         {rejectReasonModalOpen && poToReject && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <div>
                   <h3 className="font-bold text-heading text-sm">Tolak Permohonan PO</h3>
                   <p className="text-xs text-mutedtext">{poToReject.po_number}</p>
@@ -786,7 +786,7 @@ export default function AdminSupplierPOsPage() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-3">
+              <div className="p-6 space-y-3 overflow-y-auto flex-1">
                 <p className="text-xs text-mutedtext leading-relaxed">
                   Tuliskan alasan penolakan agar Operator Gudang Pusat dapat merevisi kuantitas atau pemilihan vendor:
                 </p>
@@ -799,7 +799,7 @@ export default function AdminSupplierPOsPage() {
                 />
               </div>
 
-              <div className="px-6 py-4 border-t border-borderline bg-[#FAFAFA] flex items-center justify-end gap-2">
+              <div className="px-6 py-4 border-t border-borderline bg-[#FAFAFA] flex items-center justify-end gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setRejectReasonModalOpen(false)}

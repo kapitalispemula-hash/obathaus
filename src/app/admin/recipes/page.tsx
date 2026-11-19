@@ -569,8 +569,9 @@ export default function AdminRecipesPage() {
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSaveRecipe} className="p-6 overflow-y-auto space-y-5 flex-1">
-                {formError && (
+              <form onSubmit={handleSaveRecipe} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                  {formError && (
                   <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <span>{formError}</span>
@@ -770,26 +771,27 @@ export default function AdminRecipesPage() {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
                   />
                 </div>
+              </div>
 
-                {/* Actions */}
-                <div className="pt-4 border-t border-borderline flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-100"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="flex items-center gap-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-md shadow-orange-500/20 disabled:opacity-50"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>{isSaving ? 'Menyimpan...' : 'Simpan Resep Menu'}</span>
-                  </button>
-                </div>
-              </form>
+              {/* Actions Pinned Footer */}
+              <div className="px-6 py-4 border-t border-borderline flex items-center justify-end gap-3 bg-slate-50/50 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-100"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex items-center gap-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-md shadow-orange-500/20 disabled:opacity-50"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{isSaving ? 'Menyimpan...' : 'Simpan Resep Menu'}</span>
+                </button>
+              </div>
+            </form>
             </div>
           </div>
         )}
@@ -818,7 +820,7 @@ export default function AdminRecipesPage() {
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
                 {/* Profit bar */}
                 <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div>
@@ -923,15 +925,15 @@ export default function AdminRecipesPage() {
                     </p>
                   </div>
                 )}
+              </div>
 
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={() => setViewingRecipe(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
-                  >
-                    Tutup
-                  </button>
-                </div>
+              <div className="px-6 py-3.5 border-t border-borderline flex items-center justify-end bg-slate-50/50 shrink-0">
+                <button
+                  onClick={() => setViewingRecipe(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 cursor-pointer"
+                >
+                  Tutup
+                </button>
               </div>
             </div>
           </div>

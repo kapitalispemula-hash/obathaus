@@ -484,7 +484,7 @@ export default function WarehouseStockOpnamePage() {
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
               {/* Header */}
-              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00]">
                     <ClipboardCheck className="w-5 h-5" />
@@ -505,13 +505,14 @@ export default function WarehouseStockOpnamePage() {
               </div>
 
               {/* Form & Table */}
-              <form onSubmit={handleSubmitNewOpname} className="p-6 overflow-y-auto space-y-5 flex-1">
-                {formError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>{formError}</span>
-                  </div>
-                )}
+              <form onSubmit={handleSubmitNewOpname} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 overflow-y-auto space-y-5 flex-1">
+                  {formError && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
 
                 {/* Segregation of Duties Banner */}
                 <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
@@ -623,20 +624,21 @@ export default function WarehouseStockOpnamePage() {
                     </table>
                   </div>
                 </div>
+              </div>
 
                 {/* Actions */}
-                <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+                <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3 bg-slate-50/50 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-100"
+                    className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-medium hover:bg-slate-100 cursor-pointer"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex items-center gap-2 bg-[#FF6B00] hover:bg-[#e05e00] text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-md shadow-orange-500/20 disabled:opacity-50"
+                    className="flex items-center gap-2 bg-[#FF6B00] hover:bg-[#e05e00] text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-md shadow-orange-500/20 disabled:opacity-50 cursor-pointer"
                   >
                     <ClipboardCheck className="w-4 h-4" />
                     <span>{isSubmitting ? 'Menyimpan Sesi...' : 'Ajukan Hasil Opname ke Admin'}</span>
@@ -652,7 +654,7 @@ export default function WarehouseStockOpnamePage() {
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
               {/* Header */}
-              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+              <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00]">
                     <ClipboardCheck className="w-5 h-5" />
@@ -764,7 +766,7 @@ export default function WarehouseStockOpnamePage() {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 border-t border-[#ECEEF1] bg-slate-50 flex items-center justify-between">
+              <div className="px-6 py-4 border-t border-[#ECEEF1] bg-slate-50 flex items-center justify-between shrink-0">
                 <button
                   type="button"
                   onClick={() => setSelectedOpname(null)}

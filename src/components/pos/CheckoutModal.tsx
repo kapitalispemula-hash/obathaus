@@ -125,7 +125,7 @@ export function CheckoutModal({
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white">
+        <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#FF6B00] text-white flex items-center justify-center shadow-sm shadow-orange-500/20">
               <Banknote className="w-5 h-5" />
@@ -346,7 +346,7 @@ export function CheckoutModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-borderline bg-white flex items-center justify-between gap-3">
+        <div className="px-6 py-4 border-t border-borderline bg-white flex items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}

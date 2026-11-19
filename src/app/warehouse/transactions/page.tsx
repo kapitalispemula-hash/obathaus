@@ -838,7 +838,7 @@ export default function WarehouseTransactionsPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
             <div className="bg-white rounded-3xl max-w-2xl w-full border border-[#ECEEF1] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               {/* Modal Header */}
-              <div className="p-6 border-b border-[#ECEEF1] flex items-center justify-between gap-4 bg-[#FAFAFA]">
+              <div className="p-6 border-b border-[#ECEEF1] flex items-center justify-between gap-4 bg-[#FAFAFA] shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-[#FFF7ED] border border-[#FED7AA] text-[#FF6B00] flex items-center justify-center shrink-0">
                     <History className="w-5 h-5" />
@@ -953,7 +953,7 @@ export default function WarehouseTransactionsPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="p-4 bg-[#FAFAFA] border-t border-[#ECEEF1] flex justify-end">
+              <div className="p-4 bg-[#FAFAFA] border-t border-[#ECEEF1] flex justify-end shrink-0">
                 <button
                   type="button"
                   onClick={() => setSelectedTransaction(null)}

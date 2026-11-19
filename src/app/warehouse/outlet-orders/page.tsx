@@ -237,8 +237,8 @@ export default function WarehouseOutletOrdersPage() {
         {/* Modal Detail Order */}
         {selectedOrder && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+            <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <div>
                   <h3 className="font-bold text-heading text-base font-mono text-[#FF6B00]">
                     {selectedOrder.order_number}
@@ -254,7 +254,7 @@ export default function WarehouseOutletOrdersPage() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-4 text-xs">
+              <div className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
                 <div className="bg-[#FAFAFA] p-3 rounded-xl border border-borderline">
                   <p className="text-mutedtext">Catatan Pemesanan:</p>
                   <p className="font-bold text-heading mt-0.5">{selectedOrder.notes || 'Tidak ada catatan tambahan'}</p>
@@ -280,7 +280,7 @@ export default function WarehouseOutletOrdersPage() {
                 </div>
               </div>
 
-              <div className="px-6 py-3 border-t border-borderline flex items-center justify-between">
+              <div className="px-6 py-3.5 border-t border-borderline flex items-center justify-between bg-[#FAFAFA] shrink-0">
                 <div>
                   {selectedOrder.status === 'submitted' && (
                     <button

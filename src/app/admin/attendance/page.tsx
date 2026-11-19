@@ -1363,80 +1363,82 @@ export default function AdminAttendancePage() {
         ================================================================== */}
         {isShiftModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-borderline p-6 space-y-4 animate-in zoom-in-95">
-              <div className="flex items-center justify-between border-b border-borderline pb-3">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-sm text-heading">
                   {editingShift ? 'Edit Shift Kerja' : 'Tambah Shift Kerja Baru'}
                 </h3>
-                <button onClick={() => setIsShiftModalOpen(false)} className="text-mutedtext hover:text-heading">
+                <button onClick={() => setIsShiftModalOpen(false)} className="text-mutedtext hover:text-heading cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveShift} className="space-y-3.5">
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">Nama Shift *</label>
-                  <input
-                    type="text"
-                    value={shiftName}
-                    onChange={(e) => setShiftName(e.target.value)}
-                    placeholder="Contoh: Shift Pagi Outlet"
-                    required
-                    className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:border-[#FF6B00]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleSaveShift} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
                   <div>
-                    <label className="block text-xs font-bold text-heading mb-1">Jam Masuk *</label>
+                    <label className="block text-xs font-bold text-heading mb-1">Nama Shift *</label>
                     <input
-                      type="time"
-                      value={shiftStart}
-                      onChange={(e) => setShiftStart(e.target.value)}
+                      type="text"
+                      value={shiftName}
+                      onChange={(e) => setShiftName(e.target.value)}
+                      placeholder="Contoh: Shift Pagi Outlet"
                       required
-                      className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:border-[#FF6B00]"
+                      className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:border-[#FF6B00]"
                     />
                   </div>
 
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">Jam Masuk *</label>
+                      <input
+                        type="time"
+                        value={shiftStart}
+                        onChange={(e) => setShiftStart(e.target.value)}
+                        required
+                        className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:border-[#FF6B00]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">Jam Pulang *</label>
+                      <input
+                        type="time"
+                        value={shiftEnd}
+                        onChange={(e) => setShiftEnd(e.target.value)}
+                        required
+                        className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:border-[#FF6B00]"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-xs font-bold text-heading mb-1">Jam Pulang *</label>
+                    <label className="block text-xs font-bold text-heading mb-1">Toleransi Keterlambatan (Menit)</label>
                     <input
-                      type="time"
-                      value={shiftEnd}
-                      onChange={(e) => setShiftEnd(e.target.value)}
-                      required
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={shiftTolerance}
+                      onChange={(e) => setShiftTolerance(parseInt(e.target.value, 10) || 0)}
                       className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:border-[#FF6B00]"
                     />
+                    <p className="text-[10px] text-mutedtext mt-1">
+                      Lewat dari menit ini, sistem otomatis menandai status kehadiran sebagai &quot;Terlambat&quot;.
+                    </p>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">Toleransi Keterlambatan (Menit)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={60}
-                    value={shiftTolerance}
-                    onChange={(e) => setShiftTolerance(parseInt(e.target.value, 10) || 0)}
-                    className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-mono font-bold focus:outline-none focus:border-[#FF6B00]"
-                  />
-                  <p className="text-[10px] text-mutedtext mt-1">
-                    Lewat dari menit ini, sistem otomatis menandai status kehadiran sebagai &quot;Terlambat&quot;.
-                  </p>
-                </div>
-
-                <div className="pt-2 flex gap-2">
+                <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsShiftModalOpen(false)}
-                    className="flex-1 py-2 rounded-xl border border-borderline text-xs font-bold text-mutedtext hover:bg-slate-50"
+                    className="px-4 py-2 rounded-xl border border-borderline text-xs font-bold text-mutedtext hover:bg-white cursor-pointer"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingShift}
-                    className="flex-1 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-xs cursor-pointer"
+                    className="px-5 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-xs cursor-pointer disabled:opacity-50"
                   >
                     {isSavingShift ? 'Menyimpan...' : 'Simpan Shift'}
                   </button>
@@ -1451,93 +1453,95 @@ export default function AdminAttendancePage() {
         ================================================================== */}
         {isGpsModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-borderline p-6 space-y-4 animate-in zoom-in-95">
-              <div className="flex items-center justify-between border-b border-borderline pb-3">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-[#FF6B00]" />
                   <h3 className="font-bold text-sm text-heading">Atur Titik GPS Geofencing</h3>
                 </div>
-                <button onClick={() => setIsGpsModalOpen(false)} className="text-mutedtext hover:text-heading">
+                <button onClick={() => setIsGpsModalOpen(false)} className="text-mutedtext hover:text-heading cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div>
-                <span className="text-xs font-bold text-[#FF6B00] block">{editingLocName}</span>
-                <p className="text-[11px] text-mutedtext">
-                  Tentukan titik tengah dan radius absensi untuk lokasi ini.
-                </p>
-              </div>
-
-              {/* Quick Detect Current Location Button */}
-              <button
-                type="button"
-                onClick={detectAdminCurrentGps}
-                disabled={isDetectingCurrentGps}
-                className="w-full py-2.5 px-3 bg-[#FFF7ED] hover:bg-[#FFEDD5] border border-[#FED7AA] text-[#C2410C] rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <Compass className={`w-4 h-4 ${isDetectingCurrentGps ? 'animate-spin' : ''}`} />
-                <span>{isDetectingCurrentGps ? 'Membaca GPS...' : '📍 Ambil Titik Lokasi Saya Saat Ini'}</span>
-              </button>
-
-              {gpsDetectionMsg && (
-                <p className="text-[11px] text-emerald-600 font-medium text-center">
-                  {gpsDetectionMsg}
-                </p>
-              )}
-
-              <form onSubmit={handleSaveGps} className="space-y-3.5">
-                <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleSaveGps} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
                   <div>
-                    <label className="block text-xs font-bold text-heading mb-1">Latitude *</label>
-                    <input
-                      type="text"
-                      value={locLat}
-                      onChange={(e) => setLocLat(e.target.value)}
-                      placeholder="-3.432100"
-                      required
-                      className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
-                    />
+                    <span className="text-xs font-bold text-[#FF6B00] block">{editingLocName}</span>
+                    <p className="text-[11px] text-mutedtext">
+                      Tentukan titik tengah dan radius absensi untuk lokasi ini.
+                    </p>
+                  </div>
+
+                  {/* Quick Detect Current Location Button */}
+                  <button
+                    type="button"
+                    onClick={detectAdminCurrentGps}
+                    disabled={isDetectingCurrentGps}
+                    className="w-full py-2.5 px-3 bg-[#FFF7ED] hover:bg-[#FFEDD5] border border-[#FED7AA] text-[#C2410C] rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Compass className={`w-4 h-4 ${isDetectingCurrentGps ? 'animate-spin' : ''}`} />
+                    <span>{isDetectingCurrentGps ? 'Membaca GPS...' : '📍 Ambil Titik Lokasi Saya Saat Ini'}</span>
+                  </button>
+
+                  {gpsDetectionMsg && (
+                    <p className="text-[11px] text-emerald-600 font-medium text-center">
+                      {gpsDetectionMsg}
+                    </p>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">Latitude *</label>
+                      <input
+                        type="text"
+                        value={locLat}
+                        onChange={(e) => setLocLat(e.target.value)}
+                        placeholder="-3.432100"
+                        required
+                        className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">Longitude *</label>
+                      <input
+                        type="text"
+                        value={locLng}
+                        onChange={(e) => setLocLng(e.target.value)}
+                        placeholder="119.345600"
+                        required
+                        className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-heading mb-1">Longitude *</label>
+                    <label className="block text-xs font-bold text-heading mb-1">Radius Maksimal (Meter)</label>
                     <input
-                      type="text"
-                      value={locLng}
-                      onChange={(e) => setLocLng(e.target.value)}
-                      placeholder="119.345600"
-                      required
+                      type="number"
+                      min={20}
+                      max={500}
+                      value={locRadius}
+                      onChange={(e) => setLocRadius(parseInt(e.target.value, 10) || 100)}
                       className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
                     />
+                    <p className="text-[10px] text-mutedtext mt-1">Standar toleransi F&amp;B yang direkomendasikan adalah 100 meter.</p>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">Radius Maksimal (Meter)</label>
-                  <input
-                    type="number"
-                    min={20}
-                    max={500}
-                    value={locRadius}
-                    onChange={(e) => setLocRadius(parseInt(e.target.value, 10) || 100)}
-                    className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
-                  />
-                  <p className="text-[10px] text-mutedtext mt-1">Standar toleransi F&amp;B yang direkomendasikan adalah 100 meter.</p>
-                </div>
-
-                <div className="pt-2 flex gap-2">
+                <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsGpsModalOpen(false)}
-                    className="flex-1 py-2 rounded-xl border border-borderline text-xs font-bold text-mutedtext hover:bg-slate-50"
+                    className="px-4 py-2 rounded-xl border border-borderline text-xs font-bold text-mutedtext hover:bg-white cursor-pointer"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingGps}
-                    className="flex-1 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-xs cursor-pointer"
+                    className="px-5 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-xs cursor-pointer disabled:opacity-50"
                   >
                     {isSavingGps ? 'Menyimpan...' : 'Simpan Koordinat'}
                   </button>
@@ -1552,146 +1556,148 @@ export default function AdminAttendancePage() {
         ================================================================== */}
         {isEmpModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-borderline p-6 space-y-4 animate-in zoom-in-95">
-              <div className="flex items-center justify-between border-b border-borderline pb-3">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-sm text-heading">
                   {editingEmp ? 'Edit Data Karyawan Absen' : 'Tambah Karyawan Baru'}
                 </h3>
-                <button onClick={() => setIsEmpModalOpen(false)} className="text-mutedtext hover:text-heading">
+                <button onClick={() => setIsEmpModalOpen(false)} className="text-mutedtext hover:text-heading cursor-pointer">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveEmp} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-heading mb-1">ID Karyawan *</label>
-                    <input
-                      type="text"
-                      value={empCode}
-                      onChange={(e) => setEmpCode(e.target.value.toUpperCase())}
-                      placeholder="EMP-01"
-                      required
-                      className="w-full text-xs font-mono font-bold uppercase p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
-                    />
+              <form onSubmit={handleSaveEmp} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">ID Karyawan *</label>
+                      <input
+                        type="text"
+                        value={empCode}
+                        onChange={(e) => setEmpCode(e.target.value.toUpperCase())}
+                        placeholder="EMP-01"
+                        required
+                        className="w-full text-xs font-mono font-bold uppercase p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">
+                        PIN Absen (4-6 Angka) {editingEmp ? '(Opsional)' : '*'}
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={empPin}
+                        onChange={(e) => setEmpPin(e.target.value)}
+                        placeholder={editingEmp ? 'Kosongkan jika tetap PIN lama' : '1234'}
+                        required={!editingEmp}
+                        className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-heading mb-1">
-                      PIN Absen (4-6 Angka) {editingEmp ? '(Opsional)' : '*'}
+                    <label className="block text-xs font-bold text-heading mb-1">Nama Lengkap *</label>
+                    <input
+                      type="text"
+                      value={empName}
+                      onChange={(e) => setEmpName(e.target.value)}
+                      placeholder="Contoh: Budi Santoso"
+                      required
+                      className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:border-[#FF6B00]"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">Jabatan / Role</label>
+                      <select
+                        value={empRole}
+                        onChange={(e) => setEmpRole(e.target.value)}
+                        className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-semibold focus:outline-none focus:border-[#FF6B00]"
+                      >
+                        <option value="Head Barista">Head Barista</option>
+                        <option value="Barista">Barista</option>
+                        <option value="Kasir Outlet">Kasir Outlet</option>
+                        <option value="Kitchen / Cook">Kitchen / Cook</option>
+                        <option value="Staf Logistik Gudang">Staf Logistik Gudang</option>
+                        <option value="Kurir / Dispatch">Kurir / Dispatch</option>
+                        <option value="Helper & Cleaner">Helper &amp; Cleaner</option>
+                        <option value="Supervisor Outlet">Supervisor Outlet</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">No. WhatsApp / HP</label>
+                      <input
+                        type="text"
+                        value={empPhone}
+                        onChange={(e) => setEmpPhone(e.target.value)}
+                        placeholder="0812-3456-7890"
+                        className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">Tipe Unit Penempatan</label>
+                      <select
+                        value={empLocType}
+                        onChange={(e) => {
+                          const val = e.target.value as LocationType;
+                          setEmpLocType(val);
+                          setEmpLocId(val === 'warehouse' ? (warehouses[0]?.id || '') : (outlets[0]?.id || ''));
+                        }}
+                        className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-semibold focus:outline-none focus:border-[#FF6B00]"
+                      >
+                        <option value="outlet">Cabang Outlet</option>
+                        <option value="warehouse">Gudang Logistik</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-heading mb-1">Pilih Lokasi Tetap *</label>
+                      <select
+                        value={empLocId}
+                        onChange={(e) => setEmpLocId(e.target.value)}
+                        required
+                        className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-semibold focus:outline-none focus:border-[#FF6B00]"
+                      >
+                        {empLocType === 'warehouse'
+                          ? warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)
+                          : outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="empActive"
+                      checked={empIsActive}
+                      onChange={(e) => setEmpIsActive(e.target.checked)}
+                      className="w-4 h-4 rounded text-[#FF6B00] border-borderline"
+                    />
+                    <label htmlFor="empActive" className="text-xs font-medium text-heading cursor-pointer">
+                      Karyawan Berstatus Aktif
                     </label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={empPin}
-                      onChange={(e) => setEmpPin(e.target.value)}
-                      placeholder={editingEmp ? 'Kosongkan jika tetap PIN lama' : '1234'}
-                      required={!editingEmp}
-                      className="w-full text-xs font-mono font-bold p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
-                    />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-heading mb-1">Nama Lengkap *</label>
-                  <input
-                    type="text"
-                    value={empName}
-                    onChange={(e) => setEmpName(e.target.value)}
-                    placeholder="Contoh: Budi Santoso"
-                    required
-                    className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-medium focus:outline-none focus:border-[#FF6B00]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-heading mb-1">Jabatan / Role</label>
-                    <select
-                      value={empRole}
-                      onChange={(e) => setEmpRole(e.target.value)}
-                      className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-semibold focus:outline-none focus:border-[#FF6B00]"
-                    >
-                      <option value="Head Barista">Head Barista</option>
-                      <option value="Barista">Barista</option>
-                      <option value="Kasir Outlet">Kasir Outlet</option>
-                      <option value="Kitchen / Cook">Kitchen / Cook</option>
-                      <option value="Staf Logistik Gudang">Staf Logistik Gudang</option>
-                      <option value="Kurir / Dispatch">Kurir / Dispatch</option>
-                      <option value="Helper & Cleaner">Helper &amp; Cleaner</option>
-                      <option value="Supervisor Outlet">Supervisor Outlet</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-heading mb-1">No. WhatsApp / HP</label>
-                    <input
-                      type="text"
-                      value={empPhone}
-                      onChange={(e) => setEmpPhone(e.target.value)}
-                      placeholder="0812-3456-7890"
-                      className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading focus:outline-none focus:border-[#FF6B00]"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-heading mb-1">Tipe Unit Penempatan</label>
-                    <select
-                      value={empLocType}
-                      onChange={(e) => {
-                        const val = e.target.value as LocationType;
-                        setEmpLocType(val);
-                        setEmpLocId(val === 'warehouse' ? (warehouses[0]?.id || '') : (outlets[0]?.id || ''));
-                      }}
-                      className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-semibold focus:outline-none focus:border-[#FF6B00]"
-                    >
-                      <option value="outlet">Cabang Outlet</option>
-                      <option value="warehouse">Gudang Logistik</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-heading mb-1">Pilih Lokasi Tetap *</label>
-                    <select
-                      value={empLocId}
-                      onChange={(e) => setEmpLocId(e.target.value)}
-                      required
-                      className="w-full text-xs p-2.5 bg-canvas border border-borderline rounded-xl text-heading font-semibold focus:outline-none focus:border-[#FF6B00]"
-                    >
-                      {empLocType === 'warehouse'
-                        ? warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)
-                        : outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="empActive"
-                    checked={empIsActive}
-                    onChange={(e) => setEmpIsActive(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#FF6B00] border-borderline"
-                  />
-                  <label htmlFor="empActive" className="text-xs font-medium text-heading cursor-pointer">
-                    Karyawan Berstatus Aktif
-                  </label>
-                </div>
-
-                <div className="pt-2 flex gap-2">
+                <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsEmpModalOpen(false)}
-                    className="flex-1 py-2 rounded-xl border border-borderline text-xs font-bold text-mutedtext hover:bg-slate-50"
+                    className="px-4 py-2 rounded-xl border border-borderline text-xs font-bold text-mutedtext hover:bg-white cursor-pointer"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingEmp}
-                    className="flex-1 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-xs cursor-pointer"
+                    className="px-5 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-xs font-bold text-white shadow-xs cursor-pointer disabled:opacity-50"
                   >
                     {isSavingEmp ? 'Menyimpan...' : 'Simpan Karyawan'}
                   </button>

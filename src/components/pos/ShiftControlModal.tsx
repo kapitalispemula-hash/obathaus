@@ -155,7 +155,7 @@ export function ShiftControlModal({
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50">
+        <div className="px-6 py-4 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00]">
               <Clock className="w-5 h-5" />
@@ -171,7 +171,7 @@ export function ShiftControlModal({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100"
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -179,7 +179,7 @@ export function ShiftControlModal({
 
         {/* Tab Navigation if active shift */}
         {activeShift && tab !== 'receipt' && (
-          <div className="px-6 pt-3 pb-0 border-b border-[#ECEEF1] flex items-center gap-2 text-xs font-semibold">
+          <div className="px-6 pt-3 pb-0 border-b border-[#ECEEF1] flex items-center gap-2 text-xs font-semibold shrink-0">
             <button
               onClick={() => setTab('movement')}
               className={`pb-3 px-2 border-b-2 transition-all cursor-pointer ${

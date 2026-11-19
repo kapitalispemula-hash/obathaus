@@ -338,7 +338,7 @@ export default function AdminUsersPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white shrink-0">
               <h3 className="font-bold text-heading text-base">
                 {editingProfile ? 'Edit Akun Pengguna' : 'Tambah Akun Kasir Baru'}
               </h3>
@@ -350,13 +350,14 @@ export default function AdminUsersPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-4 bg-white">
-              {formError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{formError}</span>
-                </div>
-              )}
+            <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden min-h-0 bg-white">
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                {formError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
 
               <div>
                 <label className="block text-xs font-bold text-heading mb-1">
@@ -517,9 +518,10 @@ export default function AdminUsersPage() {
                   Status Akun Aktif (Dapat Login ke Sistem)
                 </label>
               </div>
+            </div>
 
-              <div className="pt-4 border-t border-borderline flex items-center justify-between gap-3">
-                {editingProfile ? (
+            <div className="px-6 py-3.5 border-t border-borderline flex items-center justify-between gap-3 bg-[#FAFAFA] shrink-0">
+              {editingProfile ? (
                   <button
                     type="button"
                     disabled={editingProfile.id === currentUser?.id}

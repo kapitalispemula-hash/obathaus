@@ -465,8 +465,8 @@ export default function AdminOutletStocksPage() {
       {/* Modal Atur Batas Aman Cabang */}
       {editingStock && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden">
-            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
               <div>
                 <h3 className="font-bold text-dark text-sm sm:text-base">
                   Atur Batas Aman Cabang
@@ -484,12 +484,13 @@ export default function AdminOutletStocksPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveMinStock} className="p-6 space-y-4">
-              {editMinError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs">
-                  {editMinError}
-                </div>
-              )}
+            <form onSubmit={handleSaveMinStock} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                {editMinError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs">
+                    {editMinError}
+                  </div>
+                )}
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-xs space-y-1">
                 <div className="flex justify-between">
@@ -530,32 +531,33 @@ export default function AdminOutletStocksPage() {
                 </p>
               </div>
 
-              {(() => {
-                const masterVal = Number(
-                  materials.find((m) => m.id === editingStock.raw_material_id)?.minimum_stock ??
-                    editingStock.raw_material?.minimum_stock ??
-                    0
-                );
-                if (editMinValue !== masterVal) {
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => setEditMinValue(masterVal)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#FF6B00] hover:underline cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Ikuti nilai Master ({masterVal.toLocaleString('id-ID')})</span>
-                    </button>
+                {(() => {
+                  const masterVal = Number(
+                    materials.find((m) => m.id === editingStock.raw_material_id)?.minimum_stock ??
+                      editingStock.raw_material?.minimum_stock ??
+                      0
                   );
-                }
-                return null;
-              })()}
+                  if (editMinValue !== masterVal) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setEditMinValue(masterVal)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#FF6B00] hover:underline cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Ikuti nilai Master ({masterVal.toLocaleString('id-ID')})</span>
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-borderline">
+              <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                 <button
                   type="button"
                   onClick={() => setEditingStock(null)}
-                  className="px-4 py-2 border border-borderline text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer"
+                  className="px-4 py-2 border border-borderline text-slate-600 hover:bg-white rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Batal
                 </button>

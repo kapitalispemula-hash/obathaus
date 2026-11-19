@@ -252,7 +252,7 @@ export default function CashierHistoryPage() {
       {selectedTrx && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white shrink-0">
               <div>
                 <h3 className="font-bold text-heading text-base">Rincian Pesanan Kasir</h3>
                 <p className="font-mono text-xs text-mutedtext">{selectedTrx.invoice_number}</p>
@@ -265,7 +265,7 @@ export default function CashierHistoryPage() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm bg-white">
+            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm bg-white flex-1">
               {/* Items List (Strict Cashier Privacy: No HPP) */}
               <div className="space-y-2">
                 <span className="text-xs font-bold text-mutedtext uppercase tracking-wider">
@@ -311,7 +311,7 @@ export default function CashierHistoryPage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-borderline bg-white flex justify-between">
+            <div className="px-6 py-4 border-t border-borderline bg-white flex justify-between shrink-0">
               <button
                 onClick={() => setSelectedTrx(null)}
                 className="px-4 py-2 text-xs font-bold text-mutedtext hover:text-heading rounded-xl"

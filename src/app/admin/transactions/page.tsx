@@ -681,7 +681,7 @@ export default function AdminTransactionsPage() {
       {selectedTrx && !isVoidModalOpen && !isRefundModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between bg-white shrink-0">
               <div>
                 <h3 className="font-bold text-heading text-base">Detail Transaksi</h3>
                 <p className="font-mono text-xs text-mutedtext">{selectedTrx.invoice_number}</p>
@@ -694,7 +694,7 @@ export default function AdminTransactionsPage() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm bg-white">
+            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm bg-white flex-1">
               {/* Status Warning if Voided */}
               {selectedTrx.status === 'voided' && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs space-y-1">
@@ -759,7 +759,7 @@ export default function AdminTransactionsPage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-borderline bg-white flex items-center justify-between">
+            <div className="px-6 py-4 border-t border-borderline bg-white flex items-center justify-between shrink-0">
               <button
                 onClick={() => {
                   const t = selectedTrx;

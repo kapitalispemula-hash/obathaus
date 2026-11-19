@@ -506,8 +506,8 @@ export default function AdminRawMaterialsPage() {
         {/* Modal Material */}
         {isMatModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-heading text-sm sm:text-base">
                   {editingMat ? 'Edit Master Bahan Baku' : 'Tambah Bahan Baku Baru'}
                 </h3>
@@ -520,8 +520,9 @@ export default function AdminRawMaterialsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveMaterial} className="p-6 space-y-4">
-                {matFormError && (
+              <form onSubmit={handleSaveMaterial} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  {matFormError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{matFormError}</span>
@@ -737,7 +738,9 @@ export default function AdminRawMaterialsPage() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-borderline">
+                </div>
+
+                <div className="flex items-center justify-between px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                   {editingMat ? (
                     <button
                       type="button"
@@ -757,7 +760,7 @@ export default function AdminRawMaterialsPage() {
                     <button
                       type="button"
                       onClick={() => setIsMatModalOpen(false)}
-                      className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                     >
                       Batal
                     </button>
@@ -778,8 +781,8 @@ export default function AdminRawMaterialsPage() {
         {/* Modal Category */}
         {isCatModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col">
-              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
                 <h3 className="font-bold text-heading text-sm sm:text-base">
                   {editingCat ? 'Edit Kategori Bahan' : 'Tambah Kategori Bahan Baru'}
                 </h3>
@@ -792,8 +795,9 @@ export default function AdminRawMaterialsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveCategory} className="p-6 space-y-4">
-                {catFormError && (
+              <form onSubmit={handleSaveCategory} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                  {catFormError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{catFormError}</span>
@@ -839,23 +843,25 @@ export default function AdminRawMaterialsPage() {
                   </label>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-borderline">
-                  <button
-                    type="button"
-                    onClick={() => setIsCatModalOpen(false)}
-                    className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-[#FAFAFA] rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSavingCat}
-                    className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
-                  >
-                    {isSavingCat ? 'Menyimpan...' : 'Simpan Kategori'}
-                  </button>
                 </div>
-              </form>
+
+                <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsCatModalOpen(false)}
+                  className="px-4 py-2 border border-borderline text-mutedtext hover:text-heading hover:bg-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingCat}
+                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {isSavingCat ? 'Menyimpan...' : 'Simpan Kategori'}
+                </button>
+              </div>
+            </form>
             </div>
           </div>
         )}

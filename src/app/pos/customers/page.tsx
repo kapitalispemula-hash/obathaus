@@ -375,8 +375,8 @@ export default function PosCustomersPage() {
       {/* Modal Edit Pelanggan */}
       {editingCustomer && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-[#ECEEF1] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#ECEEF1] flex items-center justify-between">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-[#ECEEF1] overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-5 py-4 border-b border-[#ECEEF1] flex items-center justify-between shrink-0 bg-white">
               <h3 className="font-bold text-[#18181B] text-sm">Edit Data Pelanggan</h3>
               <button
                 type="button"
@@ -386,44 +386,46 @@ export default function PosCustomersPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <form onSubmit={handleSaveEdit} className="p-5 space-y-4">
-              {editError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
-                  {editError}
+            <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                {editError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                    {editError}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs font-bold text-[#18181B] mb-1">Nama Pelanggan *</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#FAFAFA] border border-[#ECEEF1] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    required
+                  />
                 </div>
-              )}
-              <div>
-                <label className="block text-xs font-bold text-[#18181B] mb-1">Nama Pelanggan *</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#FAFAFA] border border-[#ECEEF1] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  required
-                />
+                <div>
+                  <label className="block text-xs font-bold text-[#18181B] mb-1">Nomor Telepon / WA *</label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#FAFAFA] border border-[#ECEEF1] rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-[#18181B] mb-1">Nomor Telepon / WA *</label>
-                <input
-                  type="tel"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#FAFAFA] border border-[#ECEEF1] rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  required
-                />
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#ECEEF1]">
+              <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[#ECEEF1] bg-[#FAFAFA] shrink-0">
                 <button
                   type="button"
                   onClick={() => setEditingCustomer(null)}
-                  className="px-4 py-2 rounded-xl border border-[#ECEEF1] text-xs font-bold text-[#71717A] hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-[#ECEEF1] text-xs font-bold text-[#71717A] hover:bg-white cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isUpdating}
-                  className="px-5 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs font-bold disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-[#FF6B00] hover:bg-[#EA580C] text-white text-xs font-bold disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   {isUpdating ? 'Menyimpan...' : 'Simpan Perubahan'}
                 </button>

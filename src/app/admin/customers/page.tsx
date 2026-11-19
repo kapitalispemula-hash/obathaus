@@ -764,8 +764,8 @@ export default function AdminCustomersPage() {
       {/* Modal Tambah / Edit Pelanggan */}
       {isFormModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden">
-            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
               <h3 className="font-bold text-dark text-sm sm:text-base">
                 {editingCustomer ? 'Edit Data Pelanggan' : 'Tambah Data Pelanggan'}
               </h3>
@@ -777,54 +777,56 @@ export default function AdminCustomersPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <form onSubmit={handleSaveCustomer} className="p-6 space-y-4">
-              {formError && (
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
-                  {formError}
+            <form onSubmit={handleSaveCustomer} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                {formError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+                    {formError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-dark mb-1">Outlet / Cabang *</label>
+                  <select
+                    value={formOutletId}
+                    onChange={(e) => setFormOutletId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-borderline rounded-xl text-xs font-semibold text-dark focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    required
+                  >
+                    {outlets.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-bold text-dark mb-1">Outlet / Cabang *</label>
-                <select
-                  value={formOutletId}
-                  onChange={(e) => setFormOutletId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-borderline rounded-xl text-xs font-semibold text-dark focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  required
-                >
-                  {outlets.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <label className="block text-xs font-bold text-dark mb-1">Nama Pelanggan *</label>
+                  <input
+                    type="text"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="Contoh: Andi Wijaya"
+                    className="w-full px-3.5 py-2.5 bg-white border border-borderline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-dark mb-1">No. Telepon / WhatsApp *</label>
+                  <input
+                    type="tel"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    placeholder="081234567890"
+                    className="w-full px-3.5 py-2.5 bg-white border border-borderline rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
+                    required
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-dark mb-1">Nama Pelanggan *</label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Contoh: Andi Wijaya"
-                  className="w-full px-3.5 py-2.5 bg-white border border-borderline rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-dark mb-1">No. Telepon / WhatsApp *</label>
-                <input
-                  type="tel"
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
-                  placeholder="081234567890"
-                  className="w-full px-3.5 py-2.5 bg-white border border-borderline rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/20 focus:border-[#FF6B00]"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-borderline">
+              <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsFormModalOpen(false)}
@@ -835,7 +837,7 @@ export default function AdminCustomersPage() {
                 <button
                   type="submit"
                   disabled={isSavingForm}
-                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold disabled:opacity-50 cursor-pointer shadow-xs"
                 >
                   {isSavingForm ? 'Menyimpan...' : 'Simpan Pelanggan'}
                 </button>
@@ -848,8 +850,8 @@ export default function AdminCustomersPage() {
       {/* Modal Import Excel Pelanggan */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-borderline overflow-hidden">
-            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-borderline overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-borderline flex items-center justify-between shrink-0 bg-white">
               <div>
                 <h3 className="font-bold text-dark text-sm sm:text-base">
                   Import Database Pelanggan (Excel / CSV)
@@ -867,7 +869,7 @@ export default function AdminCustomersPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
               {importError && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
                   {importError}
@@ -944,24 +946,24 @@ export default function AdminCustomersPage() {
                   </div>
                 </div>
               )}
+            </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-borderline">
-                <button
-                  type="button"
-                  onClick={() => setIsImportModalOpen(false)}
-                  className="px-4 py-2 border border-borderline text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmImport}
-                  disabled={isImporting || importRows.length === 0}
-                  className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold disabled:opacity-50 cursor-pointer"
-                >
-                  {isImporting ? 'Mengimpor...' : `Import ${importRows.length || ''} Data`}
-                </button>
-              </div>
+            <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-borderline bg-[#FAFAFA] shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="px-4 py-2 border border-borderline text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={isImporting || importRows.length === 0}
+                className="px-5 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white rounded-xl text-xs font-bold disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                {isImporting ? 'Mengimpor...' : `Import ${importRows.length || ''} Data`}
+              </button>
             </div>
           </div>
         </div>

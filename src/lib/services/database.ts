@@ -3563,10 +3563,20 @@ export const dbService = {
       try {
         const supabase = createClient();
         const units = await this.getUnits();
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('raw_materials')
-          .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+          .select('*, category:raw_material_categories(*), standard_unit:units!standard_unit_id(*)')
           .order('name');
+
+        if (error && (String(error.message || '').includes('relationship') || String(error.message || '').includes('Could not embed'))) {
+          const fallback = await supabase
+            .from('raw_materials')
+            .select('*, category:raw_material_categories(*)')
+            .order('name');
+          data = fallback.data;
+          error = fallback.error;
+        }
+
         if (!error && data) {
           const list = (data as any[])
             .filter((r) => !deletedRawMaterialIds.has(r.id))
@@ -3574,6 +3584,7 @@ export const dbService = {
               ...r,
               pack_size: Number(r.pack_size) > 0 ? Number(r.pack_size) : 1,
               recipe_unit_id: r.recipe_unit_id || null,
+              standard_unit: r.standard_unit || units.find((u) => u.id === r.standard_unit_id),
               recipe_unit: units.find((u) => u.id === r.recipe_unit_id),
             })) as RawMaterial[];
           localRawMaterials = list;
@@ -3626,8 +3637,19 @@ export const dbService = {
         let { data, error } = await supabase
           .from('raw_materials')
           .insert(newRaw)
-          .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+          .select('*, category:raw_material_categories(*), standard_unit:units!standard_unit_id(*)')
           .single();
+
+        // If error is caused by relationship ambiguity or missing embed
+        if (error && (String(error.message || '').includes('relationship') || String(error.message || '').includes('Could not embed'))) {
+          const simpleInsert = await supabase
+            .from('raw_materials')
+            .insert(newRaw)
+            .select()
+            .single();
+          data = simpleInsert.data;
+          error = simpleInsert.error;
+        }
 
         // If pack_size or recipe_unit_id column is not yet migrated in Supabase schema cache, retry without it
         if (error && (error.code === 'PGRST204' || String(error.message || '').includes('pack_size') || String(error.message || '').includes('recipe_unit_id'))) {
@@ -3635,10 +3657,20 @@ export const dbService = {
           const retryRes = await supabase
             .from('raw_materials')
             .insert(withoutCustomCols)
-            .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+            .select('*, category:raw_material_categories(*), standard_unit:units!standard_unit_id(*)')
             .single();
           data = retryRes.data ? ({ ...retryRes.data, pack_size: packSize, recipe_unit_id: recipeUnitId } as any) : null;
           error = retryRes.error;
+
+          if (error && (String(error.message || '').includes('relationship') || String(error.message || '').includes('Could not embed'))) {
+            const retrySimple = await supabase
+              .from('raw_materials')
+              .insert(withoutCustomCols)
+              .select()
+              .single();
+            data = retrySimple.data ? ({ ...retrySimple.data, pack_size: packSize, recipe_unit_id: recipeUnitId } as any) : null;
+            error = retrySimple.error;
+          }
         }
 
         if (error) {
@@ -3679,6 +3711,16 @@ export const dbService = {
         }
 
         if (data) {
+          const units = await this.getUnits();
+          const categories = await this.getRawMaterialCategories();
+          const enriched: RawMaterial = {
+            ...data,
+            pack_size: packSize,
+            recipe_unit_id: recipeUnitId,
+            category: data.category || categories.find((c) => c.id === data.category_id),
+            standard_unit: data.standard_unit || units.find((u) => u.id === data.standard_unit_id),
+            recipe_unit: data.recipe_unit || units.find((u) => u.id === recipeUnitId),
+          };
           const deletedIds = getStorageItem<string[]>(STORAGE_KEYS.DELETED_RAW_MATERIAL_IDS, []);
           if (deletedIds.includes(newRaw.id)) {
             setStorageItem(
@@ -3686,7 +3728,7 @@ export const dbService = {
               deletedIds.filter((id) => id !== newRaw.id)
             );
           }
-          return { ...data, pack_size: packSize } as RawMaterial;
+          return enriched;
         }
       } catch (e: any) {
         console.error('createRawMaterial exception:', e);
@@ -3731,8 +3773,19 @@ export const dbService = {
           .from('raw_materials')
           .update({ ...payload, updated_at: now })
           .eq('id', id)
-          .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+          .select('*, category:raw_material_categories(*), standard_unit:units!standard_unit_id(*)')
           .single();
+
+        if (error && (String(error.message || '').includes('relationship') || String(error.message || '').includes('Could not embed'))) {
+          const simpleRes = await supabase
+            .from('raw_materials')
+            .update({ ...payload, updated_at: now })
+            .eq('id', id)
+            .select()
+            .single();
+          data = simpleRes.data;
+          error = simpleRes.error;
+        }
 
         // If pack_size or recipe_unit_id column is not yet migrated in Supabase schema cache, retry without it
         if (error && (error.code === 'PGRST204' || String(error.message || '').includes('pack_size') || String(error.message || '').includes('recipe_unit_id'))) {
@@ -3741,7 +3794,7 @@ export const dbService = {
             .from('raw_materials')
             .update({ ...withoutCustomCols, updated_at: now })
             .eq('id', id)
-            .select('*, category:raw_material_categories(*), standard_unit:units(*)')
+            .select('*, category:raw_material_categories(*), standard_unit:units!standard_unit_id(*)')
             .single();
           data = retryRes.data ? ({
             ...retryRes.data,
@@ -3749,6 +3802,21 @@ export const dbService = {
             ...(recipeUnitId !== undefined ? { recipe_unit_id: recipeUnitId } : {}),
           } as any) : null;
           error = retryRes.error;
+
+          if (error && (String(error.message || '').includes('relationship') || String(error.message || '').includes('Could not embed'))) {
+            const retrySimple = await supabase
+              .from('raw_materials')
+              .update({ ...withoutCustomCols, updated_at: now })
+              .eq('id', id)
+              .select()
+              .single();
+            data = retrySimple.data ? ({
+              ...retrySimple.data,
+              ...(packSize !== undefined ? { pack_size: packSize } : {}),
+              ...(recipeUnitId !== undefined ? { recipe_unit_id: recipeUnitId } : {}),
+            } as any) : null;
+            error = retrySimple.error;
+          }
         }
 
         if (error) {
@@ -4344,10 +4412,20 @@ export const dbService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('warehouse_stocks')
-          .select('*, raw_material:raw_materials(*, standard_unit:units(*)), warehouse:warehouses(*)')
+          .select('*, raw_material:raw_materials(*, standard_unit:units!standard_unit_id(*)), warehouse:warehouses(*)')
           .eq('warehouse_id', targetWhId);
+
+        if (error && (String(error.message || '').includes('relationship') || String(error.message || '').includes('Could not embed'))) {
+          const fallback = await supabase
+            .from('warehouse_stocks')
+            .select('*, raw_material:raw_materials(*), warehouse:warehouses(*)')
+            .eq('warehouse_id', targetWhId);
+          data = fallback.data;
+          error = fallback.error;
+        }
+
         if (!error && data) {
           dbStocks = data;
         }
@@ -6670,9 +6748,18 @@ export const dbService = {
         const supabase = createClient();
         let query = supabase
           .from('outlet_stocks')
-          .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units(*))');
+          .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units!standard_unit_id(*))');
         if (outletId) query = query.eq('outlet_id', outletId);
-        const { data, error } = await query;
+        let { data, error } = await query;
+        if (error && (String(error.message || '').includes('relationship') || String(error.message || '').includes('Could not embed'))) {
+          let fallbackQuery = supabase
+            .from('outlet_stocks')
+            .select('*, outlet:outlets(*), raw_material:raw_materials(*)');
+          if (outletId) fallbackQuery = fallbackQuery.eq('outlet_id', outletId);
+          const fallback = await fallbackQuery;
+          data = fallback.data;
+          error = fallback.error;
+        }
         if (!error && data) {
           cloudRows = (data as OutletStock[]).map((row) => ({
             ...row,
@@ -6741,12 +6828,24 @@ export const dbService = {
         }
 
         if (existing) {
-          const { data, error: updErr } = await supabase
+          let { data, error: updErr } = await supabase
             .from('outlet_stocks')
             .update({ minimum_stock: safeMin, updated_at: now })
             .eq('id', existing.id)
-            .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units(*))')
+            .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units!standard_unit_id(*))')
             .single();
+
+          if (updErr && (String(updErr.message || '').includes('relationship') || String(updErr.message || '').includes('Could not embed'))) {
+            const fallback = await supabase
+              .from('outlet_stocks')
+              .update({ minimum_stock: safeMin, updated_at: now })
+              .eq('id', existing.id)
+              .select('*, outlet:outlets(*), raw_material:raw_materials(*)')
+              .single();
+            data = fallback.data;
+            updErr = fallback.error;
+          }
+
           if (updErr && !isNetworkFailure(updErr)) {
             throw new Error(`Gagal memperbarui batas aman cabang: ${updErr.message}`);
           }
@@ -6771,7 +6870,7 @@ export const dbService = {
             return updated;
           }
         } else {
-          const { data, error: insErr } = await supabase
+          let { data, error: insErr } = await supabase
             .from('outlet_stocks')
             .insert({
               outlet_id: outletId,
@@ -6780,8 +6879,24 @@ export const dbService = {
               minimum_stock: safeMin,
               updated_at: now,
             })
-            .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units(*))')
+            .select('*, outlet:outlets(*), raw_material:raw_materials(*, standard_unit:units!standard_unit_id(*))')
             .single();
+
+          if (insErr && (String(insErr.message || '').includes('relationship') || String(insErr.message || '').includes('Could not embed'))) {
+            const fallback = await supabase
+              .from('outlet_stocks')
+              .insert({
+                outlet_id: outletId,
+                raw_material_id: rawMaterialId,
+                quantity: 0,
+                minimum_stock: safeMin,
+                updated_at: now,
+              })
+              .select('*, outlet:outlets(*), raw_material:raw_materials(*)')
+              .single();
+            data = fallback.data;
+            insErr = fallback.error;
+          }
           if (insErr && !isNetworkFailure(insErr)) {
             throw new Error(`Gagal menyimpan batas aman cabang: ${insErr.message}`);
           }

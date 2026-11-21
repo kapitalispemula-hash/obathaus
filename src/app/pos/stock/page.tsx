@@ -137,11 +137,46 @@ export default function PosStockPage() {
       setOrderItems([
         {
           raw_material_id: materials[0].id,
-          quantity: 5000,
+          quantity: 1000,
         },
       ]);
+    } else {
+      setOrderItems([]);
     }
+    setOrderNotes('Restock harian untuk menjaga batas aman');
     setIsOrderModalOpen(true);
+  };
+
+  const handleAddOrderItemRow = () => {
+    if (materials.length === 0) return;
+    const existingIds = new Set(orderItems.map((it) => it.raw_material_id));
+    const nextMat = materials.find((m) => !existingIds.has(m.id)) || materials[0];
+    setOrderItems((prev) => [
+      ...prev,
+      {
+        raw_material_id: nextMat.id,
+        quantity: 1000,
+      },
+    ]);
+  };
+
+  const handleRemoveOrderItemRow = (index: number) => {
+    if (orderItems.length <= 1) {
+      alert('Minimal harus ada 1 item bahan baku dalam permohonan restock.');
+      return;
+    }
+    setOrderItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleOrderItemChange = (index: number, field: 'raw_material_id' | 'quantity', value: any) => {
+    setOrderItems((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        [field]: field === 'quantity' ? Math.max(0, parseFloat(value) || 0) : value,
+      };
+      return updated;
+    });
   };
 
   const openReturnModal = () => {
@@ -203,13 +238,39 @@ export default function PosStockPage() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (orderItems.length === 0) return;
+    if (orderItems.length === 0) {
+      alert('Pilih minimal 1 bahan baku untuk diajukan restock.');
+      return;
+    }
+
+    for (const itm of orderItems) {
+      if (!itm.raw_material_id) {
+        alert('Pastikan semua bahan baku telah dipilih.');
+        return;
+      }
+      if (!itm.quantity || itm.quantity <= 0) {
+        alert('Jumlah kebutuhan bahan baku harus lebih dari 0.');
+        return;
+      }
+    }
+
+    // Cek duplikasi bahan baku
+    const idSet = new Set<string>();
+    for (const itm of orderItems) {
+      if (idSet.has(itm.raw_material_id)) {
+        const dupMat = materials.find((m) => m.id === itm.raw_material_id);
+        alert(`Bahan baku "${dupMat?.name || 'terpilih'}" dipilih lebih dari sekali. Harap gabungkan jumlahnya dalam satu baris.`);
+        return;
+      }
+      idSet.add(itm.raw_material_id);
+    }
 
     try {
       setIsSubmittingOrder(true);
+      const targetWhId = warehouses[0]?.id || 'e0000000-0000-0000-0000-000000000001';
       await dbService.createOutletOrder({
         outlet_id: outletId,
-        warehouse_id: 'e0000000-0000-0000-0000-000000000001',
+        warehouse_id: targetWhId,
         notes: orderNotes.trim() || null,
         created_by: user?.id,
         items: orderItems.map((itm) => {
@@ -224,7 +285,7 @@ export default function PosStockPage() {
         }),
       });
 
-      setFeedback('Permintaan restock berhasil dikirim ke Operator Gudang Pusat!');
+      setFeedback(`Permintaan restock (${orderItems.length} bahan baku) berhasil dikirim ke Operator Gudang Pusat!`);
       setIsOrderModalOpen(false);
       await loadData();
     } catch (err: any) {
@@ -561,7 +622,7 @@ export default function PosStockPage() {
         {/* 3. Modal Permintaan Bahan ke Gudang Pusat */}
         {isOrderModalOpen && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               <div className="px-6 py-5 border-b border-[#ECEEF1] flex items-center justify-between bg-slate-50/50 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#FF6B00]">
@@ -569,12 +630,15 @@ export default function PosStockPage() {
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-900">Permintaan Restock ke Gudang</h3>
-                    <p className="text-xs text-slate-500">Dari: {currentOutlet?.name || 'Cabang'}</p>
+                    <p className="text-xs text-slate-500">
+                      Dari: {currentOutlet?.name || 'Cabang'} • Pengajuan Multi-Item ke Gudang Pusat
+                    </p>
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsOrderModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100"
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -582,81 +646,142 @@ export default function PosStockPage() {
 
               <form onSubmit={handleCreateOrder} className="flex flex-col flex-1 overflow-hidden min-h-0">
                 <div className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
-                <div>
-                  <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Bahan Baku yang Diminta
-                  </label>
-                  <select
-                    value={orderItems[0]?.raw_material_id || ''}
-                    onChange={(e) =>
-                      setOrderItems([{ raw_material_id: e.target.value, quantity: orderItems[0]?.quantity || 1000 }])
-                    }
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#FF6B00]"
-                  >
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.sku})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Jumlah Kebutuhan
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      required
-                      value={orderItems[0]?.quantity || 1000}
-                      onChange={(e) =>
-                        setOrderItems([
-                          {
-                            raw_material_id: orderItems[0]?.raw_material_id || materials[0]?.id || '',
-                            quantity: parseFloat(e.target.value) || 0,
-                          },
-                        ])
-                      }
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-1 focus:ring-[#FF6B00]"
+                  <div>
+                    <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Catatan Kebutuhan
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={orderNotes}
+                      onChange={(e) => setOrderNotes(e.target.value)}
+                      placeholder="Contoh: Restock harian untuk menjaga batas aman stok akhir pekan..."
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#FF6B00]"
                     />
-                    <span className="text-slate-500 shrink-0 font-medium">gram / ml / pcs</span>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="font-semibold text-slate-700 uppercase tracking-wider">
+                          Daftar Bahan Baku yang Diminta ({orderItems.length} bahan)
+                        </label>
+                        <p className="text-[11px] text-slate-500">
+                          Tentukan kuantitas pesanan restock untuk tiap bahan baku
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddOrderItemRow}
+                        className="text-xs font-bold text-[#FF6B00] hover:text-[#EA580C] flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-orange-50 transition-colors cursor-pointer border border-[#FF6B00]/30"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah Bahan</span>
+                      </button>
+                    </div>
+
+                    {/* Table Column Header for Desktop */}
+                    <div className="hidden sm:grid sm:grid-cols-12 gap-2 px-3 py-2 bg-slate-100/70 rounded-xl text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                      <div className="col-span-7">Bahan Baku & Info Stok Saat Ini</div>
+                      <div className="col-span-4 text-center">Jumlah Kebutuhan</div>
+                      <div className="col-span-1 text-center">Aksi</div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {orderItems.map((itm, idx) => {
+                        const mat = materials.find((m) => m.id === itm.raw_material_id);
+                        const stk = stocks.find((s) => s.raw_material_id === itm.raw_material_id);
+                        const unitSymbol = mat?.standard_unit?.symbol || 'satuan';
+
+                        return (
+                          <div
+                            key={idx}
+                            className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200"
+                          >
+                            {/* Material Selector */}
+                            <div className="sm:col-span-7">
+                              <span className="block sm:hidden text-[10px] font-bold text-slate-500 mb-1 uppercase">
+                                Bahan Baku
+                              </span>
+                              <select
+                                value={itm.raw_material_id}
+                                onChange={(e) => handleOrderItemChange(idx, 'raw_material_id', e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-medium focus:ring-1 focus:ring-[#FF6B00]"
+                              >
+                                {materials.map((m) => {
+                                  const s = stocks.find((st) => st.raw_material_id === m.id);
+                                  return (
+                                    <option key={m.id} value={m.id}>
+                                      {m.name} ({m.sku || m.code}) • Stok: {(s?.quantity || 0).toLocaleString('id-ID')} {m.standard_unit?.symbol || ''}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+
+                            {/* Quantity Input with Unit Badge */}
+                            <div className="sm:col-span-4">
+                              <span className="block sm:hidden text-[10px] font-bold text-slate-500 mb-1 uppercase">
+                                Jumlah Kebutuhan
+                              </span>
+                              <div className="relative flex items-center">
+                                <input
+                                  type="number"
+                                  min={0.1}
+                                  step="any"
+                                  required
+                                  value={itm.quantity || ''}
+                                  onChange={(e) => handleOrderItemChange(idx, 'quantity', e.target.value)}
+                                  placeholder="0"
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-bold text-right pr-14 focus:ring-1 focus:ring-[#FF6B00]"
+                                />
+                                <span className="absolute right-2.5 text-[11px] font-semibold text-slate-500 pointer-events-none">
+                                  {unitSymbol}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Delete Action */}
+                            <div className="sm:col-span-1 flex justify-center">
+                              <button
+                                type="button"
+                                disabled={orderItems.length <= 1}
+                                onClick={() => handleRemoveOrderItemRow(idx)}
+                                title={orderItems.length <= 1 ? 'Minimal 1 bahan baku' : 'Hapus baris'}
+                                className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Catatan Kebutuhan
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={orderNotes}
-                    onChange={(e) => setOrderNotes(e.target.value)}
-                    placeholder="Contoh: Stok bubuk matcha dan cup 16oz menipis karena ramai pesanan siang ini..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#FF6B00]"
-                  />
+                <div className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-between bg-[#FAFAFA] shrink-0">
+                  <div className="text-xs text-slate-500">
+                    Total: <span className="font-bold text-slate-800">{orderItems.length}</span> jenis bahan baku
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsOrderModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-white cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingOrder}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{isSubmittingOrder ? 'Mengirim...' : `Kirim Permintaan (${orderItems.length})`}</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              <div className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-end gap-3 bg-[#FAFAFA] shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsOrderModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-white cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingOrder}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6B00] hover:bg-[#EA580C] text-white font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isSubmittingOrder ? 'Mengirim...' : 'Kirim Permintaan'}</span>
-                </button>
-              </div>
-            </form>
+              </form>
             </div>
           </div>
         )}

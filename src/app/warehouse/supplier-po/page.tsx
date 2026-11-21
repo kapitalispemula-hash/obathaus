@@ -108,13 +108,15 @@ export default function WarehouseSupplierPOPage() {
   };
 
   const handleAddItemRow = () => {
+    const existingIds = new Set(poItems.map((it) => it.raw_material_id));
+    const nextMat = materials.find((m) => !existingIds.has(m.id)) || materials[0];
     setPoItems([
       ...poItems,
       {
-        raw_material_id: materials[0]?.id || '',
+        raw_material_id: nextMat?.id || '',
         quantity: 1000,
-        unit_id: materials[0]?.standard_unit_id || units[0]?.id || '11111111-0000-0000-0000-000000000001',
-        unit_cost: materials[0]?.estimated_unit_cost || 100,
+        unit_id: nextMat?.standard_unit_id || units[0]?.id || '11111111-0000-0000-0000-000000000001',
+        unit_cost: nextMat?.estimated_unit_cost || 100,
       },
     ]);
   };
@@ -158,6 +160,17 @@ export default function WarehouseSupplierPOPage() {
         setFormError('Kuantitas pesanan harus lebih besar dari 0.');
         return;
       }
+    }
+
+    // Cek duplikasi bahan baku
+    const idSet = new Set<string>();
+    for (const item of poItems) {
+      if (idSet.has(item.raw_material_id)) {
+        const dupMat = materials.find((m) => m.id === item.raw_material_id);
+        setFormError(`Bahan baku "${dupMat?.name || 'terpilih'}" dipilih lebih dari sekali. Harap gabungkan kuantitasnya dalam satu baris.`);
+        return;
+      }
+      idSet.add(item.raw_material_id);
     }
 
     setIsSaving(true);
